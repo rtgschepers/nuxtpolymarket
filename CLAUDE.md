@@ -1,4 +1,5 @@
 # Polynux — Claude context
+For Hero Quest see @docs/hero-quest.CLAUDE.md 
 
 ## Stack
 
