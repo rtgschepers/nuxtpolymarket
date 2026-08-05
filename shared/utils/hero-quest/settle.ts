@@ -19,9 +19,8 @@ import {
     ELITE_STAGE_MAX,
     ELITE_STAGE_MIN,
     ELITE_STAT_MULT,
-    ENEMY_PRESTIGE_BASE,
-    ENEMY_STAGE_BASE,
-    ENEMY_WORLD_BASE,
+    ENEMY_PRESTIGE_STEP_MULT,
+    ENEMY_STEP_BASE,
     GOLD_PLATEAU_GROWTH,
     GOLD_PRESTIGE_CAP,
     GOLD_STAGE_BASE,
@@ -34,17 +33,16 @@ import {
     OFFLINE_CAP_MAX_HOURS,
     OFFLINE_EFFICIENCY_PER_LEVEL,
     PRESTIGE_GOLD_FACTOR,
+    PRESTIGE_INDEX_STEPS,
     STAGES_PER_WORLD,
     SUPER_BOSS_HP_MULT,
     SUPER_BOSS_STAGE,
     SUPER_BOSS_ATK_MULT,
     WORLD_COUNT,
     XP_BASE_PER_KILL,
-    XP_PRESTIGE_BASE,
-    XP_STAGE_BASE,
+    XP_STEP_BASE,
     XP_TO_LEVEL_BASE,
-    XP_TO_LEVEL_GROWTH,
-    XP_WORLD_BASE
+    XP_TO_LEVEL_GROWTH
 } from './constants'
 import { partyDps } from './combat'
 import { partyUnitStats } from './stats'
@@ -53,17 +51,33 @@ import type { Decimal } from './numbers'
 import type { EnemyStats, RunPosition, SettleInput, SettleResult, StageArchetype } from './types'
 
 /**
+ * How far into the game a position is, as one number.
+ *
+ *     n = prestige × 100 + (world-1) × 10 + (stage-1)
+ *
+ * Every difficulty-facing curve rides this index, which is what makes their relative growth
+ * a single comparable exponent instead of three bases per curve that have to be reasoned
+ * about pairwise. Strictly increasing along the play order, with no seam at a world or
+ * prestige boundary.
+ */
+export function curveIndex(prestige: number, world: number, stage: number): number {
+    return prestige * PRESTIGE_INDEX_STEPS + (world - 1) * STAGES_PER_WORLD + (stage - 1)
+}
+
+/**
  * The enemy power curve — the single swap point for the whole game.
  *
- *     5^prestige × 1.6^(world-1) × 1.15^(stage-1)
+ *     b^n,  b = ENEMY_CURVE_T^(1/100)
  *
- * A continuous `b^n` replacement was parked mid-tuning (`open-items.md` #8, #10). Nothing
- * else in the codebase computes an enemy scalar, so replacing it is one edit here.
+ * Replaces `5^prestige × 1.6^(world-1) × 1.15^(stage-1)` (`open-items.md` #10). Nothing
+ * else in the codebase computes an enemy scalar, so replacing it again is one edit here.
+ *
+ * `ENEMY_PRESTIGE_STEP_MULT` is 1 under the continuous curve; it is the documented lever
+ * for restoring a prestige difficulty reset, and multiplies out to nothing otherwise.
  */
 export function enemyMultiplier(prestige: number, world: number, stage: number): Decimal {
-    return decPow(ENEMY_PRESTIGE_BASE, prestige)
-        .mul(decPow(ENEMY_WORLD_BASE, world - 1))
-        .mul(decPow(ENEMY_STAGE_BASE, stage - 1))
+    return decPow(ENEMY_STEP_BASE, curveIndex(prestige, world, stage))
+        .mul(decPow(ENEMY_PRESTIGE_STEP_MULT, prestige))
 }
 
 export function stageArchetype(stage: number): StageArchetype {
@@ -144,11 +158,14 @@ export function goldPerKill(prestige: number, world: number, stage: number): num
         * prestigeGoldFactor(prestige)
 }
 
+/**
+ * XP rides the same index as the enemy, at `XP_STEP_EXPONENT` relative growth. At exponent
+ * 1 the two curves are the same shape, so XP per second neither decays nor climbs with
+ * depth — the property the old three-base curve could not hold (it decayed ×0.91 per stage
+ * and ×0.78 per world, so farming got strictly worse the deeper the run went).
+ */
 export function xpPerKill(prestige: number, world: number, stage: number): Decimal {
-    return D(XP_BASE_PER_KILL)
-        .mul(decPow(XP_WORLD_BASE, world - 1))
-        .mul(decPow(XP_STAGE_BASE, stage - 1))
-        .mul(decPow(XP_PRESTIGE_BASE, prestige))
+    return D(XP_BASE_PER_KILL).mul(decPow(XP_STEP_BASE, curveIndex(prestige, world, stage)))
 }
 
 export function xpToNextLevel(level: number): Decimal {

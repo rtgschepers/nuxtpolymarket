@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     applyXp,
     cappedOfflineSeconds,
+    curveIndex,
     enemyMultiplier,
     enemyStatsAt,
     fallbackStage,
@@ -22,9 +23,8 @@ import {
 } from '#shared/utils/hero-quest/settle'
 import {
     BASE_KILL_COUNT,
-    ENEMY_PRESTIGE_BASE,
-    ENEMY_STAGE_BASE,
-    ENEMY_WORLD_BASE,
+    ENEMY_CURVE_T,
+    ENEMY_STEP_BASE,
     GOLD_PLATEAU_GROWTH,
     GOLD_PRESTIGE_CAP,
     MAX_OFFLINE_CAP_LEVEL,
@@ -32,8 +32,12 @@ import {
     MAX_OFFLINE_EFFICIENCY_LEVEL,
     MIN_SECONDS_PER_KILL,
     OFFLINE_CAP_MAX_HOURS,
+    PRESTIGE_INDEX_STEPS,
     STAGES_PER_WORLD,
-    WORLD_COUNT
+    WORLD_COUNT,
+    XP_STEP_BASE,
+    XP_TO_LEVEL_BASE,
+    XP_TO_LEVEL_GROWTH
 } from '#shared/utils/hero-quest/constants'
 import { D, ZERO } from '#shared/utils/hero-quest/numbers'
 import { partyDps } from '#shared/utils/hero-quest/combat'
@@ -53,6 +57,20 @@ function at(world: number, stage: number, killsInStage = 0, prestige = 0): RunPo
     return { prestige, world, stage, killsInStage }
 }
 
+/** First position along the play order where the hero deals literally zero damage. */
+function firstStallingPosition(snapshot: HeroSnapshot, prestige = 0): RunPosition | null {
+    for (let world = 1; world <= WORLD_COUNT; world++) {
+        for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+            const position = at(world, stage, 0, prestige)
+            const enemy = enemyStatsAt(position)
+            if (!Number.isFinite(secondsPerKill(partyDps(partyUnitStats(snapshot), enemy.def), enemy))) {
+                return position
+            }
+        }
+    }
+    return null
+}
+
 function input(overrides: Partial<SettleInput> = {}): SettleInput {
     return {
         hero,
@@ -64,15 +82,48 @@ function input(overrides: Partial<SettleInput> = {}): SettleInput {
 }
 
 describe('hero-quest settle', () => {
+    describe('curve index', () => {
+        it('is 0 at the origin and one step per stage', () => {
+            expect(curveIndex(0, 1, 1)).toBe(0)
+            expect(curveIndex(0, 1, 2)).toBe(1)
+            expect(curveIndex(0, 2, 1)).toBe(STAGES_PER_WORLD)
+            expect(curveIndex(1, 1, 1)).toBe(PRESTIGE_INDEX_STEPS)
+        })
+
+        it('increases by exactly one along the whole play order, seams included', () => {
+            let previous = -1
+            for (let prestige = 0; prestige < 3; prestige++) {
+                for (let world = 1; world <= WORLD_COUNT; world++) {
+                    for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+                        const index = curveIndex(prestige, world, stage)
+                        expect(index).toBe(previous + 1)
+                        previous = index
+                    }
+                }
+            }
+        })
+    })
+
     describe('enemy curve', () => {
         it('is 1 at the origin', () => {
             expect(enemyMultiplier(0, 1, 1).toNumber()).toBe(1)
         })
 
-        it('applies each axis independently', () => {
-            expect(enemyMultiplier(1, 1, 1).toNumber()).toBeCloseTo(ENEMY_PRESTIGE_BASE, 10)
-            expect(enemyMultiplier(0, 2, 1).toNumber()).toBeCloseTo(ENEMY_WORLD_BASE, 10)
-            expect(enemyMultiplier(0, 1, 2).toNumber()).toBeCloseTo(ENEMY_STAGE_BASE, 10)
+        it('grows by the same ratio for every step, wherever the step falls', () => {
+            const ratio = (a: [number, number, number], b: [number, number, number]) =>
+                enemyMultiplier(...b).div(enemyMultiplier(...a)).toNumber()
+
+            // Mid-world, across a world boundary, and across a prestige boundary.
+            expect(ratio([0, 1, 1], [0, 1, 2])).toBeCloseTo(ENEMY_STEP_BASE, 10)
+            expect(ratio([0, 1, 10], [0, 2, 1])).toBeCloseTo(ENEMY_STEP_BASE, 10)
+            expect(ratio([0, 10, 10], [1, 1, 1])).toBeCloseTo(ENEMY_STEP_BASE, 10)
+        })
+
+        it('multiplies by T over one full loop', () => {
+            expect(enemyMultiplier(1, 1, 1).toNumber()).toBeCloseTo(ENEMY_CURVE_T, 10)
+            // Relative, not absolute: T^3 is large enough that digit-place tolerance is
+            // meaningless there.
+            expect(enemyMultiplier(3, 1, 1).toNumber() / Math.pow(ENEMY_CURVE_T, 3)).toBeCloseTo(1, 10)
         })
 
         it('survives magnitudes no native number can hold', () => {
@@ -215,14 +266,19 @@ describe('hero-quest settle', () => {
             // Emergent, and deliberate: enemy DEF rides the same exponential as everything
             // else, so a static hero eventually crosses DEF >= PWR x K and deals exactly 0.
             // Levelling is not optional — this is the wall the run is supposed to hit.
-            const stalled = settle(input({ position: at(1, 9), elapsedSeconds: 72 * 3600 }))
+            // Where that lands moves with ENEMY_CURVE_T, so the test finds it rather than
+            // naming a stage: what matters is that it exists and that levels answer it.
+            const wall = firstStallingPosition(hero)
+            expect(wall).not.toBeNull()
+
+            const stalled = settle(input({ position: wall!, elapsedSeconds: 72 * 3600 }))
             expect(stalled.secondsPerKill).toBe(Number.POSITIVE_INFINITY)
             expect(stalled.kills).toBe(0)
             expect(stalled.goldEarned).toBe(0)
 
             const levelled = settle(input({
-                hero: { ...hero, heroLevel: 10 },
-                position: at(1, 9),
+                hero: { ...hero, heroLevel: 200 },
+                position: wall!,
                 elapsedSeconds: 72 * 3600
             }))
             expect(levelled.kills).toBeGreaterThan(0)
@@ -331,6 +387,23 @@ describe('hero-quest settle', () => {
             expect(xpPerKill(1, 1, 1).gt(xpPerKill(0, 1, 1))).toBe(true)
         })
 
+        it('grows by a fixed ratio per index step', () => {
+            expect(xpPerKill(0, 1, 2).div(xpPerKill(0, 1, 1)).toNumber()).toBeCloseTo(XP_STEP_BASE, 10)
+            expect(xpPerKill(1, 1, 1).div(xpPerKill(0, 10, 10)).toNumber()).toBeCloseTo(XP_STEP_BASE, 10)
+        })
+
+        it('never lets XP per second decay with depth', () => {
+            // XP/second ∝ xpPerKill ÷ enemy HP. Sharing an index is what holds this flat;
+            // the old three-base curve decayed here, so farming got worse the deeper you went.
+            const rate = (prestige: number, world: number, stage: number) =>
+                xpPerKill(prestige, world, stage).div(enemyMultiplier(prestige, world, stage)).toNumber()
+
+            const origin = rate(0, 1, 1) * (1 - 1e-9)
+            expect(rate(0, 1, STAGES_PER_WORLD)).toBeGreaterThanOrEqual(origin)
+            expect(rate(0, WORLD_COUNT, STAGES_PER_WORLD)).toBeGreaterThanOrEqual(origin)
+            expect(rate(5, WORLD_COUNT, STAGES_PER_WORLD)).toBeGreaterThanOrEqual(origin)
+        })
+
         it('sums xpToNextLevel into totalXpForLevel', () => {
             let running = ZERO
             for (let level = 1; level < 20; level++) {
@@ -373,9 +446,18 @@ describe('hero-quest settle', () => {
         })
 
         it('stays exact at Decimal magnitudes a loop could not walk', () => {
-            const result = applyXp(1, ZERO, D(10).pow(120))
-            expect(result.level).toBeGreaterThan(2000)
-            expect(totalXpForLevel(result.level).lte(D(10).pow(120))).toBe(true)
+            const total = D(10).pow(120)
+            const result = applyXp(1, ZERO, total)
+
+            // Enough levels that a one-at-a-time walk is out of the question, wherever
+            // XP_TO_LEVEL_GROWTH is currently tuned.
+            expect(result.level).toBeGreaterThan(1000)
+            // And it lands where inverting the geometric series says it should.
+            const solved = Math.floor(1 + Math.log(1 + 1e120 * (XP_TO_LEVEL_GROWTH - 1) / XP_TO_LEVEL_BASE)
+                / Math.log(XP_TO_LEVEL_GROWTH))
+            expect(Math.abs(result.level - solved)).toBeLessThanOrEqual(1)
+
+            expect(totalXpForLevel(result.level).lte(total)).toBe(true)
             expect(result.xp.lt(xpToNextLevel(result.level))).toBe(true)
         })
 
@@ -398,7 +480,10 @@ describe('hero-quest settle', () => {
         })
 
         it('reports the level unchanged when nothing was earned', () => {
-            const stalled = settle(input({ position: at(1, 9), elapsedSeconds: 72 * 3600 }))
+            const stalled = settle(input({
+                position: firstStallingPosition(hero)!,
+                elapsedSeconds: 72 * 3600
+            }))
             expect(stalled.kills).toBe(0)
             expect(stalled.heroLevel).toBe(hero.heroLevel)
         })

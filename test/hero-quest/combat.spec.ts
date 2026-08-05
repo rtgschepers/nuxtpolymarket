@@ -8,6 +8,8 @@ import {
     hitChanceAgainst,
     maxHpFor,
     mitigation,
+    partyDps,
+    partyMitigation,
     rawHitDamage,
     unitDps
 } from '#shared/utils/hero-quest/combat'
@@ -26,6 +28,10 @@ import { getClass } from '#shared/utils/hero-quest/content/classes'
 import { D } from '#shared/utils/hero-quest/numbers'
 
 describe('hero-quest combat math', () => {
+    /**
+     * The pairwise contract — one attacker, one defender. A *party* does not experience
+     * this directly: it pools PWR first, which is the `pooled party damage` block below.
+     */
     describe('mitigation and damage', () => {
         it('deals full damage against zero DEF', () => {
             expect(mitigation(100, 0).toNumber()).toBe(0)
@@ -156,10 +162,66 @@ describe('hero-quest combat math', () => {
             expect(expectedHitDamage(unit, 0).toNumber()).toBeCloseTo(expected, 6)
         })
 
-        it('produces zero DPS when the defender fully mitigates', () => {
+        it('produces zero DPS when the defender fully mitigates a lone attacker', () => {
             const beginner = getClass('class_beginner')
             const unit = deriveUnitStats(heroStatBlock('class_beginner', 1), beginner)
             expect(unitDps(unit, unit.pwr.mul(K)).toNumber()).toBe(0)
+        })
+    })
+
+    /**
+     * Pooling is what lets unit count move the zero-damage threshold instead of only scaling
+     * the residual below it. Without it, mitigation resolves per attacker and N units share
+     * one ceiling — a party could never open a wall the Hero alone could not.
+     */
+    describe('pooled party damage', () => {
+        const beginner = getClass('class_beginner')
+        const unit = () => deriveUnitStats(heroStatBlock('class_beginner', 1), beginner)
+        const party = (size: number) => Array.from({ length: size }, unit)
+
+        it('agrees with the per-unit path at a party of one', () => {
+            const solo = unit()
+            for (const def of [0, 5, 12]) {
+                expect(partyDps([solo], def).toNumber()).toBeCloseTo(unitDps(solo, def).toNumber(), 10)
+            }
+        })
+
+        it('pools PWR, so the zero-damage threshold scales with party size', () => {
+            const solo = unit()
+            const wall = solo.pwr.mul(K)
+
+            // The DEF that shuts one unit out entirely leaves a party still swinging.
+            expect(unitDps(solo, wall).toNumber()).toBe(0)
+            expect(partyDps(party(3), wall).toNumber()).toBeGreaterThan(0)
+
+            // ...and the party has its own threshold, three times further out.
+            expect(partyDps(party(3), wall.mul(3)).toNumber()).toBe(0)
+        })
+
+        it('beats a plain sum of solo DPS whenever mitigation is biting', () => {
+            const units = party(3)
+            const def = units[0]!.pwr.toNumber() // well inside the clamp, not past it
+            const summed = units.reduce((total, one) => total + unitDps(one, def).toNumber(), 0)
+
+            expect(partyDps(units, def).toNumber()).toBeGreaterThan(summed)
+        })
+
+        it('is a plain sum when nothing is mitigated', () => {
+            const units = party(4)
+            const summed = units.reduce((total, one) => total + unitDps(one, 0).toNumber(), 0)
+            expect(partyDps(units, 0).toNumber()).toBeCloseTo(summed, 6)
+        })
+
+        it('adds a weak unit as a gain, never a penalty', () => {
+            const units = party(2)
+            const weakling = { ...unit(), pwr: D(1) }
+            expect(partyDps([...units, weakling], 20).toNumber())
+                .toBeGreaterThan(partyDps(units, 20).toNumber())
+        })
+
+        it('is zero for an empty party', () => {
+            expect(partyDps([], 0).toNumber()).toBe(0)
+            expect(partyMitigation([], 10).toNumber()).toBe(1)
         })
     })
 })

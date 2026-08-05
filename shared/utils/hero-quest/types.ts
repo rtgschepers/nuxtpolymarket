@@ -93,6 +93,30 @@ export interface RunPosition {
     killsInStage: number
 }
 
+/**
+ * A fielded Champion, as far as the math layer is concerned.
+ *
+ * Champions have **no XP level of their own** — they level only by consuming duplicates, on
+ * the `(star × 10 + level)` scalar shared by all four gachas (`gacha-shared-system.md` §6),
+ * which is bounded at 60. Their unbounded axis is the Hero's level, which is what keeps them
+ * from becoming dead weight against a curve that never stops (`champions-guild-gacha.md` §2
+ * says only "the other stats scale with level the same way the Hero's do", and never
+ * reconciles the two quantities — this is that reconciliation).
+ *
+ * Phase 1 defines the shape and nothing more: no roster, no archetype spreads, no base stat
+ * magnitudes. Those are Phase 2 and the docs do not specify them yet.
+ */
+export interface ChampionSnapshot {
+    /** Stable string ID, never an index. */
+    championId: string
+    /** Flat rarity multiplier, Common 1.0 → Mythic 2.5 (`champions-guild-gacha.md` §2). */
+    rarityMultiplier: number
+    /** The gacha investment scalar, `star × 10 + level`: 1 at 0★/Lv1, 60 at 5★/Lv10. */
+    investment: number
+    /** Baked into the kit, exactly as for the Hero's class node. */
+    strikesPerAttack: number
+}
+
 export interface HeroSnapshot {
     classId: ClassId
     heroLevel: number
@@ -102,6 +126,8 @@ export interface HeroSnapshot {
     goldBonusPct: number
     offlineEfficiencyLevel: number
     offlineCapLevel: number
+    /** Fielded party, 2–5 once slots exist. Absent or empty through Phase 1. */
+    champions?: readonly ChampionSnapshot[]
 }
 
 export interface SettleInput {

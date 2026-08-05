@@ -40,28 +40,81 @@ export const ELITE_STAGE_MAX = 9
 // ── Enemy curve ────────────────────────────────────  core-progression-and-prestige.md §1
 
 /**
- * enemyMultiplier = 5^prestige × 1.6^(world-1) × 1.15^(stage-1)
+ * The continuous `b^n` curve from `open-items.md` #10, now applied.
  *
- * Locked, but a continuous `b^n` replacement was mid-tuning when that design session
- * ended (`open-items.md` #8, #10). It lives behind `settle.enemyMultiplier()` so swapping
- * it is a single edit.
+ *     n = prestige × 100 + (world-1) × 10 + (stage-1)
+ *     enemyMultiplier = b^n,  b = T^(1/100)
+ *
+ * One index, one base, one smooth ramp. It replaces `5^p × 1.6^(w-1) × 1.15^(s-1)`, whose
+ * three separate bases stepped unevenly — a world boundary jumped ×1.6 where a stage step
+ * moved ×1.15, and every axis had to be reasoned about on its own. The single index is also
+ * what lets the XP curve ride the *same* ramp, which is what stops XP/second decaying with
+ * depth (see XP_STEP_EXPONENT).
+ *
+ * ⚠ This deliberately removes the prestige difficulty reset. Under the old curve P+1 W1S1
+ * landed ~52× weaker than P W10S10, so prestige meant re-climbing familiar ground. Here
+ * index 99 → 100 is one ordinary step and the ramp never dips. To put the dip back without
+ * leaving this file: set PRESTIGE_INDEX_STEPS = 0 and ENEMY_PRESTIGE_STEP_MULT = 5.
  */
-export const ENEMY_PRESTIGE_BASE = 5
-export const ENEMY_WORLD_BASE = 1.6
-export const ENEMY_STAGE_BASE = 1.15
+
+/** Index steps a prestige is worth. Deriving it from the run length keeps the ramp seamless. */
+export const PRESTIGE_INDEX_STEPS = WORLD_COUNT * STAGES_PER_WORLD
+
+/**
+ * How much harder each single stage is than the one before it — the whole enemy curve, in
+ * one number you can hold in your head. 1.08 is +8% per stage.
+ *
+ *     bun run sim:hero-quest --report=campaign --sweep=ENEMY_STEP_BASE=1.05,1.08,1.10
+ *
+ * Authored here rather than as the per-loop total `T`, because `T` is per *hundred* stages
+ * and a solo Hero is only ever meant to cover a few dozen. Wanting the run to end around
+ * Stage 30 forces T into the tens of thousands, which reads as a runaway number when it is
+ * really just 1.08 raised to a large power. Tune the step; read the total.
+ *
+ * The trade this dial sets, and the reason it is not simply "as steep as feels hard": the
+ * party pools its PWR (`partyMitigation`), so N units push the zero-damage threshold out by
+ * `ln(N)/ln(b)` stages — at *every* depth, which is the point of pooling. The party runs
+ * from 3 (Hero + 2 Champions) to 6 at full slot expansion, so at 1.08 that is +14.3 stages
+ * at the start and +23.3 fully expanded. Steeper `b` shrinks both: at 1.14 a full party is
+ * worth only 14 stages. **Steepening to force the gacha earlier also shrinks what the gacha
+ * is worth when it arrives.**
+ */
+export const ENEMY_STEP_BASE = 1.08 // UNTUNED ╧
+
+/**
+ * Enemy multiplier across one full 100-stage loop, i.e. what one prestige costs you. Derived
+ * — this is the `T` a prior design session was sliding on a Desmos slider (`open-items.md`
+ * #10), kept as a named export because it is the number that describes prestige pacing.
+ *
+ * For reference, `1.6^9 × 1.15^9 = 241.7` is what the old three-base curve grew across one
+ * run. The continuous curve cannot separate that from the old ×5 per prestige — under a
+ * single index they are the same number. See ENEMY_PRESTIGE_STEP_MULT to keep them apart.
+ */
+export const ENEMY_CURVE_T = Math.pow(ENEMY_STEP_BASE, PRESTIGE_INDEX_STEPS)
+
+/**
+ * Extra multiplier applied per prestige on top of the ramp. 1 is the continuous curve as
+ * designed; the escape hatch described above is the only reason it exists.
+ */
+export const ENEMY_PRESTIGE_STEP_MULT = 1
 
 export const BASE_ENEMY_HP = 30 // UNTUNED ╧
 export const BASE_ENEMY_PWR = 10 // UNTUNED ╧
 export const BASE_ENEMY_DEF = 5 // UNTUNED ╧
-export const ELITE_STAT_MULT = 1.35 // UNTUNED ╧
+export const ELITE_STAT_MULT = 1.2 // UNTUNED ╧
 
 /**
  * Boss and super-boss HP, both relative to that stage's *trash-mob* HP so the two numbers
  * stay directly comparable while balancing. This replaces the contested ×8–12 / ×4–6 pair
  * outright with a clean-slate starting point.
+ *
+ * The super boss is deliberately the heavier of the two, because a gate against a fixed
+ * `BOSS_TIMER_SECONDS` is a pure DPS check, and party DPS is exactly what Champions add.
+ * Making the *gate* the wall — rather than the wave ramp — is what turns "this got slow"
+ * into "this needs a party", which is the thing a player can act on.
  */
-export const BOSS_HP_MULT = 2 // UNTUNED ╧
-export const SUPER_BOSS_HP_MULT = 3 // UNTUNED ╧
+export const BOSS_HP_MULT = 3 // UNTUNED ╧
+export const SUPER_BOSS_HP_MULT = 6 // UNTUNED ╧
 
 export const BOSS_ATK_MULT = 1.2
 export const SUPER_BOSS_ATK_MULT = 1.5
@@ -128,29 +181,127 @@ export const MIN_STAT_VALUE = 1
 /**
  * statAtLevel(base, level) = (base + FLAT × (level-1)) × GROWTH^(level-1)
  *
- * GROWTH = 1.0 is the pure flat-additive model the docs currently describe. Raising it is
- * the one-constant lever for testing whether a persistent Hero level can keep pace with a
- * ×5-per-prestige ceiling.
+ * GROWTH used to be 1.0 — pure flat-additive, which `classes-and-combat.md` §4 argued and
+ * the campaign sim then demonstrated **cannot** chase an exponential enemy curve: required
+ * level runs as `b^n` and required XP as `XP_TO_LEVEL_GROWTH^(b^n)`, doubly exponential. A
+ * solo Hero stalled in World 3 and never completed a prestige, at any XP rate.
  */
-export const STAT_PER_LEVEL_FLAT = 1 // UNTUNED ╧
-export const STAT_PER_LEVEL_GROWTH = 1.0 // UNTUNED ╧
+/**
+ * Additive term, on top of the geometric one. **0 by design now**: with compounding growth
+ * an additive term is a pure early-game distortion — +1 on a base of 10 is +10% per level
+ * against a curve moving +8% per stage, so the Hero sprints away from it for the first
+ * dozen levels and never gives the lead back. Pure geometric growth is what makes the pacing
+ * math below actually hold at every level rather than only asymptotically.
+ */
+export const STAT_PER_LEVEL_FLAT = 0 // UNTUNED ╧
+
+/**
+ * How many factors of the stat curve one point of DPS carries.
+ *
+ * Damage is `PWR × critMultiplier × attacksPerSecond × strikes`, and **two of those ride the
+ * stat block**: PWR directly, and `critMultiplier` through IMP. So DPS grows as the stat
+ * curve *squared*, not linearly — at level 156 that is PWR 7.6e6 × critMult 380,260, and the
+ * Hero outruns a curve it appears on paper to be matching.
+ *
+ * 2 is the asymptotic value, once crit chance has capped at 100% and attack rate at its
+ * ceiling. Below those caps LCK and SPD scale too and the true exponent is nearer 4, so
+ * early levels are worth more than this says. That is a real wrinkle in the model and not
+ * one a single constant can express — it is why `STAT_PACE_RATIO` still wants playtesting
+ * rather than solving.
+ */
+export const DPS_STAT_EXPONENT = 2
+
+/**
+ * **How much of one stage's difficulty one level of DPS buys.** Expressed against the enemy
+ * curve itself, and divided by `DPS_STAT_EXPONENT` because damage compounds the stat curve
+ * twice over:
+ *
+ *     1.0   the Hero's DPS exactly tracks the enemy — one level per stage, forever
+ *     0.5   a level buys half a stage, so the Hero bleeds half a stage each time   ← here
+ *
+ * Below 1.0 the shortfall compounds, and it is what the multiplicative power sources — the
+ * four gacha collections, prestige-shop multipliers, Traits — are supposed to fill. That is
+ * the design: levels carry most of the curve, and the remainder is the reason to engage with
+ * everything else. Measured at 0.5, which is where the party earns its keep:
+ *
+ *     solo Hero        walls at prestige 2, World 8      (3d 14h)
+ *     + 2 Champions    walls at prestige 4, World 3      (5d 8h)
+ *     + 5 Champions    no wall inside five prestiges
+ *
+ * ⚠ **1.0 removes gating entirely.** If the Hero tracks the curve exactly then "can I beat
+ * World N's super boss" has the same answer for every N, and progression is purely time-
+ * gated — the gacha becomes a speed multiplier rather than a gate. That may well be the
+ * better game; it is a deliberate choice, not a safe default, so it is not the value here.
+ */
+export const STAT_PACE_RATIO = 0.5 // UNTUNED ╧
+
+/** Derived, never set directly — move `STAT_PACE_RATIO`. */
+export const STAT_PER_LEVEL_GROWTH = Math.pow(ENEMY_STEP_BASE, STAT_PACE_RATIO / DPS_STAT_EXPONENT)
+
+/**
+ * What one point of a Champion's `(star × 10 + level)` scalar is worth as a stat multiplier.
+ * The scalar runs 1 → 60, so this sets the span between an unstarred pull and a maxed one:
+ * at 0.05 that is ×1.0 → ×3.95 on top of the rarity multiplier.
+ *
+ * Phase 2 owns the real value — `champions-guild-gacha.md` §2 never states how the scalar
+ * converts to stats for a Champion's own block, unlike Gear and Artifacts which both have
+ * explicit formulas. Placeholder so the shape is testable.
+ */
+export const CHAMPION_INVESTMENT_PER_POINT = 0.05 // UNTUNED ╧
 
 // ── XP ─────────────────────────────────────────────
 
 export const XP_BASE_PER_KILL = 10 // UNTUNED ╧
-export const XP_WORLD_BASE = 1.25 // UNTUNED ╧
-export const XP_STAGE_BASE = 1.05 // UNTUNED ╧
 
 /**
- * No design doc covers XP the way `gold-economy.md` covers Gold. Since Hero level now
- * persists across prestige, whether XP carries a prestige term at all decides whether
- * levels stall or keep pace. Flagged, not settled.
+ * xpToNextLevel(level) = XP_TO_LEVEL_BASE × XP_TO_LEVEL_GROWTH^(level-1)
+ *
+ * How steeply a level's price climbs. Together with `STAT_PACE_RATIO` this sets the whole
+ * pace of the game: the ratio decides how much *ground* a level buys, this decides how much
+ * *time* a level costs.
+ *
+ * Declared ahead of the XP-income constants because `XP_STEP_EXPONENT` is derived from it.
  */
-export const XP_PRESTIGE_BASE = 2 // UNTUNED ╧
-
-/** xpToNextLevel(level) = XP_TO_LEVEL_BASE × XP_TO_LEVEL_GROWTH^(level-1) */
 export const XP_TO_LEVEL_BASE = 100 // UNTUNED ╧
-export const XP_TO_LEVEL_GROWTH = 1.12 // UNTUNED ╧
+export const XP_TO_LEVEL_GROWTH = 1.16 // UNTUNED ╧
+
+/**
+ * How XP income tracks difficulty, as an exponent on the enemy curve's own step:
+ *
+ *     < 1   XP/second decays with depth — the old three-base curve sat here (≈0.45)
+ *     = 1   XP/second is exactly flat, at every depth and forever
+ *     > 1   XP/second climbs with depth
+ *
+ * Flat is not the same as keeping pace. A level costs `XP_TO_LEVEL_GROWTH^level` and buys
+ * `STAT_PER_LEVEL_GROWTH^level` of stats, so holding **wall-clock time per stage** constant
+ * — the property that actually makes an idle game feel steady — needs
+ *
+ *     XP_STEP_EXPONENT = ln(XP_TO_LEVEL_GROWTH) / ln(STAT_PER_LEVEL_GROWTH)
+ *
+ * That break-even is the *whole* of the pacing question, and it swallows `STAT_PACE_RATIO`
+ * completely: whatever ground a level fails to buy, the derived exponent hands back as extra
+ * XP, so the run never walls at any ratio. Measured — at ratio 0.9 with no slack a solo Hero
+ * clears four prestiges in 93 minutes without grinding once.
+ *
+ * So the slack has to be its own dial. It is the only thing that decides whether the game
+ * has a wall at all:
+ *
+ *     1.0   income exactly matches the break-even — constant seconds per stage, forever,
+ *           and no wall ever. The gacha becomes a speed multiplier, not a gate.
+ *     0.9   income falls 10% short of break-even, so seconds-per-stage climbs geometrically
+ *           and the run eventually stops being worth grinding.
+ *
+ * Everything else — party pooling, gacha multipliers, prestige upgrades — then reads as
+ * "how much further before the slack catches up with you."
+ */
+export const XP_PACE_SLACK = 0.9 // UNTUNED ╧
+
+/** Derived. Move `XP_PACE_SLACK`, or the two curves it is measured against. */
+export const XP_STEP_EXPONENT =
+    XP_PACE_SLACK * Math.log(XP_TO_LEVEL_GROWTH) / Math.log(STAT_PER_LEVEL_GROWTH)
+
+/** Per-step XP base. Derived from the exponent above. */
+export const XP_STEP_BASE = Math.pow(ENEMY_STEP_BASE, XP_STEP_EXPONENT)
 
 // ── Gold ───────────────────────────────────────────  gold-economy.md §3–4
 

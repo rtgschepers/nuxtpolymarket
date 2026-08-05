@@ -31,6 +31,10 @@ import type { EnemyStats, UnitStats } from './types'
  * A clamped ratio, not an asymptotic curve: once a defender's DEF reaches `K` times the
  * attacker's PWR, mitigation is exactly 100% and damage floors at exactly 0. That hard
  * floor is the point of the clamped form.
+ *
+ * This is the **pairwise** contract — one attacker against one defender. A party does not
+ * experience this directly: it pools its PWR first (`partyMitigation`), which is what lets
+ * unit count move the zero-damage threshold instead of only scaling the residual below it.
  */
 export function mitigation(attackerPwr: DecimalSource, defenderDef: DecimalSource): Decimal {
     const pwr = D(attackerPwr)
@@ -99,15 +103,59 @@ export function expectedHitDamage(attacker: UnitStats, defenderDef: DecimalSourc
     return base.mul(critFactor).mul(hitChanceAgainst(defenderEva))
 }
 
-/** Folds strikesPerAttack, so Hunter's triple and Beast Master's quad need no special case. */
+/**
+ * Folds strikesPerAttack, so Hunter's triple and Beast Master's quad need no special case.
+ *
+ * Solo/pairwise: mitigates against this unit's own PWR. For a party, go through `partyDps`
+ * — the two agree exactly at one unit, and diverge deliberately above it.
+ */
 export function unitDps(unit: UnitStats, defenderDef: DecimalSource, defenderEva = 0): Decimal {
     return expectedHitDamage(unit, defenderDef, 1, defenderEva)
         .mul(unit.strikesPerAttack)
         .mul(unit.attacksPerSecond)
 }
 
+/**
+ * The party's mitigation, resolved **once** from its summed PWR.
+ *
+ * The clamp is a subtraction in disguise — a unit deals `PWR − DEF/K` — so evaluating it per
+ * attacker means N units multiply whatever survives *below* the zero-damage threshold while
+ * the threshold itself never moves. Measured on the old model: at World 9 a solo Hero and a
+ * four-unit party had identical depth ceilings, and the party was worth about a third of a
+ * stage. Champions could never open a wall the Hero could not.
+ *
+ * Pooling makes the party one body with `PWR = Σ`. Unit count now moves the ceiling, worth a
+ * constant `ln(N)/ln(ENEMY_STEP_BASE)` stages at *every* depth rather than collapsing to
+ * nothing at the clamp.
+ *
+ * Offense only, deliberately: incoming damage stays per-defender (`expectedIncomingDps`), so
+ * party size does not silently become a survivability stat too.
+ */
+export function partyMitigation(units: readonly UnitStats[], defenderDef: DecimalSource): Decimal {
+    const pooledPwr = units.reduce((total, unit) => total.add(unit.pwr), ZERO)
+    return mitigation(pooledPwr, defenderDef)
+}
+
+/**
+ * Each unit still swings its own PWR; only the mitigation they swing through is shared. A
+ * weak Champion therefore adds its own damage *and* thins the armour for everyone else,
+ * which is what makes filling a slot always worth something.
+ */
 export function partyDps(units: readonly UnitStats[], defenderDef: DecimalSource, defenderEva = 0): Decimal {
-    return units.reduce((total, unit) => total.add(unitDps(unit, defenderDef, defenderEva)), ZERO)
+    if (units.length === 0) return ZERO
+    const penetration = ONE.sub(partyMitigation(units, defenderDef))
+    if (penetration.lte(0)) return ZERO
+
+    return units.reduce((total, unit) => {
+        const critFactor = 1 + unit.critChance * (unit.critMultiplier - 1)
+        const dps = unit.pwr
+            .mul(penetration)
+            .mul(critFactor)
+            .mul(hitChanceAgainst(defenderEva))
+            .mul(unit.strikesPerAttack)
+            .mul(unit.attacksPerSecond)
+        return total.add(dps)
+    }, ZERO)
 }
 
 /** Incoming damage from an enemy, used for survivability projections. */
