@@ -57,20 +57,41 @@ Every raid auto-applies a preferred Loadout on engage (`loadouts.md` §4). Arena
 ### 7. Passive Skill Tree (backlog item 3)
 Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
 
-### 8. Alternative enemy-scaling formula (backlog item 9)
-A candidate replacement enemy curve was parked, never evaluated against the locked `5^prestige × 1.6^(world-1) × 1.15^(stage-1)`. Worth folding into the World & Enemy Design session (#6) rather than treated separately, since it directly determines the curve that pass builds content against.
+### 8. Alternative enemy-scaling formula (backlog item 9) — **applied, see #10**
+Resolved together with #10: the continuous `b^n` curve is now the implemented one. The shape is settled; only `b` is still a tuning value.
 
 ### 9. Holiday gameplay events
 Explicitly deferred scope — the gift-mechanic phase is locked, but limited-time modes/content were never started.
 
 ---
 
-## ⚠️ A decision made verbally, still not in the docs
+## ⚠️ A decision made verbally — **now applied**
 
-### 10. A new enemy curve was mid-tuning and never finished
-A prior session got partway through replacing the locked enemy formula with a continuous `b^n` version (`b = T^(1/100)`), mid-way through picking a `T` value via a Desmos slider when that conversation ended. Also in flight: **boss HP softening from ×8–12 down to ×4–6** — reads as decided, never applied to `core-progression-and-prestige.md` §1. That session also referenced "the world doc's §3 difficulty table," implying a worlds document that isn't currently in this project.
+### 10. The new enemy curve — implemented, values still tuning
+The parked continuous `b^n` curve is **built and shipped** in `settle.enemyMultiplier()`, with `core-progression-and-prestige.md` §1 rewritten to match. The boss HP softening landed alongside it, harder than the ×4–6 that was in flight: **×3 trash HP for the Stage 5 boss, ×6 for the super boss**, both now expressed against trash rather than the super boss compounding off the boss.
 
-**Belongs in the World & Enemy Design session (#6)** — the `T` value determines the curve that pass would otherwise be building content against.
+Authored as a **per-stage** base rather than the per-100-stage `T`, because `T` is a five-digit number for any sane per-stage value and nobody can slide it by feel. `ENEMY_STEP_BASE = 1.08` is the dial; `ENEMY_CURVE_T = b^100 ≈ 2,200` is derived.
+
+Three things this decided that were not previously written down anywhere:
+
+1. **No prestige difficulty reset.** One continuous index cannot hold both a per-run ramp and a smaller per-prestige jump — they are the same number. The old curve's ×0.021 dip at prestige (and ×0.455 dip at *every world boundary* — it was a sawtooth, which nobody had noticed) is gone. `ENEMY_PRESTIGE_STEP_MULT` restores it if wanted.
+2. **XP now rides the same index** at `XP_STEP_EXPONENT` relative growth, so XP/second no longer decays with depth. The old three-base XP curve sat at an effective exponent of ≈0.45 against the enemy curve, meaning farming got strictly worse the deeper you went.
+3. **Boss gates, not the wave ramp, are the intended wall** — a gate against a fixed timer is a pure DPS check, and party DPS is what Champions add.
+
+Still open here: `b` itself, `XP_STEP_EXPONENT`, and the boss multipliers are all playtest starting points (`// UNTUNED ╧`). **The World & Enemy Design session (#6) still owns the final values** — what's settled is the shape, not the numbers.
+
+That session also referenced "the world doc's §3 difficulty table," implying a worlds document that isn't currently in this project.
+
+---
+
+### 11. Consequences of pooled mitigation and geometric stat growth — **new, from the Phase 1 math pass**
+
+Mitigation is now pooled across the fielded party (`classes-and-combat.md` §7) and Hero stats grow geometrically against the enemy curve (`core-progression-and-prestige.md` §1). Four things that surfaced and are **not** resolved:
+
+1. **`HqStatBlock` is `number`, not Decimal.** Harmless while growth was flat; with geometric growth stats overflow float around level ~10,400. `docs/hero-quest/CLAUDE.md` §3 says stats are Decimal end to end, so this is already a latent violation — compounding just makes it reachable. No fix needed soon, but it is a real ceiling in an infinite-prestige game.
+2. **Champions add exactly zero survivability.** The survivability model sums incoming damage *and* HP across the party, so time-to-die is party-size-invariant. Offense-only pooling helps a wipe purely by shortening the fight. **The Tank archetype therefore has no mechanical function yet** — it needs either aggro/targeting or pooled DEF, and that is a Phase 2 design call.
+3. **DPS is quadratic in the stat curve.** `critMultiplier` scales linearly with IMP while damage scales with PWR, so both compound. Below the crit-chance and attack-rate caps, LCK and SPD scale too and the exponent is nearer 4 — meaning early levels are worth substantially more than late ones, and no single constant expresses that. Capping or flattening the crit-damage contribution is the obvious lever if it proves a problem.
+4. **Prestige-shop stat multiplier scope is still undefined** (Hero-only vs party-wide) — never stated in any doc. It is one of the multiplicative sources expected to fill the `STAT_PACE_RATIO` shortfall, so it needs an answer before the Phase 2 balance pass.
 
 ---
 

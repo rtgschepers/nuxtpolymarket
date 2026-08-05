@@ -35,12 +35,8 @@ This is the running idea list from the "Project ideas memory list" conversation,
   **Stat-boost pool and Set list received** — see dedicated design session (this item now in active design, not just backlog).
   **Awaiting next message:** the stat-boost pool (values + rarity tiers) and the 5 trait Sets + their stacking bonuses.
 
-- [ ] **9. Alternative enemy-scaling formula (smoother stage curve)**
-  Candidate replacement for the locked `enemyMultiplier` in `core-progression-and-prestige.md` §1, aimed at smoother difficulty scaling through stages:
-  ```
-  enemyMultiplier = (prestige × worlds_per_prestige × stages_per_world) × ((world-1) × 10) × stage
-  ```
-  Not evaluated or compared against the current `5^prestige × 1.6^(world-1) × 1.15^(stage-1)` formula yet — parked here until a dedicated pass (still needs a zero/world-1 and zero/prestige edge-case check, since `(world-1)` and `prestige` are still multiplicative terms that hit 0 at the start of each prestige/World 1).
+- [x] **9. Alternative enemy-scaling formula (smoother stage curve)** — **done**
+  The sketch here squashed prestige/world/stage into one position term, which was the right instinct. Shipped as `enemyMultiplier = b^n` with `n = prestige × 100 + (world-1) × 10 + (stage-1)` — an index, not a product, so the zero-at-World-1 edge case this entry worried about never arises (`n = 0` gives a multiplier of exactly 1). See `core-progression-and-prestige.md` §1 and `open-items.md` #10.
 
 ---
 

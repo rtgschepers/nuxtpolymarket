@@ -53,7 +53,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 ### Core loop & progression
 | Topic | Doc | § |
 |---|---|---|
-| Enemy scaling `5^p × 1.6^(w-1) × 1.15^(s-1)` | `core-progression-and-prestige.md` | §1 |
+| Enemy scaling `b^n` (continuous index) | `core-progression-and-prestige.md` | §1 |
 | Elite / boss / super-boss stat modifiers | `core-progression-and-prestige.md` | §1 |
 | Stage archetypes (waves / boss / elite / super boss) | `core-progression-and-prestige.md` | §2 |
 | Kill count (`BASE_KILL_COUNT` = 30), boss timer (30s) | `core-progression-and-prestige.md` | §2 |
@@ -200,7 +200,8 @@ Not design docs — they describe the *state* of the project rather than the gam
 
 | Formula | Doc |
 |---|---|
-| `enemyMultiplier = 5^p × 1.6^(w-1) × 1.15^(s-1)` | `core-progression-and-prestige.md` §1 |
+| `enemyMultiplier = b^n`, `n = p×100 + (w-1)×10 + (s-1)` | `core-progression-and-prestige.md` §1 |
+| `xpPerKill = XP_BASE × (b^XP_STEP_EXPONENT)^n` | `core-progression-and-prestige.md` §1 |
 | `prestigeCurrencyEarned = 100 × 2^prestigeCompleted` | `core-progression-and-prestige.md` §4 |
 | `mitigation = min(1, DEF / (PWR × K))` | `classes-and-combat.md` §7 |
 | `damage = max(0, PWR − DEF/K) × abilityMultiplier` | `classes-and-combat.md` §7 |

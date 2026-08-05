@@ -112,15 +112,24 @@ These are two different levers now, worth separating clearly:
 
 ### Why uncapped leveling still catches the enemy curve — **argument rewritten for continuous levels**
 
-The enemy curve is *bounded within a prestige tier*, not exponential-forever: `enemyMultiplier = 5^prestige × 1.6^(world-1) × 1.15^(stage-1)` has world capped at 10 and stage capped at 10 (per `core-progression-and-prestige.md`'s locked "10 worlds (fixed)" structure), so for any given prestige count there's a fixed, finite ceiling — its value at World 10 / Stage 10.
+The enemy curve is *bounded within a prestige tier*, not exponential-forever: `enemyMultiplier = b^n` where `n = prestige × 100 + (world-1) × 10 + (stage-1)` has world capped at 10 and stage capped at 10 (per `core-progression-and-prestige.md`'s locked "10 worlds (fixed)" structure), so for any given prestige count there's a fixed, finite ceiling — its value at World 10 / Stage 10.
 
 The old version of this argument leaned on the reset: *"each new prestige resets the Hero to level 1 against a new, higher ceiling, so this logic re-applies fresh every run."* **That reasoning is gone, and what replaces it is stronger, not weaker:**
 
-- Each prestige raises the fixed ceiling by exactly **×5**, a constant factor per tier.
+- Each prestige raises the fixed ceiling by exactly **×T** (`b^100`, ≈2,200 at the current `b = 1.08`), a constant factor per tier. *(Under the old curve this was ×5, because that curve reset at prestige. The continuous curve has no reset, so the per-tier factor is the whole 100-stage span — same ramp, honestly counted.)*
 - The Hero's level is now **cumulative across all runs** — it only ever goes up. So rather than restarting a race from zero against a ceiling that keeps rising, the Hero enters every new tier already carrying every level ever earned.
-- The guardrail this puts on the eventual per-level stat curve is therefore **stricter and more precise than before**: total Hero power must keep growing by at least ×5 per prestige worth of accumulated levels, sustained indefinitely. A flat-additive-per-level curve, notably, **does not satisfy this on its own** — additive growth against a geometric ceiling falls behind eventually, no matter the constant. Either the per-level stat gain needs to itself grow with level (so accumulated power compounds), or the ×5 gap has to be carried by the other power sources that *are* multiplicative and persistent: the four gacha collections, prestige-shop multipliers, and Traits.
+- The guardrail this puts on the eventual per-level stat curve is therefore **stricter and more precise than before**: total Hero power must keep growing by at least ×T per prestige worth of accumulated levels, sustained indefinitely. A flat-additive-per-level curve, notably, **does not satisfy this on its own** — additive growth against a geometric ceiling falls behind eventually, no matter the constant. Either the per-level stat gain needs to itself grow with level (so accumulated power compounds), or the gap has to be carried by the other power sources that *are* multiplicative and persistent: the four gacha collections, prestige-shop multipliers, and Traits.
 
 **This is a real constraint the balance pass has to satisfy, not a formality** — and it's the single most important consequence of making level persistent. Flagging it explicitly rather than letting "uncapped leveling will sort itself out" carry over from the old reset-based reasoning, where it was true and now isn't.
+
+**Now measured, not just argued.** `bun run sim:hero-quest --report=campaign` walks the run until
+farming stops working, and at `STAT_PER_LEVEL_GROWTH = 1.0` (flat-additive) it confirms the
+prediction: a solo Hero stalls in World 3 and never completes a single prestige, at any XP rate.
+Raising that constant to 1.08 clears four prestiges with almost no grinding. The closed form for
+holding time-per-stage constant is `XP_STEP_EXPONENT = ln(XP_TO_LEVEL_GROWTH) / ln(STAT_PER_LEVEL_GROWTH)`,
+which is undefined at 1.0 — flat stat growth cannot keep pace at *any* XP rate. Whether that gap
+is closed by compounding levels or by the multiplicative power sources is still the open call;
+what is settled is that it cannot be left to levels alone as they are currently shaped.
 
 ---
 
@@ -170,6 +179,22 @@ damage = PWR × (1 - mitigation) × abilityMultiplier
 ```
 This is now **literally identical to the Champion damage formula** (`champions-guild-gacha.md` §2) rather than merely the same shape — one formula, one stat, for every unit in the game.
 `K` is now a ratio threshold rather than v1's flat additive constant: once a defender's DEF reaches `K` times the attacker's own PWR, mitigation is fully 100% and damage floors at exactly **0** — e.g. an enemy far weaker than the Hero can genuinely land zero damage, not just an asymptotic sliver. Below that threshold it still scales smoothly with the DEF-to-PWR *ratio* (not a raw difference), so the earlier reasoning about staying relative/percentage-based against the exponential enemy curve still holds — there's just a hard floor added on top now. Tune `K` via playtesting, same as before.
+
+#### The party pools its PWR — **revision**
+
+The formula above is the **pairwise** contract: one attacker, one defender. A *fielded party* does not resolve it per member. Mitigation is computed **once**, from the party's summed PWR, and every member then swings its own PWR through that shared figure:
+
+```
+partyMitigation = min(1, DEF / (Σ PWR_member × K))
+partyDamage     = Σ [ PWR_member × (1 - partyMitigation) × ... ]
+                = max(0, Σ PWR_member - DEF / K) × ...
+```
+
+The party fights as one body with `PWR = Σ`. Incoming damage is deliberately **not** pooled — enemies still resolve against each defender's own DEF, so party size is an offensive lever only.
+
+**Why this had to change.** Because `damage = max(0, PWR − DEF/K)` is a *subtraction*, evaluating it per attacker means N members multiply whatever survives below the zero-damage threshold while the threshold itself never moves. Measured on the un-pooled model at World 9: a solo Hero and a four-member party had **identical** depth ceilings, and the party was worth about a third of a stage. Champions could never open a wall the Hero alone could not — no amount of roster breadth or investment, only raw PWR. Pooling makes party size worth a constant `ln(N)/ln(ENEMY_STEP_BASE)` stages at *every* depth: +14.3 at the starting party of 3, +23.3 at the full 6.
+
+The hard floor this section calls the point of the clamped form survives intact — it just belongs to the party rather than to each member.
 
 ### Accuracy & Evasion — **new**
 

@@ -11,31 +11,67 @@ Status: **Locked** — decisions confirmed, ready to reference for implementatio
 
 ## 1. Enemy Power Curve
 
-Base multiplier applied to enemy stats, driven by three inputs: prestige count, current world, current stage.
+Base multiplier applied to enemy stats. Every position in the game collapses to **one index**,
+and the curve is a single exponential over it.
 
 ```
-enemyMultiplier(prestige, world, stage) =
-    5^prestige × 1.6^(world-1) × 1.15^(stage-1)
-```
-(world ranges 1–10)
+n = prestige × 100 + (world-1) × 10 + (stage-1)
 
-- `5` = per-prestige growth (the big jump on reset)
-- `1.6` = per-world growth
-- `1.15` = per-stage growth
+enemyMultiplier(prestige, world, stage) = b^n
+```
+(world and stage both range 1–10, so `n` advances by exactly 1 per stage, forever)
+
+- `b` = **per-stage growth**, `ENEMY_STEP_BASE`, currently **1.08** (+8% per stage)
+- `T` = `b^100` ≈ **2,200** — the multiplier across one full 100-stage prestige loop, derived
+
+This **replaces** the earlier `5^prestige × 1.6^(world-1) × 1.15^(stage-1)`, which was three
+bases on three axes and stepped unevenly: a world boundary was a ×1.6 jump where a stage step
+was ×1.15, and because stage reset from 10 to 1 across that boundary the curve actually *fell*
+×0.455 at every world change and ×0.021 at every prestige. It was a sawtooth, not a ramp. The
+single index removes both seams — n=99 → n=100 is one ordinary step like any other.
+
+**Consequence, deliberate and worth stating plainly: there is no prestige difficulty reset.**
+Under the old curve a new prestige started ~52× weaker than where you just were, so prestige
+meant re-climbing familiar ground. It no longer does. A single continuous base cannot express
+both a per-run ramp and a smaller per-prestige jump — under one index they are the same number.
+`ENEMY_PRESTIGE_STEP_MULT` in `constants.ts` is the escape hatch if the dip is wanted back.
 
 **Elite mob stats** (stages 6–9 within a world), layered on top of the regular-mob multiplier for that stage:
 - Stats ≈ ×1.2–1.5 that stage's regular-mob baseline — same base roster, stat-buffed variants with a slight design variation (e.g. recolor or minor visual tweak) so players can tell them apart from regular mobs at a glance, without needing full new art.
 
 **Boss stats** (Stage 5 of every world), layered on top of the trash-mob multiplier for that stage:
-- HP ≈ ×8–12 trash-mob HP
+- HP ≈ **×3** trash-mob HP
+- ATK ≈ ×1.2 trash-mob ATK
+
+**Super boss stats** (Stage 10 of each world), also expressed against **trash-mob** HP so the two
+gates stay directly comparable while balancing:
+- HP ≈ **×6** trash-mob HP
 - ATK ≈ ×1.5 trash-mob ATK
 
-**Super boss stats** (Stage 10 of each world), layered on top of the regular stage-boss stats:
-- HP ≈ ×2 stage-boss HP
-- ATK ≈ ×1.2 stage-boss ATK
-- Mechanical bump is intentionally modest — the main differentiator should be visual (bigger sprite, unique animation, name tag).
+Both boss numbers are down hard from the original ×8–12 (and the super boss's ×2-of-stage-boss,
+which compounded to ×16–24 of trash). The super boss is now the heavier of the two on purpose:
+against a fixed `BOSS_TIMER_SECONDS`, a gate is a pure DPS check, and party DPS is exactly what
+Champions add. Making the *gate* the wall rather than the wave ramp is what turns "this got
+slow" into "this needs a party."
 
 All constants above are tunable starting points; adjust via playtesting rather than theory.
+
+### Hero pacing against the curve
+
+Hero stat growth is now **geometric**, not flat-additive, and is expressed as a fraction of the enemy curve rather than as an independent number:
+
+```
+STAT_PER_LEVEL_GROWTH = ENEMY_STEP_BASE ^ (STAT_PACE_RATIO / DPS_STAT_EXPONENT)
+```
+
+- `STAT_PACE_RATIO` — **how much of one stage's difficulty one level of DPS buys.** At 1.0 the Hero tracks the curve exactly and never walls; below it the shortfall compounds, and filling that shortfall is the entire job of the gacha collections, prestige-shop multipliers and Traits. Currently 0.5.
+- `DPS_STAT_EXPONENT = 2` — damage is `PWR × critMultiplier × …`, and **both** ride the stat block (`critMultiplier` through IMP), so DPS grows as the stat curve *squared*. Missing this is what makes an apparently pace-matched Hero run away from the curve.
+
+⚠ **`STAT_PACE_RATIO = 1.0` removes gating entirely.** If the Hero tracks the curve exactly, "can I beat World N's super boss" has the same answer for every N, progression becomes purely time-gated, and the gacha turns into a speed multiplier rather than a gate. That is a legitimate design — it is just a deliberate choice, not the default.
+
+XP income is pinned to the same frame: `XP_STEP_EXPONENT = XP_PACE_SLACK × ln(XP_TO_LEVEL_GROWTH) / ln(STAT_PER_LEVEL_GROWTH)`, where the break-even is the value at which seconds-per-stage stays constant forever. `XP_PACE_SLACK` below 1.0 is what lets the run eventually stop being worth grinding.
+
+Measured at the current values, a solo Hero walls at prestige 2 / World 8; the starting party of 3 reaches prestige 4 / World 3; a full party of 6 clears five prestiges without walling.
 
 Note: by roughly prestige 15–20, raw numbers will exceed standard float precision. Plan for scientific notation display or a big-number library (e.g. `break_eternity.js`) ahead of time.
 

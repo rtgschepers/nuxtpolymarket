@@ -105,7 +105,7 @@ Structural invariants from the docs (drop-rate rows sum to 100%, ability reuse �
 
 ## 7. Known-unstable ground
 
-- **The enemy curve may change.** `5^p × 1.6^(w-1) × 1.15^(s-1)` is what's locked, but a continuous `b^n` replacement was mid-tuning when that session ended, and a boss-HP softening (×8–12 → ×4–6) reads as decided but was never applied. Phase 1 exists partly to settle this empirically. Keep the curve behind a single function in `settle.ts` so swapping it is one edit.
+- **The enemy curve changed, and its values are still moving.** The continuous `b^n` replacement is now applied — one index `n = p×100 + (w-1)×10 + (s-1)`, one base `ENEMY_STEP_BASE`, and the boss-HP softening landed with it (×3 / ×6 of trash). `open-items.md` #10 has the full record, including the two consequences that were not previously written down: there is no longer a prestige difficulty reset, and XP rides the same index so XP/second no longer decays with depth. `b`, `XP_STEP_EXPONENT` and the boss multipliers are `// UNTUNED ╧` playtest values — Phase 1 settles them empirically. The curve stays behind `settle.enemyMultiplier()` so swapping it again is one edit.
 - **Hero level now persists across prestige and class switches.** This is a recent revision. `heroLevel`/`heroXp` are **not** reset by `settleHq`'s prestige path — it zeroes only the run-position group. Several Gold constants need re-derivation because of it.
 - **`gold-economy.md` supersedes older Gold assumptions** in `gacha-shared-system.md`, `economy-and-currencies.md`, `skills-gacha.md`, and `core-progression-and-prestige.md`. Gold is decoupled from the exponential curve. Any flat 1,000,000-Gold Seal price you encounter is superseded by the daily escalating ladder (`gold-economy.md` §7).
 

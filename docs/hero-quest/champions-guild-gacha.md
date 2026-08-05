@@ -100,7 +100,17 @@ debuffPotency = PWR × abilityMultiplier                       (Control kits —
 - **Champion HP is now derived the same way as Hero HP:** `HP = baseHP + VIT × HPperVIT` (Combat doc §7) — previously undefined for non-Tank Champions.
 - **Champions are subject to the same Evasion check as the Hero** (Combat doc §7, "Accuracy & Evasion"). Base EVA is **0** for every Champion of every archetype, exactly as it is for every Hero class — Champions gain it only from party-wide sources, which today means the Vital Reflex trait set (`traits.md` §5). No archetype grants evasion innately; Tank's survivability identity stays expressed through DEF/VIT and its own kit, not through dodging.
 
-PWR is still the thing that actually grows as a Champion levels via stars/dupes (Section 4); the rarity multiplier above is a flat, level-independent baseline on top of it. The other stats (SPD/LCK/IMP/VIT/DEF) scale with level the same way the Hero's do. Note the Section 7 Hero-facing passive is still a *separate* channel from this: PWR governs a Champion's own kit magnitude, while §7 governs what owning that Champion hands the Hero. They now happen to name the same stat for the Damage archetype, but they remain two distinct mechanics.
+PWR is still the thing that actually grows as a Champion levels via stars/dupes (Section 4); the rarity multiplier above is a flat, level-independent baseline on top of it.
+
+**Two axes, and which is which — resolved.** This section used to say the other stats "scale with level the same way the Hero's do", which quietly conflated two different quantities: the Hero has an **uncapped XP level**, while a Champion has only the bounded `star × 10 + level` dupe scalar, which maxes at 60. A Champion cannot chase an exponential enemy curve on a bounded scalar, and because mitigation clamps at `DEF ≥ PWR × K`, one that falls behind contributes **exactly zero** rather than merely less — dead weight, not diminished weight. So:
+
+```
+championStat = statAtLevel(archetypeBase, heroLevel) × rarityMultiplier × investmentMultiplier(star × 10 + level)
+```
+
+The **Hero's level supplies the unbounded axis** — every Champion rides the Hero's own stat curve, so the party scales together and no member can be left behind by the curve. Rarity and dupe investment supply a **bounded multiplier the player earns**, which is what makes pulling and starring matter. Neither replaces the other.
+
+Still unspecified, and owned by the Phase 2 content pass: the per-archetype base spread (there is no Champion equivalent of `classes-and-combat.md` §2's table), absolute base magnitudes, and how the 1→60 scalar converts to a multiplier (`CHAMPION_INVESTMENT_PER_POINT` is a placeholder). The *shape* above is what the math layer implements. Note the Section 7 Hero-facing passive is still a *separate* channel from this: PWR governs a Champion's own kit magnitude, while §7 governs what owning that Champion hands the Hero. They now happen to name the same stat for the Damage archetype, but they remain two distinct mechanics.
 
 ---
 

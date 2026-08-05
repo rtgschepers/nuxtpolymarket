@@ -40,7 +40,7 @@ New gacha-paired raids follow this pattern automatically as new gacha content is
 raidDifficulty(raidLevel) = RAID_BASE_STATS × RAID_LEVEL_GROWTH^(raidLevel - 1)
 ```
 
-Own dedicated constants **per raid** (`RAID_BASE_STATS[raid]`, `RAID_LEVEL_GROWTH[raid]`) — independent of `core-progression-and-prestige.md`'s `5^prestige × 1.6^(world-1) × 1.15^(stage-1)`, and independent of each other. No reason all 4 raids need the same growth rate; one meant as a longer-term chase can climb slower than one meant to gate content earlier. Tune-via-playtest, same convention as everywhere else in this project.
+Own dedicated constants **per raid** (`RAID_BASE_STATS[raid]`, `RAID_LEVEL_GROWTH[raid]`) — independent of `core-progression-and-prestige.md`'s `b^n` enemy curve, and independent of each other. No reason all 4 raids need the same growth rate; one meant as a longer-term chase can climb slower than one meant to gate content earlier. Tune-via-playtest, same convention as everywhere else in this project.
 
 **Big-number consequence, same as the enemy curve:** since this climbs forever with no prestige reset to bound it, `raidDifficulty` needs the same Decimal/text treatment as `enemyMultiplier` (`tech-architecture.md` §2) — a dedicated player exceeds float precision here too, just on its own independent clock.
 

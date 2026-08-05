@@ -58,8 +58,8 @@ This is the platform doc's own scaffolding order, and it's the right one: `share
 
 These are the design assumptions most likely to be wrong, and the reason the phase exists:
 
-1. **Does the `5^prestige × 1.6^world × 1.15^stage` curve feel right?** Backlog item 9 parks an alternative formula, and a separate half-finished conversation was retuning this whole curve toward a continuous `b^n` shape with a `T` slider. Phase 1 is where that gets settled empirically instead of on paper.
-2. **Can an uncapped, now-*persistent* Hero level actually keep pace with a ×5-per-prestige ceiling?** `classes-and-combat.md` §4 flags that flat-additive per-level growth **provably cannot** on its own. Phase 1 either confirms the other power sources carry it, or forces a change to the level curve.
+1. **Does `b = 1.08` per stage feel right?** The *shape* is settled — the continuous `b^n` curve replaced `5^prestige × 1.6^world × 1.15^stage` (`open-items.md` #10), closing backlog item 9. What Phase 1 tests is the value, and whether losing the prestige difficulty dip costs the run its rhythm. `bun run sim:hero-quest --report=campaign --sweep=ENEMY_STEP_BASE=...` is the slider.
+2. **Can an uncapped, now-*persistent* Hero level actually keep pace with a ×T-per-prestige ceiling?** `classes-and-combat.md` §4 flags that flat-additive per-level growth **provably cannot** on its own, and the campaign sim now demonstrates it: at `STAT_PER_LEVEL_GROWTH = 1.0` a solo Hero stalls in World 3 and never completes a prestige. Phase 1 either confirms the other power sources carry it, or forces a change to the level curve.
 3. **Is boss-gating-requires-presence tolerable?** Prestige currency can never be earned offline by design. Fun, or annoying?
 4. **Is 30 kills per stage × 100 stages the right run length?**
 
