@@ -8,7 +8,9 @@
  *   bun run sim:hero-quest --set=K=3 --set=BASE_HP=200      # override constants for one run
  *   bun run sim:hero-quest --sweep=K=1..4:0.5               # sweep a dial, tabulate results
  *
- * Flags: --class --level --world --stage --prestige --no-levelup --json
+ *   bun run sim:hero-quest --report=gates --party=3         # what a starting party buys
+ *
+ * Flags: --class --level --world --stage --prestige --party --no-levelup --json
  *
  * Crit-averaged, no per-hit rolling — a verdict is "wins on expected values", not a win
  * rate. Overrides are applied by rewriting `constants.ts` at load time and never touch the
@@ -18,7 +20,7 @@
 import { describeOverrides, parseOverrides, registerTuning } from './hero-quest/tuning'
 // Type-only, so these are erased at compile time and never pull constants.ts in early.
 import type { ClassId } from '../shared/utils/hero-quest/types'
-import type { StageReport, Verdict } from './hero-quest/sim'
+import type { CampaignReport, StageReport, Verdict, WallReason } from './hero-quest/sim'
 
 const argv = process.argv.slice(2)
 
@@ -32,9 +34,19 @@ const flag = (name: string) => argv.includes(`--${name}`)
 const overrides = parseOverrides(argv)
 registerTuning(overrides)
 
-const { analyzeStage, analyzeWorld, compareClasses, gateTable, makeHero } = await import('./hero-quest/sim')
+const {
+    analyzeCampaign,
+    analyzeStage,
+    analyzeWorld,
+    compareClasses,
+    gateTable,
+    makeParty,
+    DEFAULT_CAMPAIGN_MAX_LEVEL,
+    DEFAULT_CAMPAIGN_MAX_PRESTIGE,
+    DEFAULT_GRIND_BUDGET_SECONDS
+} = await import('./hero-quest/sim')
 const { formatHq, formatSeconds } = await import('../shared/utils/hero-quest/numbers')
-const { BOSS_TIMER_SECONDS } = await import('../shared/utils/hero-quest/constants')
+const { BOSS_TIMER_SECONDS, WORLD_COUNT } = await import('../shared/utils/hero-quest/constants')
 const { getClass } = await import('../shared/utils/hero-quest/content/classes')
 
 const report = arg('report', 'world')
@@ -46,6 +58,11 @@ const prestige = Number(arg('prestige', '0'))
 const sweep = arg('sweep', '')
 const asJson = flag('json')
 const levelUp = !flag('no-levelup')
+const maxPrestige = Number(arg('max-prestige', String(DEFAULT_CAMPAIGN_MAX_PRESTIGE)))
+const grindHours = Number(arg('grind-hours', String(DEFAULT_GRIND_BUDGET_SECONDS / 3600)))
+const maxLevel = Number(arg('max-level', String(DEFAULT_CAMPAIGN_MAX_LEVEL)))
+/** Total units, Hero included. 1 is the solo Phase 1 Hero; real parties run 3–6. */
+const party = Math.max(1, Number(arg('party', '1')))
 
 getClass(classId) // fail fast on a bad --class
 
@@ -63,7 +80,8 @@ function pct(value: number | null): string {
 
 function banner() {
     const tuning = describeOverrides(overrides)
-    console.log(`\n${classId} @ level ${level} — prestige ${prestige}${tuning ? `  [${tuning}]` : ''}`)
+    const size = party > 1 ? `  party of ${party}` : ''
+    console.log(`\n${classId} @ level ${level} — prestige ${prestige}${size}${tuning ? `  [${tuning}]` : ''}`)
 }
 
 // ── reports ────────────────────────────────────────────────────────────────────────────
@@ -86,7 +104,7 @@ function stageRow(row: StageReport) {
 }
 
 function reportStage() {
-    const row = analyzeStage(makeHero(classId, level), prestige, world, stage)
+    const row = analyzeStage(makeParty(classId, level, party), prestige, world, stage)
     if (asJson) return console.log(JSON.stringify(row, replacer))
 
     banner()
@@ -109,7 +127,7 @@ function reportStage() {
 }
 
 function reportWorld() {
-    const result = analyzeWorld(makeHero(classId, level), prestige, world, levelUp)
+    const result = analyzeWorld(makeParty(classId, level, party), prestige, world, levelUp)
     if (asJson) return console.log(JSON.stringify(result, replacer))
 
     banner()
@@ -121,10 +139,63 @@ function reportWorld() {
         : 'No blockers — the world clears end to end.\n')
 }
 
+const WALL_LABEL: Record<WallReason, string> = {
+    unclearable: 'UNCLEARABLE — no level clears it',
+    unfarmable: 'UNFARMABLE — nowhere left to earn XP',
+    grind_budget: 'GRIND WALL — clearable, but not in the time budget',
+    prestige_limit: 'NO WALL — ran out of prestiges first'
+}
+
+function reportCampaign() {
+    const result: CampaignReport = analyzeCampaign(makeParty(classId, level, party), prestige, {
+        maxPrestige,
+        grindBudgetSeconds: grindHours * 3600,
+        maxLevel
+    })
+    if (asJson) return console.log(JSON.stringify(result, replacer))
+
+    banner()
+    console.log(`Campaign walk — stages → worlds → prestiges, farming past blockers until one sticks`)
+    console.log(`Grind budget ${grindHours}h per blocked stage, level ceiling ${maxLevel}, up to ${maxPrestige} prestige(s)\n`)
+
+    console.table(result.rows.map(row => ({
+        'P': row.prestige,
+        'world': row.world,
+        'lvl': `${row.startLevel} → ${row.endLevel}`,
+        'fights': formatSeconds(row.fightSeconds),
+        'grind': row.grindSeconds > 0 ? formatSeconds(row.grindSeconds) : '—',
+        'blockers': row.grinds || '—',
+        'gold': Math.round(row.gold).toLocaleString('en'),
+        '': row.completed ? '' : '← WALL'
+    })))
+
+    if (result.grinds.length) {
+        console.log('\nForced grinds\n')
+        console.table(result.grinds.map(event => ({
+            'at': `P${event.prestige} W${event.world}S${event.stage}`,
+            'blocked by': VERDICT_LABEL[event.blockedBy],
+            'farmed': `W${event.farmWorld}S${event.farmStage}`,
+            'lvl': `${event.fromLevel} → ${event.toLevel}`,
+            'kills': event.kills.toLocaleString('en'),
+            'time': formatSeconds(event.seconds)
+        })))
+    }
+
+    const wall = result.wall
+    console.log(`\n${WALL_LABEL[wall.reason]}`)
+    console.log(`  at             P${wall.prestige} W${wall.world}S${wall.stage} (${wall.archetype})`)
+    console.log(`  hero level     ${wall.level}${wall.requiredLevel !== null ? `   needs ${wall.requiredLevel}` : ''}`)
+    console.log(`  why            ${wall.detail}`)
+    console.log()
+    console.log(`Reached: ${result.prestigesCompleted} prestige(s) completed, level ${result.startLevel} → ${result.endLevel}`)
+    console.log(`Time:    ${formatSeconds(result.totalSeconds)} total — ${formatSeconds(result.fightSeconds)} fighting, ${formatSeconds(result.grindSeconds)} grinding`)
+    console.log(`Gold:    ${Math.round(result.totalGold).toLocaleString('en')}\n`)
+}
+
 function reportGates() {
     banner()
     console.log('Minimum hero level to clear each boss gate\n')
-    const rows = gateTable(classId, prestige)
+    const rows = gateTable(classId, prestige, WORLD_COUNT, party)
     console.table(rows.map(row => ({
         world: row.world,
         'stage 5 boss': row.bossLevel ?? 'unreachable',
@@ -142,7 +213,7 @@ function reportGates() {
 function reportClasses() {
     banner()
     console.log(`All 16 classes at level ${level} — world ${world}, stage ${stage}\n`)
-    console.table(compareClasses(prestige, world, stage, level).map(row => ({
+    console.table(compareClasses(prestige, world, stage, level, party).map(row => ({
         class: row.name,
         tier: row.tier,
         DPS: formatHq(row.partyDps),
@@ -182,15 +253,26 @@ function parseSweep(spec: string): { name: string; values: number[] } {
  */
 function runSweep() {
     const { name, values } = parseSweep(sweep)
+    // `--set` survives into every point, so `--set=X=1 --sweep=Y=...` sweeps Y *against* X
+    // rather than quietly reporting un-overridden numbers. The swept pair is appended last
+    // and wins on a collision, since `parseOverrides` takes the final assignment.
+    //
+    // `--report` is re-supplied per point: `arg()` takes the first match, so leaving the
+    // caller's copy in would silently shadow it and hand the parser the wrong shape back.
     const passthrough = argv.filter(entry =>
-        !entry.startsWith('--sweep=') && !entry.startsWith('--set=') && entry !== '--json')
+        !entry.startsWith('--sweep=') && !entry.startsWith('--report=') && entry !== '--json')
+
+    // Only `world` and `campaign` produce a whole-walk summary worth one row per point.
+    const swept = report === 'campaign' ? 'campaign' : 'world'
 
     banner()
-    console.log(`Sweeping ${name} over ${values.length} values — world ${world}, ${levelUp ? 'levelling' : 'fixed level'}\n`)
+    console.log(swept === 'campaign'
+        ? `Sweeping ${name} over ${values.length} values — campaign walk, ${grindHours}h grind budget\n`
+        : `Sweeping ${name} over ${values.length} values — world ${world}, ${levelUp ? 'levelling' : 'fixed level'}\n`)
 
     const rows = values.map((value) => {
         const proc = Bun.spawnSync([
-            'bun', import.meta.path, ...passthrough, `--set=${name}=${value}`, '--report=world', '--json'
+            'bun', import.meta.path, ...passthrough, `--set=${name}=${value}`, `--report=${swept}`, '--json'
         ], { stderr: 'pipe' })
 
         if (proc.exitCode !== 0) {
@@ -198,6 +280,8 @@ function runSweep() {
         }
 
         const result = JSON.parse(proc.stdout.toString())
+        if (swept === 'campaign') return campaignSweepRow(name, value, result)
+
         const boss = result.rows.find((row: StageReport) => row.stage === 5)
         const superBoss = result.rows.find((row: StageReport) => row.stage === 10)
         return {
@@ -214,6 +298,19 @@ function runSweep() {
 
     console.table(rows)
     console.log(`Baseline is whatever ${name} currently is in constants.ts — nothing on disk was modified.\n`)
+}
+
+function campaignSweepRow(name: string, value: number, result: CampaignReport) {
+    const { wall } = result
+    return {
+        [name]: value,
+        'wall at': `P${wall.prestige} W${wall.world}S${wall.stage}`,
+        'reason': wall.reason,
+        'lvl': `${wall.level}${wall.requiredLevel !== null ? ` / ${wall.requiredLevel}` : ''}`,
+        'prestiges': result.prestigesCompleted,
+        'fights': formatSeconds(result.fightSeconds),
+        'grind': formatSeconds(result.grindSeconds)
+    }
 }
 
 /** Decimals serialise as objects otherwise, which JSON.parse can't turn back into numbers. */
@@ -233,13 +330,15 @@ try {
         switch (report) {
             case 'stage': reportStage(); break
             case 'world': reportWorld(); break
+            case 'campaign': reportCampaign(); break
             case 'gates': reportGates(); break
             case 'classes': reportClasses(); break
             default:
-                console.log(`Unknown report "${report}". Available: stage, world, gates, classes`)
+                console.log(`Unknown report "${report}". Available: stage, world, campaign, gates, classes`)
                 console.log('Sweep:     --sweep=K=1..4:0.5')
                 console.log('Override:  --set=K=3 --set=BASE_HP=200 --set=STAT_TIER_VALUES.high=20')
-                console.log('Filters:   --class= --level= --world= --stage= --prestige= --no-levelup --json')
+                console.log('Filters:   --class= --level= --world= --stage= --prestige= --party= --no-levelup --json')
+                console.log('Campaign:  --max-prestige=10 --grind-hours=24 --max-level=5000')
                 process.exit(1)
         }
     }
