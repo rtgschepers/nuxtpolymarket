@@ -19,13 +19,15 @@ import {
     applyXp,
     enemyStatsAt,
     goldPerKill,
+    incomingDps,
     killsRequired,
     secondsPerKill,
+    secondsToDie,
     stageArchetype,
     totalXpForLevel,
     xpPerKill
 } from '../../shared/utils/hero-quest/settle'
-import { expectedIncomingDps, partyDps } from '../../shared/utils/hero-quest/combat'
+import { partyDps } from '../../shared/utils/hero-quest/combat'
 import { partyUnitStats } from '../../shared/utils/hero-quest/stats'
 import { CLASS_NODES } from '../../shared/utils/hero-quest/content/classes'
 import { ZERO } from '../../shared/utils/hero-quest/numbers'
@@ -57,7 +59,7 @@ export interface StageReport {
     incomingDps: Decimal
     heroEhp: Decimal
     secondsToDie: number
-    /** Seconds the party must survive uninterrupted: a whole boss fight, or one wave kill. */
+    /** Seconds the party must survive uninterrupted — the whole stage attempt, boss or wave. */
     survivalWindow: number
     /** secondsToDie / survivalWindow. Below 1 is a wipe; 2 means twice the HP needed. */
     survivalRatio: number
@@ -109,9 +111,11 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
     const kills = killsRequired(position)
     const clearSeconds = isGate ? spk : spk * kills
 
-    const incoming = units.reduce((total, unit) => total.add(expectedIncomingDps(enemy, unit)), ZERO)
+    // Same two functions `settle()` uses, deliberately — a survivability verdict here that
+    // the live game disagreed with would make every table in this tool a lie.
+    const incoming = incomingDps(units, enemy)
     const heroEhp = units.reduce((total, unit) => total.add(unit.maxHp), ZERO)
-    const secondsToDie = incoming.lte(0) ? Number.POSITIVE_INFINITY : heroEhp.div(incoming).toNumber()
+    const timeToDie = secondsToDie(units, enemy)
 
     const timerSeconds = isGate ? BOSS_TIMER_SECONDS : null
     const timerMargin = timerSeconds === null || !Number.isFinite(clearSeconds)
@@ -121,22 +125,23 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
     /**
      * How long the party must stay alive without a break.
      *
-     * A boss is one continuous fight, so the window is the whole clear. A wave stage is 30
-     * separate enemies, so it's one kill — the party is not under fire for all 30 in a row.
+     * **Phase 1 answered the question this used to park.** HP is one pool that carries
+     * across a whole stage attempt and refills only on a clear or a wipe — so a wave stage
+     * is the same continuous fight a boss is, just against 30 bodies instead of one. The
+     * window is the full clear either way, and the earlier one-kill reading (which assumed
+     * the party got a breather between enemies) is gone.
      *
-     * Caveat worth knowing while reading any survivability number here: **no design doc
-     * covers whether HP carries between kills, or regenerates.** If HP does persist across
-     * a whole wave stage with no regen, wave survivability is far harsher than this shows.
-     * Phase 1 has to answer that; until it does, this is the optimistic reading.
+     * A wave wipe restarts that stage rather than falling the run back one, so this is a
+     * wall the run sits at and levels out of, not a loss of ground (`settle.killsBeforeWipe`).
      */
-    const survivalWindow = isGate ? clearSeconds : spk
-    const survivalRatio = Number.isFinite(secondsToDie) && Number.isFinite(survivalWindow) && survivalWindow > 0
-        ? secondsToDie / survivalWindow
+    const survivalWindow = clearSeconds
+    const survivalRatio = Number.isFinite(timeToDie) && Number.isFinite(survivalWindow) && survivalWindow > 0
+        ? timeToDie / survivalWindow
         : Number.POSITIVE_INFINITY
 
     let verdict: Verdict = 'clear'
     if (!Number.isFinite(spk)) verdict = 'stalled'
-    else if (secondsToDie < survivalWindow) verdict = 'wipe'
+    else if (timeToDie < survivalWindow) verdict = 'wipe'
     else if (isGate && clearSeconds > BOSS_TIMER_SECONDS) verdict = 'timer_fail'
 
     return {
@@ -156,7 +161,7 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
         timerMargin,
         incomingDps: incoming,
         heroEhp,
-        secondsToDie,
+        secondsToDie: timeToDie,
         survivalWindow,
         survivalRatio,
         verdict,

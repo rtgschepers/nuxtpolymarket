@@ -690,6 +690,104 @@ export const hackHistory = pgTable('hack_history', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, t => [index('hack_history_userId_idx').on(t.userId)])
 
+/**
+ * HERO QUEST — settle contract.
+ *
+ * The party fights continuously and there is no server-side interval, cron or worker
+ * anywhere in this game. Kills, Gold, XP and stage advancement are computed analytically
+ * from elapsed real time (see server/utils/hero-quest.ts:settleHq) on every state read and
+ * before every mutation that depends on accrued progress. `lastSettledAt` is the anchor.
+ *
+ * The row lock taken over this row is the mutex — two concurrent settles would otherwise
+ * both read the same `lastSettledAt` and both pay out the same window. The loser blocks,
+ * then reads the advanced timestamp and returns having earned nothing.
+ *
+ * Presence is *demonstrated*, not asserted: a gap at or under ONLINE_THRESHOLD_MS counts as
+ * online (full rate), anything longer is offline (cap + efficiency apply). A closed app is
+ * therefore indistinguishable from a dead network, which is the correct failure direction.
+ *
+ * Two things settle never does. It never resolves a boss — Stage 5 and Stage 10 park the run
+ * and wait for a live `boss/engage` (which is why Void Shards can never be earned offline) —
+ * and it never resets `heroLevel`/`heroXp`, which persist across prestige and class switches.
+ * Prestige writes four columns and increments `prestige`; everything else survives by simply
+ * not being written.
+ *
+ * Gold lives on the shared `user.balance` and is only ever touched through
+ * server/utils/balance.ts. Only Void Shards are Hero Quest's own currency, and it is `text`
+ * rather than a numeric because its 100 × 2^prestige payout overflows a bigint by ~prestige 56.
+ */
+export const hqState = pgTable('hq_state', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  /** The settle clock. Never compare-and-swap on this — Postgres keeps microseconds, JS Dates don't. */
+  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull(),
+
+  // Run position — the only group prestige resets.
+  prestige: integer('prestige').notNull().default(0),
+  world: integer('world').notNull().default(1),
+  stage: integer('stage').notNull().default(1),
+  /** Kills banked toward the current stage's requirement. */
+  killCount: integer('kill_count').notNull().default(0),
+  /** Parked at an unengaged Stage 5/10, waiting for the player to start the fight. */
+  atBossGate: boolean('at_boss_gate').notNull().default(false),
+  /**
+   * The World 10 / Stage 10 super boss has been beaten, so prestige is available.
+   *
+   * Needed because a win there leaves the run standing on the same stage — position alone
+   * cannot distinguish "cleared the game" from "walked up to the final boss and stopped".
+   * Paying Void Shards off position would hand them out for merely arriving. Prestige clears
+   * this along with the rest of the run-position group.
+   */
+  runCleared: boolean('run_cleared').notNull().default(false),
+
+  // Hero — persists across prestige AND across class switches. There is no relevel anywhere.
+  heroNodeId: text('hero_node_id').notNull().default('class_beginner'),
+  heroLevel: integer('hero_level').notNull().default(1),
+  /** Decimal as text: XP accumulates forever now that level never resets. */
+  heroXp: text('hero_xp').notNull().default('0'),
+  /** Every class node reached in any past run — permanently re-pickable at prestige. */
+  seenNodeIds: jsonb('seen_node_ids').$type<string[]>().notNull().default(['class_beginner']),
+
+  /** Prestige currency. Decimal as text — see the note above. */
+  voidShards: text('void_shards').notNull().default('0'),
+
+  /** Slot → 'front' | 'back'. One occupant until Champions land in Phase 2. */
+  formation: jsonb('formation').$type<Record<string, 'front' | 'back'>>().notNull().default({})
+}, t => [index('hq_state_userId_idx').on(t.userId)])
+
+/**
+ * Every purchasable track in the game, whatever currency pays for it. Deliberately generic:
+ * Phase 2's party-slot tracks and Phase 4's raid-key tracks are new `upgradeId` values, not
+ * new tables. `level` is an integer, so the conditional bump is a safe compare-and-swap and
+ * doubles as the claim-then-reward mutex for the purchase.
+ */
+export const hqShopUpgrades = pgTable('hq_shop_upgrades', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  upgradeId: text('upgrade_id').notNull(),
+  level: integer('level').notNull().default(0)
+}, t => [
+  unique('hq_shop_upgrades_unique').on(t.userId, t.upgradeId),
+  index('hq_shop_upgrades_userId_idx').on(t.userId)
+])
+
+/**
+ * One row per resolved boss fight. The client fetches `seed` + `context` and replays the
+ * animation by running the identical shared `fight.ts` — so this is the record of what
+ * authoritatively happened, and a free audit trail for a shared-economy game.
+ */
+export const hqFights = pgTable('hq_fights', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  /** 'boss' today; 'arena' joins it in Phase 4. */
+  kind: text('kind').notNull(),
+  seed: integer('seed').notNull(),
+  /** The snapshot the fight was resolved against — hero, position, outcome detail. */
+  context: jsonb('context').notNull(),
+  outcome: text('outcome').notNull(),
+  resolvedAt: timestamp('resolved_at').defaultNow().notNull()
+}, t => [index('hq_fights_userId_idx').on(t.userId)])
+
 export const chatMessages = pgTable('chat_messages', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),

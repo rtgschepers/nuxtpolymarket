@@ -18,6 +18,7 @@ import {
     K,
     MAX_EVASION,
     MIN_ATTACK_INTERVAL_SECONDS,
+    MIN_COOLDOWN_SECONDS,
     OVERFLOW_CONVERSION_RATE,
     SPD_ATTACK_RATE_PER_POINT
 } from './constants'
@@ -86,6 +87,23 @@ export function attackIntervalFor(spd: number): number {
 
 export function attacksPerSecondFor(spd: number): number {
     return 1 / attackIntervalFor(spd)
+}
+
+/**
+ * A skill's cooldown after SPD shortens it — the same curve `attackIntervalFor` rides, with
+ * the skill's own base in place of the flat 3s and its own floor.
+ *
+ *     cooldownFor(base, spd) = clamp(base / (1 + spd × rate), MIN_COOLDOWN_SECONDS, base)
+ *
+ * `classes-and-combat.md` §3 gives SPD exactly one job — "reduces cooldown duration across
+ * the board, for every skill on every path" — which is this. Sharing the rate constant with
+ * the autoattack interval is what keeps SPD one stat with one shape rather than two dials
+ * that happen to share a name.
+ */
+export function cooldownFor(baseSeconds: number, spd: number): number {
+    const base = Math.max(0, baseSeconds)
+    const scaled = base / (1 + Math.max(0, spd) * SPD_ATTACK_RATE_PER_POINT)
+    return Math.min(base, Math.max(MIN_COOLDOWN_SECONDS, scaled))
 }
 
 /** Flat accuracy check with no attacker-side ACC stat. Total EVA is clamped at MAX_EVASION. */

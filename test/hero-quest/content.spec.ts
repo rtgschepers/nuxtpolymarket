@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLASS_BY_ID, CLASS_IDS, CLASS_NODES, ROOT_CLASS_ID, childrenOf, classPath, isDescendantOf } from '#shared/utils/hero-quest/content/classes'
+import { CLASS_BY_ID, CLASS_IDS, CLASS_NODES, ROOT_CLASS_ID, childrenOf, classPath, isDescendantOf, kitFor } from '#shared/utils/hero-quest/content/classes'
 import { baseSpreadFor } from '#shared/utils/hero-quest/stats'
 import { MIN_STAT_VALUE } from '#shared/utils/hero-quest/constants'
 
@@ -32,7 +32,34 @@ describe('hero-quest class content', () => {
 
     it('has unique class and skill IDs', () => {
         expect(new Set(CLASS_IDS).size).toBe(CLASS_NODES.length)
-        expect(new Set(CLASS_NODES.map(node => node.skillId)).size).toBe(CLASS_NODES.length)
+        expect(new Set(CLASS_NODES.map(node => node.skill.id)).size).toBe(CLASS_NODES.length)
+    })
+
+    it('gives every node a firing skill', () => {
+        for (const node of CLASS_NODES) {
+            expect(node.skill.name.length, node.id).toBeGreaterThan(0)
+            expect(node.skill.cooldownSeconds, node.id).toBeGreaterThan(0)
+            expect(node.skill.abilityMultiplier, node.id).toBeGreaterThan(0)
+        }
+    })
+
+    it('builds a cumulative kit — a specialization never replaces what it inherited', () => {
+        // `classes-and-combat.md` §4: re-picking Berserker restores Whirlwind and
+        // Threatening Roar alongside Enrage, not Enrage on its own.
+        const kit = kitFor('class_berserker')
+        expect(kit.map(entry => entry.id)).toEqual([
+            'skill_haste',
+            'skill_whirlwind',
+            'skill_threatening_roar',
+            'skill_enrage'
+        ])
+
+        for (const node of CLASS_NODES) {
+            const own = kitFor(node.id)
+            expect(own.length, node.id).toBe(classPath(node.id).length)
+            expect(own.at(-1)!.id, node.id).toBe(node.skill.id)
+            expect(new Set(own.map(entry => entry.id)).size, node.id).toBe(own.length)
+        }
     })
 
     it('is acyclic — every node walks up to the root', () => {

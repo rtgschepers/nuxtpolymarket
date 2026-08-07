@@ -50,14 +50,32 @@ export type ClassTier = 'beginner' | 'base' | 'elite' | 'master'
 /** Autoattack target selection (`classes-and-combat.md` §7). */
 export type AutoTarget = 'lowest_hp_pct' | 'highest_pwr'
 
+/**
+ * A class node's named ability.
+ *
+ * **Single-target damage only, deliberately.** `classes-and-combat.md` §7 sketches
+ * distinctive behaviour for several of these — Ethereal Bouncebolt chains, Lightning Storm
+ * and Meteor Shower hit multiple targets, Totem Storm and Raise Dead affect the party or
+ * battlefield, Disciple and Man's Best Friend summon, Haste doubles SPD, Enrage trades max
+ * HP — but assigns no magnitude, no cooldown and no targeting rule to any of them. Those
+ * behaviours are an undesigned content pass; this shape covers what every skill does have.
+ */
+export interface ClassSkill {
+    /** Stable string ID — DB rows and loadouts reference IDs only, never indices. */
+    id: string
+    name: string
+    /** Base cooldown before SPD shortens it (`combat.cooldownFor`). */
+    cooldownSeconds: number
+    /** Multiplier on the damage formula's `abilityMultiplier` term. */
+    abilityMultiplier: number
+}
+
 export interface ClassNode {
     id: ClassId
     name: string
     parentId: ClassId | null
     tier: ClassTier
-    /** Stable string ID — DB rows and loadouts reference IDs only, never indices. */
-    skillId: string
-    skillName: string
+    skill: ClassSkill
     spread: Record<HqStatKey, StatTier>
     /** Specialization shift, applied cumulatively down the class path. */
     delta: Partial<HqStatBlock>
@@ -72,6 +90,13 @@ export interface UnitStats {
     def: Decimal
     maxHp: Decimal
     attacksPerSecond: number
+    /**
+     * Kept alongside `attacksPerSecond` rather than folded into it, because SPD drives two
+     * separate things: the autoattack interval (already folded) and skill cooldowns (which
+     * `fight.ts` derives per skill). Recovering it by inverting `attackIntervalFor` would be
+     * lossy — that function clamps at both ends.
+     */
+    spd: number
     strikesPerAttack: number
     critChance: number
     critMultiplier: number
@@ -155,5 +180,11 @@ export interface SettleResult {
     secondsPerKill: number
     /** True when accrual stopped at a boss gate — offline never resolves a boss. */
     blockedAtBoss: boolean
+    /**
+     * True when the party cannot outlast a wave stage's kill requirement, so the stage
+     * restarts instead of clearing. The run holds position and keeps earning; it is a wall
+     * levelling resolves, not a fallback.
+     */
+    wipedOnWave: boolean
     effectiveSeconds: number
 }

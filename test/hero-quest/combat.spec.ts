@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     attackIntervalFor,
     attacksPerSecondFor,
+    cooldownFor,
     critChanceFor,
     critMultiplierFor,
     expectedHitDamage,
@@ -18,6 +19,8 @@ import {
     BASE_HP,
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
+    MIN_COOLDOWN_SECONDS,
+    SKILL_BASE_COOLDOWN_SECONDS,
     HP_PER_VIT,
     K,
     MAX_EVASION,
@@ -128,6 +131,43 @@ describe('hero-quest combat math', () => {
 
         it('never slows below the base interval for a zero or negative SPD', () => {
             expect(attackIntervalFor(-50)).toBe(BASE_ATTACK_INTERVAL_SECONDS)
+        })
+    })
+
+    describe('skill cooldowns', () => {
+        it('is the skill\'s own base at zero SPD', () => {
+            expect(cooldownFor(SKILL_BASE_COOLDOWN_SECONDS, 0)).toBe(SKILL_BASE_COOLDOWN_SECONDS)
+        })
+
+        it('shortens monotonically with SPD', () => {
+            let previous = cooldownFor(SKILL_BASE_COOLDOWN_SECONDS, 0)
+            for (const spd of [10, 50, 100, 200]) {
+                const cooldown = cooldownFor(SKILL_BASE_COOLDOWN_SECONDS, spd)
+                expect(cooldown).toBeLessThan(previous)
+                previous = cooldown
+            }
+        })
+
+        it('never drops below the floor, however high SPD climbs', () => {
+            for (const spd of [400, 4_000, 1e9]) {
+                expect(cooldownFor(SKILL_BASE_COOLDOWN_SECONDS, spd)).toBeGreaterThanOrEqual(MIN_COOLDOWN_SECONDS)
+            }
+        })
+
+        it('never lengthens a cooldown for a zero or negative SPD', () => {
+            expect(cooldownFor(SKILL_BASE_COOLDOWN_SECONDS, -50)).toBe(SKILL_BASE_COOLDOWN_SECONDS)
+        })
+
+        it('rides the same SPD curve the autoattack interval does', () => {
+            // One stat, one shape — a skill base of 3s must track attackIntervalFor exactly.
+            for (const spd of [0, 10, 100]) {
+                expect(cooldownFor(BASE_ATTACK_INTERVAL_SECONDS, spd)).toBeCloseTo(attackIntervalFor(spd), 10)
+            }
+        })
+
+        it('leaves a base shorter than the floor alone rather than raising it', () => {
+            const tiny = MIN_COOLDOWN_SECONDS / 2
+            expect(cooldownFor(tiny, 500)).toBe(tiny)
         })
     })
 

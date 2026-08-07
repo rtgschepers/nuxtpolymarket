@@ -35,7 +35,8 @@ const idleGameItems: NavigationMenuItem[] = [
   { label: 'Miner', class: 'mb-1', icon: 'i-lucide-pickaxe', to: '/miner' },
   { label: 'Xeno', class: 'mb-1', icon: 'i-lucide-sprout', to: '/xeno' },
   { label: 'Hack Ops', class: 'mb-1', icon: 'i-lucide-terminal', to: '/hack' },
-  { label: 'Colony', class: 'mb-1', icon: 'i-lucide-bug', to: '/colony' }
+  { label: 'Colony', class: 'mb-1', icon: 'i-lucide-bug', to: '/colony' },
+  { label: 'Hero Quest', class: 'mb-1', icon: 'i-lucide-swords', to: '/hero-quest' }
 ]
 
 const activeGameItems: NavigationMenuItem[] = [

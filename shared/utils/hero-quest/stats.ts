@@ -49,10 +49,14 @@ export function baseSpreadFor(node: ClassNode): HqStatBlock {
 /**
  * statAtLevel(base, level) = (base + FLAT × (level-1)) × GROWTH^(level-1)
  *
- * GROWTH = 1.0 collapses this to pure flat-additive growth, which is the model the design
- * docs currently describe and which `implementation-plan.md` flags as provably unable to
- * keep pace with a ×5-per-prestige ceiling on its own. Raising GROWTH above 1.0 is how
- * that gets tested without touching any other file.
+ * `GROWTH` is derived from `STAT_PACE_RATIO` and sits just above 1.0, which is what the
+ * design docs now describe — geometric, expressed as a fraction of the enemy curve
+ * (`core-progression-and-prestige.md` §1). `FLAT` is 0 by design.
+ *
+ * The flat-additive model this comment used to describe (GROWTH = 1.0) is not merely
+ * out of date, it is provably unworkable: additive growth against a geometric ceiling
+ * falls behind at any constant, and the campaign sim confirms it — a solo Hero stalls in
+ * World 3 and never completes a prestige, at any XP rate.
  */
 export function statAtLevel(base: number, level: number): number {
     const steps = Math.max(0, level - 1)
@@ -118,6 +122,7 @@ export function deriveUnitStats(block: HqStatBlock, kit: { strikesPerAttack: num
         def: D(block.def),
         maxHp: maxHpFor(block.vit),
         attacksPerSecond: attacksPerSecondFor(block.spd),
+        spd: block.spd,
         strikesPerAttack: kit.strikesPerAttack,
         critChance: critChanceFor(block.lck).critChance,
         critMultiplier: critMultiplierFor(block.lck, block.imp),

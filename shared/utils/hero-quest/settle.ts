@@ -44,11 +44,11 @@ import {
     XP_TO_LEVEL_BASE,
     XP_TO_LEVEL_GROWTH
 } from './constants'
-import { partyDps } from './combat'
+import { expectedIncomingDps, partyDps } from './combat'
 import { partyUnitStats } from './stats'
 import { D, ZERO, decPow } from './numbers'
 import type { Decimal } from './numbers'
-import type { EnemyStats, RunPosition, SettleInput, SettleResult, StageArchetype } from './types'
+import type { EnemyStats, RunPosition, SettleInput, SettleResult, StageArchetype, UnitStats } from './types'
 
 /**
  * How far into the game a position is, as one number.
@@ -126,6 +126,54 @@ export function secondsPerKill(dps: Decimal, enemy: EnemyStats): number {
     const raw = enemy.hp.div(dps).toNumber()
     if (!Number.isFinite(raw)) return Number.POSITIVE_INFINITY
     return Math.max(MIN_SECONDS_PER_KILL, raw)
+}
+
+// ── Survivability ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Total incoming DPS against the fielded party.
+ *
+ * Deliberately **not** pooled, unlike offence (`partyDps`): each enemy attack resolves
+ * against its own defender's DEF, so party size is an offensive lever only. A second body
+ * adds its own damage taken alongside its own HP, which is why time-to-die is very nearly
+ * party-size-invariant (`open-items.md` #11.2).
+ */
+export function incomingDps(units: readonly UnitStats[], enemy: EnemyStats): Decimal {
+    return units.reduce((total, unit) => total.add(expectedIncomingDps(enemy, unit)), ZERO)
+}
+
+/**
+ * How long the party survives one uninterrupted stage attempt, from full HP.
+ *
+ * `Infinity` when nothing gets through — an enemy whose PWR is fully mitigated by the
+ * party's DEF deals exactly 0, not an asymptotic sliver (that hard floor is the point of
+ * the clamped mitigation form).
+ */
+export function secondsToDie(units: readonly UnitStats[], enemy: EnemyStats): number {
+    const incoming = incomingDps(units, enemy)
+    if (incoming.lte(0)) return Number.POSITIVE_INFINITY
+    const ehp = units.reduce((total, unit) => total.add(unit.maxHp), ZERO)
+    const raw = ehp.div(incoming).toNumber()
+    return Number.isFinite(raw) ? raw : Number.POSITIVE_INFINITY
+}
+
+/**
+ * How many kills a wave stage yields before the party drops.
+ *
+ * **HP carries across the whole stage attempt** and refills only when the stage clears or
+ * restarts — the answer to the question `scripts/hero-quest/sim.ts` parked as "no design doc
+ * covers whether HP carries between kills". A wave wipe is not a fallback: the *same* stage
+ * restarts at 0 kills, so the run never loses ground, it just stops gaining any.
+ *
+ * That makes an unsurvivable wave a self-resolving wall rather than a dead end. Kills still
+ * land at `secondsPerKill` right up to the wipe, so Gold and XP keep flowing at the usual
+ * rate and the Hero levels its way out. Returns `Infinity` when the party cannot die.
+ */
+export function killsBeforeWipe(units: readonly UnitStats[], enemy: EnemyStats, spk: number): number {
+    const survives = secondsToDie(units, enemy)
+    if (!Number.isFinite(survives)) return Number.POSITIVE_INFINITY
+    if (!Number.isFinite(spk) || spk <= 0) return 0
+    return Math.floor(survives / spk)
 }
 
 /** Boss stages have no kill requirement — they're cleared by the fight, not by a counter. */
@@ -296,6 +344,10 @@ export function offlineFarmStage(pos: RunPosition): RunPosition {
  * kills carrying the run past a stage threshold. On reaching Stage 5 or Stage 10 accrual
  * stops advancing and the remainder loops the preceding wave stage. The player lands back
  * *at* the boss with the fight ready to engage manually.
+ *
+ * Wave stages have a second, softer stop: if the party dies before the stage's kill counter
+ * fills (`killsBeforeWipe`), that stage restarts rather than advancing. Income continues at
+ * the same rate, so the wall unsticks itself as the Hero levels.
  */
 export function settle(input: SettleInput): SettleResult {
     const units = partyUnitStats(input.hero)
@@ -316,6 +368,7 @@ export function settle(input: SettleInput): SettleResult {
         heroXp: input.hero.heroXp,
         secondsPerKill: spk,
         blockedAtBoss: isBossStage(input.position.stage),
+        wipedOnWave: false,
         effectiveSeconds
     }
     if (!Number.isFinite(spk) || spk <= 0 || effectiveSeconds <= 0) return empty
@@ -328,7 +381,15 @@ export function settle(input: SettleInput): SettleResult {
     let remaining = totalKills
     let gold = 0
     let xp = ZERO
+    let killsLanded = 0
     let blockedAtBoss = false
+    let wipedOnWave = false
+
+    // Survivability is frozen at the departure snapshot for exactly the reason `spk` is:
+    // offline holds one rate, and the two halves of that rate have to agree. A window that
+    // carries the run into deeper stages fights all of them at the departure stage's
+    // difficulty — generous, and the same generosity `secondsPerKill` already grants.
+    const wipeAt = killsBeforeWipe(units, startEnemy, spk)
 
     while (remaining > 0) {
         if (isBossStage(pos.stage)) {
@@ -337,11 +398,33 @@ export function settle(input: SettleInput): SettleResult {
             const farm = offlineFarmStage(pos)
             gold += remaining * goldPerKill(pos.prestige, farm.world, farm.stage) * goldMultiplier
             xp = xp.add(xpPerKill(pos.prestige, farm.world, farm.stage).mul(remaining))
+            killsLanded += remaining
             remaining = 0
             break
         }
 
-        const needed = killsRequired(pos) - pos.killsInStage
+        const required = killsRequired(pos)
+
+        // The party drops before the stage's counter fills, so the stage restarts from 0 and
+        // can never be cleared at this power level. Resolve the whole remainder in one step —
+        // walking it wipe-by-wipe would spin for the length of an offline window.
+        if (wipeAt < required) {
+            wipedOnWave = true
+            if (wipeAt > 0) {
+                gold += remaining * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
+                xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(remaining))
+                killsLanded += remaining
+                // Where the current attempt stands, having restarted every `wipeAt` kills.
+                pos = { ...pos, killsInStage: (pos.killsInStage + remaining) % wipeAt }
+            } else {
+                // Dies faster than it kills: no kills land at all, so nothing is earned.
+                pos = { ...pos, killsInStage: 0 }
+            }
+            remaining = 0
+            break
+        }
+
+        const needed = required - pos.killsInStage
         const applied = Math.min(remaining, Math.max(0, needed))
         if (applied <= 0) {
             pos = nextStage(pos)
@@ -350,6 +433,7 @@ export function settle(input: SettleInput): SettleResult {
 
         gold += applied * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
         xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(applied))
+        killsLanded += applied
         remaining -= applied
         pos = { ...pos, killsInStage: pos.killsInStage + applied }
 
@@ -363,13 +447,14 @@ export function settle(input: SettleInput): SettleResult {
 
     return {
         position: pos,
-        kills: totalKills,
+        kills: killsLanded,
         goldEarned: gold,
         xpEarned: xp,
         heroLevel: levelled.level,
         heroXp: levelled.xp,
         secondsPerKill: spk,
         blockedAtBoss,
+        wipedOnWave,
         effectiveSeconds
     }
 }

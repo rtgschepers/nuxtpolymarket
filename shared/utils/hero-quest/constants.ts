@@ -116,8 +116,8 @@ export const ELITE_STAT_MULT = 1.2 // UNTUNED ╧
 export const BOSS_HP_MULT = 3 // UNTUNED ╧
 export const SUPER_BOSS_HP_MULT = 6 // UNTUNED ╧
 
-export const BOSS_ATK_MULT = 1.2
-export const SUPER_BOSS_ATK_MULT = 1.5
+export const BOSS_ATK_MULT = 1.2 // UNTUNED ╧
+export const SUPER_BOSS_ATK_MULT = 1.5 // UNTUNED ╧
 
 // ── Combat ─────────────────────────────────────────  classes-and-combat.md §7
 
@@ -144,7 +144,26 @@ export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
 
 /** HP = BASE_HP + VIT × HP_PER_VIT */
 export const BASE_HP = 100 // UNTUNED ╧
-export const HP_PER_VIT = 10 // UNTUNED ╧
+
+/**
+ * Re-derived when Phase 1 settled the HP model, and the reason it is this large.
+ *
+ * HP is **one pool across a whole stage attempt** (`settle.killsBeforeWipe`), so the number
+ * a wave stage asks for is not "survive an enemy" but "survive thirty of them back to back"
+ * — about five minutes of uninterrupted fire at World 1. At the old value of 10 a level-1
+ * Hero had 200 HP against 476 damage over a Stage 1 attempt: it wiped at kill 12, restarted,
+ * and the campaign sim never completed a single prestige. Sized so that opening clears with
+ * ~4× margin and every World 1 elite stage holds ≥1.6×.
+ *
+ * It is the only survivability lever that keeps working: `BASE_HP` is flat and goes
+ * irrelevant within a few levels, and moving `BASE_ENEMY_PWR` instead sits on a knife edge —
+ * mitigation clamps to 100% the moment enemy PWR drops under `heroDef / K`, flipping the
+ * party from fragile to immortal with nothing in between.
+ *
+ * The wall did not move: the campaign still ends at prestige 2 / World 8 in 3d 14h, exactly
+ * as before, because survivability was never what bound it at depth — party DPS is.
+ */
+export const HP_PER_VIT = 200 // UNTUNED ╧
 
 // ── Attack rate ────────────────────────────────────  basic attacks only
 
@@ -156,6 +175,44 @@ export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 3
 
 /** Reaches the 3/sec ceiling at SPD 400. */
 export const SPD_ATTACK_RATE_PER_POINT = 0.02 // UNTUNED ╧
+
+// ── Skill cooldowns ────────────────────────────────  classes-and-combat.md §3
+
+/**
+ * Floor on a SPD-shortened skill cooldown, the cooldown-side twin of
+ * `MIN_ATTACK_INTERVAL_SECONDS`.
+ *
+ * ⚠ **SPD drives two things, and only one of them is in a design doc.**
+ * `classes-and-combat.md` §3 states SPD's role as reducing *cooldown duration* and says
+ * nothing about autoattack rate — but Phase 0 shipped `attackIntervalFor`, which shortens
+ * the autoattack interval off the same stat, and `settle.ts` plus every campaign number
+ * now depend on it. Rather than pick one and quietly drop the other, both ride the
+ * identical `1 / (1 + SPD × SPD_ATTACK_RATE_PER_POINT)` curve: one stat, one shape, two
+ * consumers. §3 should be amended to say so.
+ */
+export const MIN_COOLDOWN_SECONDS = 0.5 // UNTUNED ╧
+
+/**
+ * The starting cooldown and damage multiplier **every one of the 16 class skills** uses.
+ *
+ * Uniform on purpose. No design doc assigns a cooldown or a magnitude to any skill —
+ * `classes-and-combat.md` §3 says only that "every skill's cooldown length will differ (set
+ * later during balancing)". Handing out 16 different invented pairs would encode a spread
+ * nobody decided and which would read three phases later as intentional. One shared pair
+ * makes the absence obvious, and `ClassSkill` still carries the fields per node, so
+ * differentiating them later is a content edit and nothing else.
+ */
+export const SKILL_BASE_COOLDOWN_SECONDS = 8 // UNTUNED ╧
+export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // UNTUNED ╧
+
+/**
+ * Tick granularity of the seeded boss simulation (`fight.ts`).
+ *
+ * Bounds the work: `BOSS_TIMER_SECONDS / FIGHT_TICK_SECONDS` iterations, fixed, regardless
+ * of party strength or depth. Finer ticks resolve cooldowns and attack intervals more
+ * exactly at the cost of a longer replay log the client has to animate.
+ */
+export const FIGHT_TICK_SECONDS = 0.1 // UNTUNED ╧
 
 // ── Hero stats ─────────────────────────────────────  classes-and-combat.md §2
 
@@ -373,3 +430,39 @@ export const OFFLINE_EFFICIENCY_BASE_COST = 50 // UNTUNED ╧
 export const OFFLINE_EFFICIENCY_COST_GROWTH = 2
 export const OFFLINE_CAP_BASE_COST = 25 // UNTUNED ╧
 export const OFFLINE_CAP_COST_GROWTH = 1.72
+
+// ── Presence ───────────────────────────────────────  tech-architecture.md §4b
+
+/**
+ * How often the open client re-reads state. Lazy settle erases the app-open/app-closed
+ * distinction that offline efficiency and the offline cap depend on; a steady refresh is
+ * what restores it, by *demonstrating* presence through the request pattern rather than
+ * letting the client assert it.
+ */
+export const HQ_REFRESH_INTERVAL_MS = 60_000 // UNTUNED ╧
+
+/**
+ * Gap at or below which a settle window counts as **online** — full rate, no cap, no
+ * efficiency tax. Anything longer is an offline chunk.
+ *
+ * Deliberately a few times the refresh interval: a closed app then looks identical to a
+ * dead network, which is the correct failure direction (degrades to offline rules, never
+ * inflates).
+ */
+export const ONLINE_THRESHOLD_MS = HQ_REFRESH_INTERVAL_MS * 3 // UNTUNED ╧
+
+// ── Prestige currency ──────────────────────────────  economy-and-currencies.md §3
+
+/**
+ * voidShardsEarned(prestigeCompleted) = VOID_SHARD_BASE × VOID_SHARD_GROWTH^prestigeCompleted
+ *
+ * Paid only on a full World 10 / Stage 10 clear — no partial credit. Both values are the
+ * doc's own "starting point" wording, not a decided number. `VOID_SHARD_GROWTH` is meant to
+ * stay well below the enemy curve's per-loop factor: it only has to outpace shop costs, not
+ * the power curve.
+ *
+ * Decimal, not integer — `2^prestige` overflows a 64-bit bigint around prestige 56, which
+ * an infinite-prestige game reaches.
+ */
+export const VOID_SHARD_BASE = 100 // UNTUNED ╧
+export const VOID_SHARD_GROWTH = 2 // UNTUNED ╧

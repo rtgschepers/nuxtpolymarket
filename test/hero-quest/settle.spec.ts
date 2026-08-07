@@ -7,8 +7,10 @@ import {
     enemyStatsAt,
     fallbackStage,
     goldPerKill,
+    killsBeforeWipe,
     killsRequired,
     maxGoldPerHour,
+    secondsToDie,
     nextStage,
     offlineCapHours,
     offlineEfficiency,
@@ -228,6 +230,80 @@ describe('hero-quest settle', () => {
         })
     })
 
+    describe('the wave wipe', () => {
+        /** Deep enough that a level-1 Beginner still deals damage but cannot outlast a stage. */
+        const unsurvivable = at(2, 2)
+
+        function secondsPerKillAt(position: RunPosition, heroLevel = 1) {
+            const units = partyUnitStats({ ...hero, heroLevel })
+            const enemy = enemyStatsAt(position)
+            return secondsPerKill(partyDps(units, enemy.def), enemy)
+        }
+
+        function wipeCount(position: RunPosition, heroLevel = 1) {
+            const units = partyUnitStats({ ...hero, heroLevel })
+            return killsBeforeWipe(units, enemyStatsAt(position), secondsPerKillAt(position, heroLevel))
+        }
+
+        it('is unreachable while the party cannot be killed at all', () => {
+            const units = partyUnitStats({ ...hero, heroLevel: 200 })
+            const enemy = enemyStatsAt(at(1, 1))
+            // Enemy PWR fully mitigated means exactly 0 damage, not an asymptotic sliver.
+            expect(secondsToDie(units, enemy)).toBe(Number.POSITIVE_INFINITY)
+            expect(wipeCount(at(1, 1), 200)).toBe(Number.POSITIVE_INFINITY)
+        })
+
+        it('holds the stage instead of advancing when the party cannot outlast it', () => {
+            expect(wipeCount(unsurvivable)).toBeLessThan(BASE_KILL_COUNT)
+
+            const result = settle(input({ position: unsurvivable, elapsedSeconds: 72 * 3600 }))
+            expect(result.wipedOnWave).toBe(true)
+            expect(result.position.world).toBe(unsurvivable.world)
+            expect(result.position.stage).toBe(unsurvivable.stage)
+        })
+
+        it('never banks more stage progress than one attempt survives', () => {
+            const result = settle(input({ position: unsurvivable, elapsedSeconds: 72 * 3600 }))
+            expect(result.position.killsInStage).toBeLessThan(wipeCount(unsurvivable))
+        })
+
+        it('keeps paying Gold and XP while walled, so levelling breaks the wall', () => {
+            const result = settle(input({ position: unsurvivable, elapsedSeconds: 8 * 3600 }))
+            expect(result.kills).toBeGreaterThan(0)
+            expect(result.goldEarned).toBeGreaterThan(0)
+            expect(result.xpEarned.gt(0)).toBe(true)
+            expect(result.heroLevel).toBeGreaterThan(hero.heroLevel)
+        })
+
+        it('resolves a long window in bounded time rather than walking wipe by wipe', () => {
+            const started = Date.now()
+            settle(input({ position: unsurvivable, elapsedSeconds: 72 * 3600 }))
+            expect(Date.now() - started).toBeLessThan(1000)
+        })
+
+        it('earns nothing when the party dies before landing a single kill', () => {
+            // The narrow band where the hero still scratches the enemy but one kill outlasts
+            // it — past this the hero deals literally 0 and `stalls` instead (below).
+            const position = at(2, 6)
+            expect(secondsPerKillAt(position)).toBeLessThan(Number.POSITIVE_INFINITY)
+            expect(wipeCount(position)).toBe(0)
+
+            const result = settle(input({ position, elapsedSeconds: 24 * 3600 }))
+            expect(result.wipedOnWave).toBe(true)
+            expect(result.kills).toBe(0)
+            expect(result.goldEarned).toBe(0)
+            expect(result.position.killsInStage).toBe(0)
+        })
+
+        it('clears normally once the party outlasts the kill requirement', () => {
+            expect(wipeCount(at(1, 1))).toBeGreaterThanOrEqual(BASE_KILL_COUNT)
+
+            const result = settle(input({ position: at(1, 1), elapsedSeconds: 8 * 3600 }))
+            expect(result.wipedOnWave).toBe(false)
+            expect(result.position.stage).toBeGreaterThan(1)
+        })
+    })
+
     describe('the boss wall', () => {
         it('never advances past Stage 5, however long the window', () => {
             const result = settle(input({ position: at(1, 1), elapsedSeconds: 72 * 3600 }))
@@ -252,9 +328,10 @@ describe('hero-quest settle', () => {
         })
 
         it('gates Stage 10 the same way it gates Stage 5', () => {
-            // Needs a leveled hero: a level-1 Beginner cannot scratch a Stage 9 elite (below).
+            // Needs a leveled hero: a level-1 Beginner cannot scratch a Stage 9 elite (below),
+            // and below ~level 20 it cannot outlast a full elite stage attempt either.
             const result = settle(input({
-                hero: { ...hero, heroLevel: 10 },
+                hero: { ...hero, heroLevel: 25 },
                 position: at(1, 9, BASE_KILL_COUNT - 1),
                 elapsedSeconds: 8 * 3600
             }))
