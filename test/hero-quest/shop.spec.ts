@@ -7,6 +7,8 @@ import {
     shopTrackCost
 } from '#shared/utils/hero-quest/content/shop'
 import {
+    BASE_CHAMPION_SLOTS,
+    MAX_CHAMPION_SLOTS,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
@@ -17,13 +19,19 @@ import {
 import { offlineCapHours, offlineEfficiency } from '#shared/utils/hero-quest/settle'
 
 describe('hero-quest prestige shop', () => {
-    it('exposes only the two tracks Phase 1 has locked formulas for', () => {
-        expect(SHOP_TRACKS.map(track => track.id).sort()).toEqual(['offlineCap', 'offlineEfficiency'])
+    it('exposes only the tracks with locked formulas — the two offline pair, plus Champion slots', () => {
+        // Champion slots joined in Phase 2 because the system it unlocks now exists. The
+        // remaining §4 sinks (Skill/Artifact slots, Raid Keys, global stat multipliers) still
+        // have no formula, level count or magnitude in any doc — see `content/shop.ts`.
+        expect(SHOP_TRACKS.map(track => track.id).sort())
+            .toEqual(['championSlots', 'offlineCap', 'offlineEfficiency'])
     })
 
     it('matches each track\'s level count to the constant that caps its effect', () => {
         expect(maxLevelFor('offlineEfficiency')).toBe(MAX_OFFLINE_EFFICIENCY_LEVEL)
         expect(maxLevelFor('offlineCap')).toBe(MAX_OFFLINE_CAP_LEVEL)
+        // 2 slots to start, 5 at the cap — so exactly 3 purchases (§1).
+        expect(maxLevelFor('championSlots')).toBe(MAX_CHAMPION_SLOTS - BASE_CHAMPION_SLOTS)
     })
 
     it('reaches each track\'s designed ceiling at exactly its last level, not before', () => {
@@ -35,7 +43,8 @@ describe('hero-quest prestige shop', () => {
 
     it('recognises its own track IDs and nothing else', () => {
         expect(isShopTrackId('offlineCap')).toBe(true)
-        expect(isShopTrackId('championSlots')).toBe(false)
+        expect(isShopTrackId('championSlots')).toBe(true)
+        expect(isShopTrackId('skillSlots')).toBe(false)
         expect(isShopTrackId('__proto__')).toBe(false)
     })
 

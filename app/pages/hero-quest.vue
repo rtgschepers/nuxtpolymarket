@@ -1,10 +1,11 @@
 <script setup lang="ts">
 const route = useRoute()
 
-// Phase 1 is the loop and nothing else. The gacha, raid, trait, arena and encyclopedia tabs
-// the architecture doc lists all belong to systems that do not exist yet.
+// Guild is the first of the four gacha tabs (Phase 2). The Forge, Training Grounds and
+// Dig-site tabs are Phase 3; raid, trait, arena and encyclopedia belong to Phase 4.
 const tabs = [
   { label: 'Battle', to: '/hero-quest', icon: 'i-lucide-swords' },
+  { label: 'Guild', to: '/hero-quest/guild', icon: 'i-lucide-users' },
   { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' }
 ]
 

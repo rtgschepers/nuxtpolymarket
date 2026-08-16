@@ -144,7 +144,6 @@ Starting point: `BASE_CURRENCY = 100`, `CURRENCY_GROWTH = 2` → 100 / 200 / 400
 **Design note:** this pairs with the soft fallback fail state — since a run can never permanently lose progress (only fall back a stage), "must reach World 10 to get paid" doesn't carry true failure risk, just time cost. If early playtesting shows the *first* prestige (before any shop bonuses exist) takes unreasonably long with zero payoff en route, that's the one assumption worth revisiting.
 
 **Spends on (shop, permanent):**
-- Global stat multipliers (ATK%, HP%, gold gain%)
 - Idle/offline efficiency%
 - **Slot expansions — same pattern across the three slot-based collectible systems:** Champion slots, (gacha) Skill slots, and Artifact slots each start at **2** and cap at **5**, via **3 permanent purchase levels** apiece (2→3, 3→4, 4→5) — 9 purchase levels total. See `champions-guild-gacha.md` §1, `skills-gacha.md` §6, and `artifacts-dig-site-gacha.md` §7. **Gear/Forge has no slot track** — all 6 of its slots are available from account start by design (`gear-equipment.md` §1).
 - Kill-count reduction% (lowering the per-stage requirement below its base 30) or boss-timer extension (small, expensive)

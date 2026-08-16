@@ -105,7 +105,7 @@ Rows are counters-plus-progression keyed on `(userId, …, contentId)` — the p
 | Champion / Skill / Artifact slots (2→5) | 3 each, 9 total | Void Shards |
 | Offline Efficiency (50→100%) | 5 | Void Shards |
 | Offline Cap (8→72h) | 32 | Void Shards |
-| Stat multipliers, kill-count reduction, boss-timer extension | TBD | Void Shards |
+| Kill-count reduction, boss-timer extension | TBD | Void Shards |
 | Raid Key daily-grant rate, one track per raid | 5 tracks | Void Shards |
 | `loadoutSlots` (2→10) | 8 | **Gems** (`loadouts.md` §3) |
 | `traitSaveSlots` (1→4) | 3 | **Gems** (`traits.md` §6) |

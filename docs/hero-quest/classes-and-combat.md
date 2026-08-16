@@ -213,6 +213,34 @@ onHit:  roll uniform [0,1) < hitChance  → the attack lands, resolve damage/cri
 - **Offline/settle treatment:** the offline calc averages crit rather than rolling it (`idle-mechanics.md` §4), and EVA follows the same convention — it applies as a flat `× (1 − EVA)` multiplier on expected incoming damage rather than a per-hit roll. Seeded live fights (`tech-architecture.md` §4c) roll it for real, exactly like crit.
 - **Party-wide by default when trait-sourced** — see `traits.md` §5, where Trait effects apply to the whole fielded party.
 
+### Status effects — **new, and decided rather than transcribed**
+
+Both ability rosters lean heavily on status effects — stacking DoTs, refreshed debuffs, shields, cleanses, debuff immunity, "extend all active debuffs on the target" — but **no doc ever defined the system they assume**. Unraveling Curse settles it: an effect that operates on *every debuff currently on a target* can only be written against a queryable, mutable, per-unit registry of live effects. These are that registry's rules. They were chosen during implementation, not lifted from a design pass, so they are open to revision — but they are now what the code does.
+
+**The kinds.** `dot`, `hot`, `shield`, `buff`, `debuff`, `taunt`, `silence`, `stun`, `reflect`, `redirect`, `immunity`. Enough to express every effect the two rosters describe; anything more exotic is a combination rather than a twelfth kind.
+
+**Stacking and refresh.** Reapplying the same effect id **adds a stack and refreshes the duration**, capped at `STATUS_MAX_STACKS`. Both halves are load-bearing: "re-application stacks" needs the stack, and an effect whose duration never refreshed would expire however hard it was maintained. Refresh goes to the **longer** of the two durations, never blindly to the newer — otherwise a short cheap application would cut a long expensive one short, making a strong effect worse for standing beside a weak one. Different ids never merge.
+
+**Periodic cadence.** DoT and HoT pay out on a fixed `STATUS_TICK_SECONDS` grid, deliberately **not** on the combat tick. Paying per combat tick would tie every effect's strength to `FIGHT_TICK_SECONDS`, so halving the sim's resolution would halve every burn. A fixed grid keeps "damage per second" a property of the effect rather than of the simulator. Fractional ticks are paid, not rounded away.
+
+**Stat modifiers combine multiplicatively**, as a product, which makes them **order-independent** — there is no "buffs before debuffs" rule to decide, because multiplication does not care. Any additive scheme would need both a stated order and a floor rule to stop stacked debuffs driving a stat negative, and both would be arbitrary. The product is floored at zero: a stat may reach nothing, never less.
+
+**Shields absorb after mitigation, never before.** A shield therefore buys a predictable amount of *post-mitigation* damage instead of a value that swings with the attacker's PWR and the defender's DEF. It also preserves `MIN_DAMAGE`: that floor is a property of the mitigation formula, and a shield in front of it would let a fully-shielded unit take literally nothing, quietly restoring the immortality the floor exists to prevent. Shields are pools — reapplying tops up rather than replacing — and are consumed oldest-first.
+
+**Silence stops abilities; stun stops abilities and autoattacks.** Cooldowns keep running underneath both, so control *delays* a kit rather than erasing it. A stun eats the swing whose timer came due during it — the attack is lost, not banked, which is what makes hard control worth more than a slow.
+
+**Cleanse and immunity act on hostile kinds only** — `dot`, `debuff`, `silence`, `stun`. A cleanse can never strip the bearer's own buffs or eat a shield it was meant to protect, and immunity blocks incoming hostile effects while letting friendly ones land.
+
+**Debuff resistance reduces duration, not chance.** Nothing sources it yet (it arrives with Skills), but the choice is made: a duration cut is predictable and composes with stacking, where a chance roll would add a second source of variance on top of crit for no design gain.
+
+### Threat — **new**
+
+`champions-guild-gacha.md` §8.2 calls Tank "the primary aggro anchor for the party" and §7 above gives the Warrior path "a threat modifier pulling a share of enemy attacks onto itself", but neither assigns a number or a mechanism. The mechanism:
+
+**Row decides eligibility; threat decides who among the eligible is chosen.** Front row first, back row only once the front is empty or dead — unchanged. Threat sorts *within* that row and never across it, which is exactly `champions-guild-gacha.md` §8.4's requirement that a back-lined Tank's pull stays inert while the front row stands. Putting a Tank in the back row still costs it its entire purpose, with no special case needed to enforce that.
+
+Ties keep their original order, so a party with no aggro anchor targets exactly as it did before threat existed. `TANK_THREAT_MULTIPLIER` is carried by the Tank archetype and by every node on the Warrior path; `TAUNT_THREAT_MULTIPLIER` is what an active `taunt` status adds on top.
+
 ### Crit
 LCK and IMP are separate stats per your doc. Crit chance is no longer hard-capped below 100% — instead it converts from LCK linearly (no log curve) until it hits 100%, and any LCK beyond that point doesn't get wasted: it converts into bonus crit damage at a reduced rate:
 ```

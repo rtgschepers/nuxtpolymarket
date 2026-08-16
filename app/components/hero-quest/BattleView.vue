@@ -21,6 +21,9 @@ const props = defineProps<{
         walled: boolean
         killsBeforeWipe: number | null
         secondsPerKill: number | null
+        /** Seconds to clear a whole encounter — `secondsPerKill × packSize`. */
+        secondsPerPack: number | null
+        packSize: number
         enemyHp: string
         partyDps: string
     }
@@ -54,11 +57,16 @@ const killProgress = computed(() => {
     return Math.min(100, (displayKills.value / props.run.killsRequired) * 100)
 })
 
-/** Enemy HP bar, driven off the fractional part of the current kill. Pure decoration. */
+/**
+ * Enemy HP bar, driven off the fractional part of the current *encounter*. Pure decoration.
+ *
+ * Cycles on `secondsPerPack`, not `secondsPerKill`: with a pack of N the bar represents the
+ * whole group, so sweeping it once per individual kill would empty it N times per encounter.
+ */
 const enemyHpPct = computed(() => {
-    const spk = props.run.secondsPerKill
-    if (!spk || props.run.atBossGate) return 100
-    return 100 - ((elapsed.value % spk) / spk) * 100
+    const perPack = props.run.secondsPerPack ?? props.run.secondsPerKill
+    if (!perPack || props.run.atBossGate) return 100
+    return 100 - ((elapsed.value % perPack) / perPack) * 100
 })
 
 const elapsed = ref(0)
@@ -98,7 +106,11 @@ onUnmounted(() => {
     <template v-else>
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-sm">
-          <span class="font-medium text-highlighted">{{ run.enemyName }}</span>
+          <span class="font-medium text-highlighted">
+            {{ run.enemyName }}
+            <!-- HP below is per enemy, so the count has to be visible next to it. -->
+            <span v-if="run.packSize > 1" class="text-muted">×{{ run.packSize }}</span>
+          </span>
           <span class="text-muted">{{ formatHq(run.enemyHp) }} HP</span>
         </div>
         <UProgress

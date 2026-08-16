@@ -37,6 +37,51 @@ export const SUPER_BOSS_STAGE = 10
 export const ELITE_STAGE_MIN = 6
 export const ELITE_STAGE_MAX = 9
 
+// ── Enemy packs ────────────────────────────────────  classes-and-combat.md §7, §6
+//
+// How many enemies stand in one encounter. **No design doc owns this number** — the combat
+// model was single-enemy until now, which left every "AoE", "3 random enemies" and "chain to
+// a second enemy" in both ability rosters with nothing to hit, and left the Tank's threat
+// modifier with nothing to re-weight.
+//
+// `BASE_KILL_COUNT` still counts **individual enemies**, not encounters: a wave stage is 30
+// bodies that now arrive in bursts of N. Keeping that unit is what leaves `goldPerKill`,
+// `xpPerKill`, `MIN_SECONDS_PER_KILL` and the whole `PRESTIGE_GOLD_FACTOR[]` chain untouched,
+// and what lets the persisted `hq_state.kill_count` keep its meaning with no migration.
+//
+// Because pack HP and party DPS both scale by N against a homogeneous pack, `secondsPerKill`
+// is algebraically unchanged at any size. Packs move difficulty **entirely onto
+// survivability** — one lever, one axis.
+
+/**
+ * Six per encounter divides `BASE_KILL_COUNT` exactly — a wave or elite stage is **5 packs**,
+ * not 30 lone enemies trickling past. Keep any retune a divisor of 30 or the last pack of a
+ * stage is a ragged remainder.
+ */
+export const WAVE_PACK_SIZE = 6 // UNTUNED ╧
+export const ELITE_PACK_SIZE = 6 // UNTUNED ╧
+
+/**
+ * Minions standing with a boss or super boss. The boss itself is always exactly one, so a
+ * boss encounter holds `BOSS_MINION_COUNT + 1` bodies.
+ *
+ * Deliberately smaller than a wave pack: the boss is the fight, and its escort is there to
+ * split the party's attention and give AoE something to answer, not to become the fight. The
+ * `BOSS_TIMER_SECONDS` gate covers the **whole encounter**, so every minion is time taken off
+ * the boss — which is what makes clearing adds a real decision rather than free damage.
+ */
+export const BOSS_MINION_COUNT = 2 // UNTUNED ╧
+
+/**
+ * Fraction of a pack still swinging, averaged over one stage attempt.
+ *
+ * Under focus fire an encounter's live attackers walk N → N-1 → … → 1, so the mean over an
+ * attempt is exactly `(N+1)/2` — which `0.5` reproduces. `1.0` is the conservative endpoint
+ * (every member swinging for the whole attempt). Whatever it holds, N = 1 yields exactly one
+ * stream, so bosses and every pre-pack number stay bit-identical.
+ */
+export const PACK_LIVE_STREAM_FRACTION = 0.5 // UNTUNED ╧
+
 // ── Enemy curve ────────────────────────────────────  core-progression-and-prestige.md §1
 
 /**
@@ -123,12 +168,81 @@ export const SUPER_BOSS_ATK_MULT = 1.5 // UNTUNED ╧
 
 /**
  * Mitigation ratio threshold: once a defender's DEF reaches `K` times the attacker's PWR,
- * mitigation is 100% and damage floors at exactly 0.
+ * mitigation is 100% — and damage floors at `MIN_DAMAGE`, not at 0.
  */
 export const K = 2 // UNTUNED ╧
 
+/**
+ * The damage floor. **A hit never deals less than this, however far DEF outruns PWR.**
+ *
+ * ## Why this exists
+ *
+ * The clamped mitigation form used to bottom out at exactly 0, which made every wall in the
+ * game a *hard* wall rather than a slow one: the Phase 2 campaign sim reported `STALLED
+ * (0 dmg)` at essentially every elite stage, because the enemy's DEF had passed `PWR × K` and
+ * the party's damage was not merely small but literally nothing. A player in that state has
+ * no feedback that they are close, no partial progress, and no way to tell a 1%-short wall
+ * from a 90%-short one.
+ *
+ * A floor of 1 changes the *kind* of wall without meaningfully changing its position: against
+ * an enemy with 10^40 HP, 1 damage per hit is not a route through, so the gate still gates.
+ * What it buys is that progress is always non-zero and always measurable, and that no party
+ * is ever perfectly immortal either — the floor is symmetric, so an over-armoured party takes
+ * 1 per hit rather than being untouchable.
+ *
+ * Applied in `rawHitDamage`, which is the one place pairwise damage is derived, and mirrored
+ * in `partyDps` and `fight.rollDamage` where the pooled path computes damage directly.
+ */
+export const MIN_DAMAGE = 1 // UNTUNED ╧
+
 /** Locked at 60%, leaving headroom for EVA sources added after Traits. */
 export const MAX_EVASION = 0.60
+
+// ── Status effects ─────────────────────────────────  classes-and-combat.md §7 (new)
+//
+// No design doc defines a status system, but both ability rosters assume one — stacking DoTs,
+// refreshed debuffs, shields, cleanses, debuff immunity, "extend all active debuffs". These
+// are the rules that assumption needs, decided here rather than transcribed.
+
+/**
+ * Ceiling on stacks of one effect on one unit.
+ *
+ * Reapplication refreshes duration *and* adds a stack, so without a cap a maintained DoT grows
+ * without bound — and Frostbind's "at max stacks, fully disables" needs a max to point at.
+ */
+export const STATUS_MAX_STACKS = 5 // UNTUNED ╧
+
+/**
+ * The grid periodic effects pay out on.
+ *
+ * Deliberately **not** `FIGHT_TICK_SECONDS`: paying per combat tick would tie every DoT's
+ * strength to the sim's resolution, so halving the tick would halve every burn. A fixed grid
+ * keeps "damage per second" a property of the effect rather than of the simulator.
+ */
+export const STATUS_TICK_SECONDS = 1 // UNTUNED ╧
+
+/**
+ * Threat weight of a unit with no aggro identity — the baseline every multiplier is against.
+ *
+ * Threat re-weights *within* the row the enemy is already allowed to hit; it never overrides
+ * front-row-first eligibility (`champions-guild-gacha.md` §8.4, which is explicit that a
+ * back-lined Tank's taunt stays inert while the front row stands).
+ */
+export const BASE_THREAT = 1
+
+/**
+ * What a Tank archetype and the Warrior class path multiply their threat by.
+ *
+ * `champions-guild-gacha.md` §8.2 calls Tank "the primary aggro anchor for the party" and
+ * `classes-and-combat.md` §7 gives the Warrior path "a threat modifier pulling a share of
+ * enemy attacks onto itself" — neither assigns a number, so this is the placeholder that makes
+ * both real. Any value above 1 is enough to put a Tank in front of its own row-mates; the
+ * magnitude only matters once threat becomes a contested, continuous quantity.
+ */
+export const TANK_THREAT_MULTIPLIER = 3 // UNTUNED ╧
+
+/** What an active taunt multiplies threat by, on top of whatever the unit already carries. */
+export const TAUNT_THREAT_MULTIPLIER = 10 // UNTUNED ╧
 
 /** Archer's LCK 16 → 16% crit; Warrior's LCK 5 → 5%. */
 export const CRIT_CHANCE_PER_POINT = 0.01 // UNTUNED ╧
@@ -204,6 +318,94 @@ export const MIN_COOLDOWN_SECONDS = 0.5 // UNTUNED ╧
  */
 export const SKILL_BASE_COOLDOWN_SECONDS = 8 // UNTUNED ╧
 export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // UNTUNED ╧
+
+// ── Ability effect magnitudes ──────────────────────  classes-and-combat.md §7, §3
+//
+// Every ability in both rosters is described in prose and given no numbers anywhere — "a
+// short duration", "a portion", "small", "solid". These are the shapes that prose implies,
+// as one named set rather than 44 literals scattered through content files, so the eventual
+// balance pass is a single edit here.
+//
+// The relative *ordering* is the design content and is deliberate: wide AoE pays for its
+// reach, a pierce beats a basic attack by a little, and single-target burst beats both.
+
+/** Wide AoE trades magnitude for reach — it is hitting up to six bodies. */
+export const SKILL_AOE_MULTIPLIER = 1.0 // UNTUNED ╧
+
+/** A pierce hits two, so it sits between an autoattack and a full-power single hit. */
+export const SKILL_PIERCE_MULTIPLIER = 1.3 // UNTUNED ╧
+
+/** A line hit reaches up to three — between a pierce and a full-board storm. */
+export const SKILL_LINE_MULTIPLIER = 1.2 // UNTUNED ╧
+
+/** How long an ability-applied buff, debuff or control lasts. */
+export const SKILL_STATUS_DURATION_SECONDS = 6 // UNTUNED ╧
+
+/** Hard control is short by design — it denies actions outright rather than slowing them. */
+export const SKILL_CONTROL_DURATION_SECONDS = 2 // UNTUNED ╧
+
+/** Fractional shift a one-stat buff or debuff applies, per stack. */
+export const SKILL_BUFF_FRACTION = 0.25 // UNTUNED ╧
+export const SKILL_DEBUFF_FRACTION = 0.20 // UNTUNED ╧
+
+/** Healing and shielding as a multiple of the caster's PWR (`champions-guild-gacha.md` §2). */
+export const SKILL_HEAL_MULTIPLIER = 1.5 // UNTUNED ╧
+export const SKILL_SHIELD_MULTIPLIER = 2.0 // UNTUNED ╧
+
+/** Damage-over-time per tick, as a multiple of PWR. Lower than a hit; it lands repeatedly. */
+export const SKILL_DOT_MULTIPLIER = 0.4 // UNTUNED ╧
+export const SKILL_HOT_MULTIPLIER = 0.4 // UNTUNED ╧
+
+/**
+ * Haste doubles SPD — **the one ability magnitude any doc actually states**
+ * (`classes-and-combat.md` §3). Expressed as the fraction added, so +1.0 is a doubling.
+ * Not marked untuned: it is specified, not guessed. The duration is not.
+ */
+export const HASTE_SPD_BONUS = 1.0
+
+/** Enrage's trade: PWR up, and more incoming damage taken, as `classes-and-combat.md` §2 has it. */
+export const ENRAGE_PWR_BONUS = 0.6 // UNTUNED ╧
+export const ENRAGE_DEF_PENALTY = 0.4 // UNTUNED ╧
+
+/** Kill Shot always crits, and crits for this multiple of the normal crit. */
+export const KILL_SHOT_CRIT_MULTIPLIER = 2 // UNTUNED ╧
+
+/** How much an execute-style ability gains against a target at 0% HP. */
+export const EXECUTE_BONUS = 1.5 // UNTUNED ╧
+
+/** Reflected and redirected fractions, per stack. */
+export const SKILL_REFLECT_FRACTION = 0.25 // UNTUNED ╧
+export const SKILL_REDIRECT_FRACTION = 0.4 // UNTUNED ╧
+
+/** How many separate rolls Focused Barrage splits its damage into — "more crit rolls per cast". */
+export const FOCUSED_BARRAGE_HITS = 4 // UNTUNED ╧
+
+/** Fraction of max HP a revived ally comes back on — Second Wind's "partial HP". */
+export const REVIVE_HP_FRACTION = 0.3 // UNTUNED ╧
+
+/**
+ * Frostbind: "stacking slow; at max stacks, fully disables (freezes) the target".
+ *
+ * Two independent dials, deliberately. `STACKS_PER_CAST` is how fast the slow builds, and
+ * `FREEZE_STACKS` is how deep it has to get before the freeze lands — so the *time to freeze*
+ * can be retuned from either end without touching the other, or the freeze pushed out of reach
+ * entirely by setting the threshold above `STATUS_MAX_STACKS`.
+ *
+ * The threshold is a stack count rather than "on the last application", so it stays meaningful
+ * however many casts it takes to get there.
+ */
+export const FROSTBIND_STACKS_PER_CAST = 1 // UNTUNED ╧
+export const FROSTBIND_FREEZE_STACKS = 3 // UNTUNED ╧
+
+/**
+ * The most of an incoming wave that party healing may cancel in the **idle projection**.
+ *
+ * Not a combat rule — `fight.ts` resolves heals for real and needs no cap. This exists because
+ * the averaged rate model would otherwise let a party with one Support drive incoming damage
+ * to zero and become immortal, restoring exactly what `MIN_DAMAGE` was introduced to remove,
+ * in the one place no fight would ever contradict it.
+ */
+export const MAX_SUSTAIN_MITIGATION = 0.9 // UNTUNED ╧
 
 /**
  * Tick granularity of the seeded boss simulation (`fight.ts`).
@@ -450,6 +652,140 @@ export const HQ_REFRESH_INTERVAL_MS = 60_000 // UNTUNED ╧
  * inflates).
  */
 export const ONLINE_THRESHOLD_MS = HQ_REFRESH_INTERVAL_MS * 3 // UNTUNED ╧
+
+// ── Gacha ──────────────────────────────────────────  gacha-shared-system.md §2–6
+//
+// Shared by all four gachas. Champions are the only one built (Phase 2); Gear, Skills and
+// Artifacts reuse every constant below unchanged, which is the whole point of the single
+// `hqCollection` table.
+
+/**
+ * Pulls needed to advance a gacha from level L to L+1, indexed by L (1-based; index 0 unused).
+ *
+ * **Doc-specified table, not a live formula.** `gacha-shared-system.md` §2 gives the shape as
+ * `roundDown(10 × 2.6^(L-1) × 1.5)` and then rounds each result "to a clean denomination"
+ * — nearest 10 below 100, nearest 100 up to 10,000, nearest 1,000 above. The rounded values
+ * are what the doc actually locks, so they are transcribed rather than recomputed; the raw
+ * formula does not reproduce them.
+ *
+ * Cumulative to max a single gacha at level 10: ~50,240 pulls.
+ */
+export const PULLS_TO_LEVEL_UP: readonly number[] = [
+    0, 10, 30, 100, 200, 600, 1_700, 4_600, 12_000, 31_000
+]
+
+export const MAX_GACHA_LEVEL = 10
+
+/**
+ * Drop rates by gacha level, `[common, uncommon, rare, epic, legendary, mythic]`.
+ *
+ * Index 0 is unused so the level indexes directly. Every row must sum to exactly 100% —
+ * enforced in `test/hero-quest/content.spec.ts`, not asserted at boot.
+ */
+export const DROP_RATE_TABLE: readonly (readonly number[])[] = [
+    [],
+    [100.0, 0, 0, 0, 0, 0],
+    [75.0, 25.0, 0, 0, 0, 0],
+    [47.0, 43.0, 10.0, 0, 0, 0],
+    [19.0, 56.0, 23.0, 2.0, 0, 0],
+    [18.8, 32.0, 37.0, 12.0, 0.2, 0],
+    [19.0, 22.0, 24.0, 34.0, 0.8, 0.2],
+    [10.0, 10.0, 14.0, 60.0, 5.2, 0.8],
+    [10.0, 10.0, 12.1, 54.5, 12.0, 1.4],
+    [10.0, 10.0, 10.0, 49.0, 18.8, 2.2],
+    [10.0, 10.0, 10.0, 42.0, 25.0, 3.0]
+]
+
+/** 1 Seal per pull; a 10-pull is 9 Seals but still counts as 10 toward gacha leveling. */
+export const SINGLE_PULL_COST = 1
+export const TEN_PULL_SIZE = 10
+export const TEN_PULL_COST = 9
+
+/**
+ * dupesToLevelUp(star, level) = round(min((star × 10 + level) × DUPE_LEVEL_FACTOR, DUPE_LEVEL_CAP))
+ *
+ * `1.618` is the golden ratio, per the doc. The cap binds fast — everything from 1★ Lv3
+ * onward is a flat 20 — which is what keeps a full 0★→5★ Lv10 max at 1,066 dupes.
+ */
+export const DUPE_LEVEL_FACTOR = 1.618
+export const DUPE_LEVEL_CAP = 20
+
+/** Items start at 0★, 10 levels per star, 5★ Lv10 is maxed. */
+export const MAX_STAR = 5
+export const LEVELS_PER_STAR = 10
+
+/**
+ * Essence gained per post-max duplicate, and the Essence price of crafting, by rarity index.
+ *
+ * Both ladders are ×5 per tier, and a rarity's craft cost is always exactly 5× its own dupe
+ * value — so 15,625 Common duplicates buy one hand-crafted Mythic.
+ */
+export const ESSENCE_VALUE_PER_RARITY: readonly number[] = [1, 5, 25, 125, 625, 3_125]
+export const CRAFT_COST_PER_RARITY: readonly number[] = [5, 25, 125, 625, 3_125, 15_625]
+
+/**
+ * Champion party slots, bought with Void Shards in the prestige shop
+ * (`champions-guild-gacha.md` §1). Starts at 2, caps at 5, so 3 levels to buy.
+ */
+export const BASE_CHAMPION_SLOTS = 2
+export const MAX_CHAMPION_SLOTS = 5
+export const CHAMPION_SLOT_BASE_COST = 400 // UNTUNED ╧
+export const CHAMPION_SLOT_COST_GROWTH = 3 // UNTUNED ╧
+
+/** The flat 3-front / 3-back grid (`classes-and-combat.md` §6). Capacities, not quotas. */
+export const FORMATION_ROW_CAPACITY = 3
+
+/**
+ * The §7 passive collection bonus, per point of a copy's `(star × 10 + level)` scalar.
+ *
+ * Multiplicative on the Hero's own stat, and paid by **every owned Champion whether or not it
+ * is fielded** — that is the whole point of the mechanic: pulling broadly and levelling
+ * everything has value independent of which 2–5 you actually field.
+ *
+ * `champions-guild-gacha.md` §7 fixes the *shape* (which archetype buffs which Hero stat, and
+ * that it scales on the shared scalar) and states no magnitude anywhere, so this is a
+ * placeholder. At 0.002 a single maxed Champion (scalar 60) is +12% to its archetype's stat,
+ * and the 12-Champion Phase 2 roster fully maxed is roughly +36% on each of the six.
+ */
+export const CHAMPION_PASSIVE_PER_POINT = 0.002 // UNTUNED ╧
+
+/**
+ * Free Seal grant: one of each type per real-time interval, bankable up to a cap
+ * (`economy-and-currencies.md` §5). Deliberately *not* a stage-clear drop — keeping Seals
+ * discrete is what preserves "buy extra Seals with Gold" as a genuine choice.
+ */
+export const SEAL_GRANT_INTERVAL_HOURS = 24 // UNTUNED ╧
+export const SEAL_GRANT_AMOUNT = 1 // UNTUNED ╧
+export const SEAL_GRANT_BANK_CAP_DAYS = 7 // UNTUNED ╧
+
+/**
+ * Milestone Seal grants (`economy-and-currencies.md` §5, source 1).
+ *
+ * Tied to core-progression milestones rather than to any gacha's own progress, so a milestone
+ * grants **all four Seal types at once** — the four gachas are meant to advance in lockstep.
+ * The doc defers the exact list and batch sizes to the World/enemy design pass and gives only
+ * a starting shape: "small batches per World clear, larger batches per Prestige completion."
+ * These are that shape, and nothing more.
+ */
+export const SEAL_GRANT_PER_BOSS = 1 // UNTUNED ╧
+export const SEAL_GRANT_PER_WORLD_CLEAR = 3 // UNTUNED ╧
+export const SEAL_GRANT_PER_PRESTIGE = 10 // UNTUNED ╧
+
+/**
+ * The daily escalating Gold ladder for extra Seals (`gold-economy.md` §7). Per-gacha
+ * independent counter, one shared reset date.
+ *
+ *     price(n) = SEAL_LADDER_BASE_GOLD × SEAL_LADDER_GROWTH[system]^n
+ *
+ * where `n` is how many of *that* gacha's Seals were already bought with Gold today.
+ */
+export const SEAL_LADDER_BASE_GOLD = 1_000_000
+export const SEAL_LADDER_GROWTH: Readonly<Record<string, number>> = {
+    gear: 1.0011,
+    champion: 1.0007,
+    skill: 1.0011,
+    artifact: 1.0007
+}
 
 // ── Prestige currency ──────────────────────────────  economy-and-currencies.md §3
 

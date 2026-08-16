@@ -95,6 +95,13 @@ All three reuse Phase 2's shared machinery. Build in this order — cheapest fir
 
 Plus: Loadouts (`loadouts.md`) lands naturally here, since it's the thing that manages all the equipping Phase 3 creates.
 
+**Also in scope: retiring `foldToAvailableRarity`** (`open-items.md`, Phase 2 carry-over). It is scaffolding that folds a rolled rarity down to the nearest rarity the shipped roster actually populates — needed because Phase 2's Champions cover only Common/Rare/Mythic. Each gacha added here needs its own `hasContent` predicate wired in, so the decision cannot be dodged:
+
+- **Gear** ships 1 item per slot per rarity, i.e. fully populated. The fold is the identity, and Gear should simply not call it.
+- **Skills** and **Artifacts** — decide per roster. If either ships partial, it keeps folding on the same terms as Champions (strictly stingier than the finished table, never richer).
+
+The helper is deleted outright the day every roster is complete; until then it stays, and every caller that no longer needs it stops calling it rather than passing an always-true predicate.
+
 **Done when:** all four gachas run, Loadouts bundle the swapping, and GPN (`global-power-number.md`) can finally be computed meaningfully — it needs real gear and collections to read.
 
 ---

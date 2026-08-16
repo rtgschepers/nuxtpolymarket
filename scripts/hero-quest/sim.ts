@@ -21,18 +21,20 @@ import {
     goldPerKill,
     incomingDps,
     killsRequired,
-    secondsPerKill,
+    packDps,
+    packSize,
+    rateAt,
     secondsToDie,
     stageArchetype,
     totalXpForLevel,
     xpPerKill
 } from '../../shared/utils/hero-quest/settle'
-import { partyDps } from '../../shared/utils/hero-quest/combat'
-import { partyUnitStats } from '../../shared/utils/hero-quest/stats'
+import { partyAbilityDps } from '../../shared/utils/hero-quest/projection'
 import { CLASS_NODES } from '../../shared/utils/hero-quest/content/classes'
+import { CHAMPION_ABILITY_POOL, ability, getArchetype } from '../../shared/utils/hero-quest/content/champions'
 import { ZERO } from '../../shared/utils/hero-quest/numbers'
 import type { Decimal } from '../../shared/utils/hero-quest/numbers'
-import type { ClassId, HeroSnapshot, StageArchetype } from '../../shared/utils/hero-quest/types'
+import type { ChampionArchetype, ClassId, HeroSnapshot, StageArchetype } from '../../shared/utils/hero-quest/types'
 
 export type Verdict = 'clear' | 'timer_fail' | 'wipe' | 'stalled'
 
@@ -43,7 +45,9 @@ export interface StageReport {
     isGate: boolean
     level: number
 
+    /** Per enemy, not per pack — `packSize` says how many of them stand together. */
     enemyHp: Decimal
+    packSize: number
     enemyPwr: Decimal
     enemyDef: Decimal
 
@@ -88,34 +92,68 @@ export function makeHero(classId: ClassId, heroLevel: number, overrides: Partial
  * no rarity bonus and no dupes — so a measured party gain is a floor, not a best case. Real
  * party size runs 3 (Hero + 2) to 6 (`champions-guild-gacha.md` §1).
  */
+/**
+ * The order stand-in Champions are added in, and therefore what `--party=N` actually fields.
+ *
+ * A Tank first, because that is the build a player is steered toward — Tank is the only
+ * front-row default (`champions-guild-gacha.md` §8.1) and, since the enemy resolves as one
+ * attack stream front-row-first, it is the body that actually buys survival time. Projecting
+ * an all-Damage party would understate what a real party is worth.
+ *
+ * Every stand-in is Common (×1.0) and un-invested (scalar 1), so this measures what *slots*
+ * are worth, never what a lucky pull is worth.
+ */
+const STAND_IN_ARCHETYPES: readonly ChampionArchetype[] = ['tank', 'damage', 'support', 'control', 'damage']
+
 export function makeParty(classId: ClassId, heroLevel: number, size: number, overrides: Partial<HeroSnapshot> = {}): HeroSnapshot {
-    const champions = Array.from({ length: Math.max(0, Math.floor(size) - 1) }, (_unused, index) => ({
-        championId: `champ_stand_in_${index + 1}`,
-        rarityMultiplier: 1,
-        investment: 1,
-        strikesPerAttack: 1
-    }))
+    const champions = Array.from({ length: Math.max(0, Math.floor(size) - 1) }, (_unused, index) => {
+        const archetype = STAND_IN_ARCHETYPES[index % STAND_IN_ARCHETYPES.length]!
+        return {
+            championId: `champ_stand_in_${index + 1}`,
+            archetype,
+            rarityMultiplier: 1,
+            investment: 1,
+            strikesPerAttack: 1,
+            row: getArchetype(archetype).defaultRow,
+            /**
+             * **One** ability, the first from its archetype's pool — the Common shape, since a
+             * Common is what a stand-in is.
+             *
+             * These used to be empty, on the grounds that `settle.ts` had no skill term so an
+             * ability list would change nothing. That stopped being true when the projection
+             * landed: a party whose Champions bring no kit now *understates* every real party,
+             * because a real Common Champion has exactly one ability and it counts.
+             */
+            abilities: [ability(CHAMPION_ABILITY_POOL[archetype][0]!)]
+        }
+    })
     return makeHero(classId, heroLevel, { champions, ...overrides })
 }
 
 /** Full picture for one stage: can the party kill it, how fast, and does it survive doing so. */
 export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number, stage: number): StageReport {
     const position = { prestige, world, stage, killsInStage: 0 }
+    // Per-enemy stats for the display columns; the pack for everything that resolves against
+    // the whole encounter. A wave stage is still 30 bodies — they just arrive N at a time.
     const enemy = enemyStatsAt(position)
-    const units = partyUnitStats(hero)
-
-    const dps = partyDps(units, enemy.def)
-    const spk = secondsPerKill(dps, enemy)
+    // Through the same helper `settle()` uses, so a verdict here cannot describe a party the
+    // live game does not field — buffs rewrite the party, debuffs rewrite the pack, and the
+    // rate counts ability damage alongside autoattacks.
+    const { abilities, units, pack, secondsPerKill: spk } = rateAt(hero, position)
+    const dps = packDps(units, pack).add(partyAbilityDps(hero, units, enemy.def, packSize(pack)))
     const archetype = stageArchetype(stage)
     const isGate = archetype === 'boss' || archetype === 'super_boss'
     const kills = killsRequired(position)
-    const clearSeconds = isGate ? spk : spk * kills
+    // Both branches are "seconds × bodies". A gate is one encounter — the boss plus its
+    // escort — so it is `packSize` bodies, not one; `spk` is amortized per enemy, so using it
+    // bare would under-report a boss fight by the size of its escort.
+    const clearSeconds = isGate ? spk * packSize(pack) : spk * kills
 
     // Same two functions `settle()` uses, deliberately — a survivability verdict here that
     // the live game disagreed with would make every table in this tool a lie.
-    const incoming = incomingDps(units, enemy)
+    const incoming = incomingDps(units, pack)
     const heroEhp = units.reduce((total, unit) => total.add(unit.maxHp), ZERO)
-    const timeToDie = secondsToDie(units, enemy)
+    const timeToDie = secondsToDie(units, pack, abilities.healingPerSecond)
 
     const timerSeconds = isGate ? BOSS_TIMER_SECONDS : null
     const timerMargin = timerSeconds === null || !Number.isFinite(clearSeconds)
@@ -151,6 +189,7 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
         isGate,
         level: hero.heroLevel,
         enemyHp: enemy.hp,
+        packSize: packSize(pack),
         enemyPwr: enemy.pwr,
         enemyDef: enemy.def,
         partyDps: dps,

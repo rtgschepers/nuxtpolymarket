@@ -26,31 +26,69 @@
  * ## Skills
  *
  * Every skill auto-fires the instant its cooldown completes — there is no manual mode
- * anywhere in this game (`classes-and-combat.md` §3). Kits are cumulative, so a Berserker
- * brings four skills and a Beginner one. All 16 currently resolve as single-target damage on
- * a shared placeholder cooldown and multiplier; the distinctive behaviours §7 sketches
- * (chaining, multi-target, summons) have no numeric model in any doc and are not built.
+ * anywhere in this game (`classes-and-combat.md` §3). **Every unit fires its own kit**: the
+ * Hero's is cumulative down the class path, so a Berserker brings four skills and a Beginner
+ * one, while a Champion brings the 1–3 its rarity grants (`champions-guild-gacha.md` §2).
  *
- * **Consequence worth knowing:** `settle.ts` has no skill term at all, so a boss's DPS check
- * is fought with strictly more damage than the wave rate on screen implies. That gap is
- * intentional but untuned, and it moves whenever `SKILL_BASE_ABILITY_MULTIPLIER` moves.
+ * All of them — 16 class skills and 28 Champion abilities — currently resolve as
+ * single-target damage on a shared placeholder cooldown and multiplier. The distinctive
+ * behaviours the docs sketch (chaining, multi-target, summons, heals, the whole Support and
+ * Control archetype identities) have no numeric model anywhere and are not built. What is
+ * built is the framework that fires them; the effects are a later content pass.
+ *
+ * **Two consequences worth knowing:**
+ *
+ * 1. `settle.ts` has no skill term at all, so a boss's DPS check is fought with strictly
+ *    more damage than the wave rate on screen implies. That gap is intentional but untuned,
+ *    it moves whenever `SKILL_BASE_ABILITY_MULTIPLIER` moves, and it **widened when Champion
+ *    abilities started firing** — a party of six now brings up to 19 skills to a boss and
+ *    still none to the wave rate.
+ * 2. Ability *count* is now a real rarity payoff, not just flavour. A Mythic's three
+ *    abilities out-damage a Common's one on top of the ×2.5 stat multiplier, which is the
+ *    intended shape but has never been balanced against it.
  */
 
 import {
     BOSS_TIMER_SECONDS,
-    FIGHT_TICK_SECONDS
+    FIGHT_TICK_SECONDS,
+    MIN_DAMAGE,
+    SKILL_STATUS_DURATION_SECONDS
 } from './constants'
-import { attackIntervalFor, cooldownFor, mitigation, partyMitigation } from './combat'
-import { enemyStatsAt } from './settle'
+import { attackIntervalFor, cooldownFor, partyMitigation, rawHitDamage, targetingOrder } from './combat'
+import { columnOf, enemyPackAt, rowOf } from './settle'
 import { partyUnitStats } from './stats'
 import { kitFor } from './content/classes'
-import { ONE, ZERO } from './numbers'
+import {
+    SINGLE_TARGET,
+    executeMultiplier,
+    isAllyTarget,
+    resolveAllyTargets,
+    resolveEnemyTargets
+} from './effects'
+import type { AbilityEffect } from './effects'
+import {
+    absorbDamage,
+    applyStatus,
+    canAutoattack,
+    canCastAbilities,
+    cleanse,
+    extendHostile,
+    hasStatus,
+    tickStatuses
+} from './status'
+import type { StatusInstance } from './status'
+import { ONE, ZERO, decMax } from './numbers'
 import type { Decimal } from './numbers'
-import type { HeroSnapshot, RunPosition, UnitStats } from './types'
+import type { ClassSkill, EnemyStats, HeroSnapshot, RunPosition, UnitStats } from './types'
 
 export type FightOutcome = 'win' | 'timeout' | 'wipe'
 
-export type FightEventKind = 'attack' | 'skill' | 'enemy_attack' | 'unit_down' | 'enemy_down'
+export type FightEventKind =
+    | 'attack' | 'skill' | 'enemy_attack' | 'unit_down' | 'enemy_down'
+    // Status-engine events. Nothing emits these until Stage 3 authors effects onto the
+    // engine, but the replay contract is fixed here so the client is never handed a kind it
+    // silently drops.
+    | 'heal' | 'shield' | 'status_applied' | 'status_expired' | 'status_tick'
 
 /**
  * One thing that happened, at one moment. The replay log is nothing but these — the client
@@ -65,8 +103,17 @@ export interface FightEvent {
     kind: FightEventKind
     /** Index into the party for unit-sourced events; absent for enemy-sourced ones. */
     unitIndex?: number
+    /**
+     * Which enemy the event concerns — the one struck, or the one that struck. Encounters hold
+     * a boss plus its escort, so "the enemy" is no longer a single implied body.
+     */
+    enemyIndex?: number
     /** Skill that fired, for `kind: 'skill'`. */
     skillId?: string
+    /** Status involved, for the status kinds. Its `id`, so the client can group stacks. */
+    statusId?: string
+    /** Whether the status event concerns an enemy rather than a party member. */
+    onEnemy?: boolean
     /** Decimal as a string. */
     damage?: string
     crit?: boolean
@@ -85,10 +132,21 @@ export interface FightResult {
     /** When it ended. Equal to `BOSS_TIMER_SECONDS` on a timeout. */
     secondsElapsed: number
     events: FightEvent[]
-    /** Enemy HP left when the fight ended — 0 on a win. String-encoded Decimal. */
+    /**
+     * HP left across the **whole encounter** — boss and escort together — 0 on a win.
+     * String-encoded Decimal.
+     */
     enemyHpRemaining: string
     enemyMaxHp: string
-    /** Fraction of the boss's HP removed, for a "so close" readout on a loss. */
+    /**
+     * Each body's own starting HP, in encounter order (escort first, boss last).
+     *
+     * The client cannot derive this: a boss pack is *mixed*, so it cannot divide `enemyMaxHp`
+     * by the count. Without it a replay cannot tell an untouched minion from a dead one, and
+     * the HP bar jumps as focus moves between bodies.
+     */
+    enemyMaxHps: string[]
+    /** Fraction of the encounter's HP removed, for a "so close" readout on a loss. */
     damageDealtPct: number
     seed: number
 }
@@ -113,7 +171,20 @@ interface Combatant {
     hp: Decimal
     /** Sim-seconds until the next autoattack. */
     attackTimer: number
-    skills: { id: string; interval: number; timer: number; multiplier: number }[]
+    skills: { id: string; interval: number; timer: number; multiplier: number; effect: AbilityEffect }[]
+    /**
+     * Live status effects. Mutable and separate from `stats`, which `stats.ts` builds once and
+     * never rewrites — see the `status.ts` header for why that split exists.
+     */
+    statuses: StatusInstance[]
+}
+
+/** One enemy in the encounter. Bosses bring an escort, so there can be several. */
+interface EnemyCombatant {
+    stats: EnemyStats
+    hp: Decimal
+    attackTimer: number
+    statuses: StatusInstance[]
 }
 
 /**
@@ -126,35 +197,132 @@ interface Combatant {
  */
 export function runFight(input: FightInput): FightResult {
     const random = seededRandom(input.seed)
-    const enemy = enemyStatsAt(input.position)
+    const pack = enemyPackAt(input.position)
     const units = partyUnitStats(input.hero)
-    const kit = kitFor(input.hero.classId)
+
+    /**
+     * One kit per unit, in the order `partyUnitStats` builds the party: the Hero's cumulative
+     * class kit first, then each fielded Champion's own 1–3 abilities.
+     *
+     * The two sources stay separate because they are genuinely different — the Hero's kit is
+     * *accumulated down the class path* (`kitFor`), while a Champion's is a fixed list fixed
+     * by its rarity — but from here down they are the same thing, so there is no per-unit
+     * branch below.
+     */
+    const kits: readonly (readonly ClassSkill[])[] = [
+        kitFor(input.hero.classId),
+        ...(input.hero.champions ?? []).map(champion => champion.abilities)
+    ]
 
     const party: Combatant[] = units.map((stats, index) => ({
         stats,
         hp: stats.maxHp,
         attackTimer: 0,
-        // Only the Hero carries the class tree's kit. Champions bring their own, which is
-        // Phase 2 content — they field as autoattackers until then.
-        skills: index === 0
-            ? kit.map(entry => ({
-                id: entry.id,
-                interval: cooldownFor(entry.cooldownSeconds, stats.spd),
-                timer: cooldownFor(entry.cooldownSeconds, stats.spd),
-                multiplier: entry.abilityMultiplier
-            }))
-            : []
+        statuses: [],
+        // Every unit fires its own kit. Cooldowns are shortened by that unit's own SPD, so a
+        // Control Champion cycles its abilities faster than a Tank standing next to it.
+        skills: (kits[index] ?? []).map(entry => ({
+            id: entry.id,
+            interval: cooldownFor(entry.cooldownSeconds, stats.spd),
+            timer: cooldownFor(entry.cooldownSeconds, stats.spd),
+            multiplier: entry.abilityMultiplier,
+            effect: entry.effect ?? SINGLE_TARGET
+        }))
+    }))
+
+    /**
+     * Who the enemy hits next: front row first, back row only once the front is empty or dead,
+     * and within the eligible row whoever carries the most threat.
+     *
+     * Recomputed per swing rather than fixed once, because **taunt is a status** — a Tank that
+     * taunts mid-fight has to start pulling immediately, and one whose taunt expires has to
+     * stop. That is the only reason this is a function and not the precomputed list it
+     * replaced; the row rule itself is unchanged.
+     *
+     * Shares `targetingOrder` with `settle.ts` so the projection and the fight can never
+     * disagree about who is soaking.
+     */
+    const chooseDefender = (): Combatant | undefined => {
+        const living = party.filter(unit => unit.hp.gt(0))
+        if (living.length === 0) return undefined
+        const taunting = living.filter(unit => hasStatus(unit.statuses, 'taunt'))
+        // A taunt only outranks row eligibility among units already eligible, per §8.4 — so
+        // it is applied to whichever row the enemy can currently reach, not across both.
+        const pool = taunting.length > 0 ? taunting : living
+        const front = pool.filter(unit => unit.stats.row === 'front')
+        const eligible = front.length > 0 ? front : pool
+        const ordered = targetingOrder(eligible.map(unit => unit.stats))
+        return eligible.find(unit => unit.stats === ordered[0])
+    }
+
+    /**
+     * The enemy side, in the order the party works through it: escort first, boss last (see
+     * `enemyPackAt`). Each keeps its own HP and its own attack timer, so a three-body boss
+     * encounter is three attack streams until the adds go down.
+     */
+    const enemies: EnemyCombatant[] = pack.members.map(stats => ({
+        stats,
+        hp: stats.hp,
+        attackTimer: attackIntervalFor(0),
+        statuses: []
     }))
 
     const events: FightEvent[] = []
-    let enemyHp = enemy.hp
-    let enemyAttackTimer = attackIntervalFor(0)
+    const enemyMaxHps = enemies.map(foe => foe.stats.hp)
     let elapsed = 0
 
-    // Mitigation is resolved once from the party's *summed* PWR and never per attacker —
-    // that pooling is what lets unit count move the zero-damage threshold instead of only
-    // scaling whatever survives below it (`classes-and-combat.md` §7).
-    const penetration = ONE.sub(partyMitigation(units, enemy.def))
+    const livingEnemies = () => enemies.filter(foe => foe.hp.gt(0))
+    const enemyHpLeft = () => enemies.reduce((total, foe) => total.add(decMaxZero(foe.hp)), ZERO)
+
+    /**
+     * Mitigation is resolved from the party's *summed* PWR against **the current target's**
+     * DEF — pooled on the party side, never on the enemy side (`classes-and-combat.md` §7).
+     * Recomputed per target rather than once, because a boss and its escort have different
+     * DEF and pooling theirs would make each of them individually harder to hurt.
+     */
+    const penetrationAgainst = (foe: EnemyCombatant) => ONE.sub(partyMitigation(units, foe.stats.def))
+
+    /**
+     * Advance one combatant's statuses, applying periodic damage and healing and logging what
+     * expired. Runs before anyone acts, so a burn that kills finishes the body before it gets
+     * another swing — and so an expiring stun frees its bearer on the tick it runs out.
+     *
+     * Healing never exceeds max HP, and a `dot` can kill: both are what make DoT and HoT worth
+     * the same currency as a direct hit.
+     */
+    const advanceStatuses = (
+        holder: { hp: Decimal; statuses: StatusInstance[] },
+        maxHp: Decimal,
+        indexes: { unitIndex?: number; enemyIndex?: number; onEnemy: boolean }
+    ) => {
+        if (holder.statuses.length === 0) return
+        const { damage, healing, expired } = tickStatuses(holder.statuses, FIGHT_TICK_SECONDS)
+
+        if (damage.gt(0)) {
+            holder.hp = holder.hp.sub(damage)
+            events.push({
+                at: elapsed,
+                kind: 'status_tick',
+                ...indexes,
+                damage: damage.toString(),
+                remainingHp: decMaxZero(holder.hp).toString()
+            })
+        }
+        if (healing.gt(0) && holder.hp.gt(0)) {
+            const before = holder.hp
+            holder.hp = holder.hp.add(healing).gt(maxHp) ? maxHp : holder.hp.add(healing)
+            events.push({
+                at: elapsed,
+                kind: 'heal',
+                ...indexes,
+                damage: holder.hp.sub(before).toString(),
+                remainingHp: holder.hp.toString()
+            })
+        }
+        for (const status of expired) {
+            events.push({ at: elapsed, kind: 'status_expired', ...indexes, statusId: status.id })
+        }
+    }
 
     const totalTicks = Math.ceil(BOSS_TIMER_SECONDS / FIGHT_TICK_SECONDS)
 
@@ -162,84 +330,311 @@ export function runFight(input: FightInput): FightResult {
         elapsed = Math.min(BOSS_TIMER_SECONDS, (tick + 1) * FIGHT_TICK_SECONDS)
 
         for (const [index, unit] of party.entries()) {
+            if (unit.hp.gt(0)) advanceStatuses(unit, unit.stats.maxHp, { unitIndex: index, onEnemy: false })
+            if (unit.hp.lte(0) && !events.some(e => e.kind === 'unit_down' && e.unitIndex === index)) {
+                events.push({ at: elapsed, kind: 'unit_down', unitIndex: index, remainingHp: '0' })
+            }
+        }
+        for (const [index, foe] of enemies.entries()) {
+            if (foe.hp.gt(0)) advanceStatuses(foe, foe.stats.hp, { enemyIndex: index, onEnemy: true })
+            if (foe.hp.lte(0) && !events.some(e => e.kind === 'enemy_down' && e.enemyIndex === index)) {
+                events.push({ at: elapsed, kind: 'enemy_down', enemyIndex: index, remainingHp: '0' })
+            }
+        }
+
+        if (livingEnemies().length === 0) {
+            return result('win', elapsed, events, ZERO, enemyMaxHps, input.seed)
+        }
+        if (party.every(unit => unit.hp.lte(0))) {
+            return result('wipe', elapsed, events, enemyHpLeft(), enemyMaxHps, input.seed)
+        }
+
+        for (const [index, unit] of party.entries()) {
             if (unit.hp.lte(0)) continue
+
+            /**
+             * Resolve one ability — or one autoattack, which is the same thing with the
+             * default single-target effect.
+             *
+             * Targeting comes from the ability, not the caster: `champions-guild-gacha.md`
+             * §8.3 requires exactly that, and says it "will apply often, not as a rare
+             * exception". The focus anchor is the front-most living enemy, the same body a
+             * plain swing would hit; patterns spread out from there.
+             *
+             * Returns false only when there is nothing left to act on, so the caller can stop
+             * a multi-strike loop swinging at an empty board.
+             */
+            const cast = (multiplier: number, effect: AbilityEffect, skillId?: string): boolean => {
+                const living = enemies.flatMap((foe, at) => foe.hp.gt(0) ? [at] : [])
+                if (living.length === 0) return false
+
+                const statusFrom = (spec: NonNullable<AbilityEffect['status']>) => ({
+                    id: skillId ?? 'autoattack',
+                    kind: spec.kind,
+                    ...(spec.stat === undefined ? {} : { stat: spec.stat }),
+                    duration: spec.duration,
+                    magnitude: spec.scalesWithPwr
+                        ? unit.stats.pwr.mul(spec.magnitude ?? 0)
+                        : (spec.magnitude ?? 0),
+                    ...(spec.stacks === undefined ? {} : { stacks: spec.stacks })
+                })
+
+                const landSelfStatus = () => {
+                    if (!effect.selfStatus) return
+                    applyStatus(unit.statuses, statusFrom(effect.selfStatus))
+                    events.push({
+                        at: elapsed, kind: 'status_applied', unitIndex: index,
+                        statusId: skillId ?? 'autoattack'
+                    })
+                }
+
+                /**
+                 * Every ability that fires shows up as a `skill` event, even a pure-utility one
+                 * that deals no damage — Haste, Enrage, Totem Storm. Without this a replay
+                 * would show a buff appearing with nothing having cast it, and "did this
+                 * ability fire" would be unanswerable from the log.
+                 *
+                 * Damage-dealing abilities log per target instead, so this only fills the gap.
+                 */
+                let dealtDamage = false
+                const noteUtilityCast = () => {
+                    if (dealtDamage || skillId === undefined) return
+                    events.push({
+                        at: elapsed, kind: 'skill', unitIndex: index, skillId, damage: '0'
+                    })
+                }
+
+                if (isAllyTarget(effect.target)) {
+                    const roster = party.map(member => ({
+                        alive: member.hp.gt(0),
+                        hpFraction: member.stats.maxHp.lte(0)
+                            ? 0
+                            : member.hp.div(member.stats.maxHp).toNumber(),
+                        power: member.stats.pwr.toNumber()
+                    }))
+                    const allies = resolveAllyTargets(effect.target, index, roster, Boolean(effect.revive))
+
+                    for (const allyIndex of allies) {
+                        const ally = party[allyIndex]!
+                        if (effect.revive && ally.hp.lte(0)) {
+                            ally.hp = ally.stats.maxHp.mul(effect.revive)
+                            events.push({
+                                at: elapsed, kind: 'heal', unitIndex: allyIndex,
+                                ...(skillId === undefined ? {} : { skillId }),
+                                damage: ally.hp.toString(),
+                                remainingHp: ally.hp.toString()
+                            })
+                        }
+                        if (effect.cleanse) {
+                            for (const removed of cleanse(ally.statuses)) {
+                                events.push({
+                                    at: elapsed, kind: 'status_expired',
+                                    unitIndex: allyIndex, statusId: removed.id
+                                })
+                            }
+                        }
+                        if (effect.heal) {
+                            const before = ally.hp
+                            const healed = ally.hp.add(unit.stats.pwr.mul(effect.heal))
+                            ally.hp = healed.gt(ally.stats.maxHp) ? ally.stats.maxHp : healed
+                            events.push({
+                                at: elapsed, kind: 'heal', unitIndex: allyIndex,
+                                ...(skillId === undefined ? {} : { skillId }),
+                                damage: ally.hp.sub(before).toString(),
+                                remainingHp: ally.hp.toString()
+                            })
+                        }
+                        if (effect.shield) {
+                            applyStatus(ally.statuses, {
+                                id: `${skillId ?? 'shield'}_shield`,
+                                kind: 'shield',
+                                duration: effect.status?.duration ?? SKILL_STATUS_DURATION_SECONDS,
+                                magnitude: unit.stats.pwr.mul(effect.shield)
+                            })
+                            events.push({
+                                at: elapsed, kind: 'shield', unitIndex: allyIndex,
+                                damage: unit.stats.pwr.mul(effect.shield).toString()
+                            })
+                        }
+                        if (effect.status) {
+                            applyStatus(ally.statuses, statusFrom(effect.status))
+                            events.push({
+                                at: elapsed, kind: 'status_applied', unitIndex: allyIndex,
+                                statusId: skillId ?? 'autoattack'
+                            })
+                        }
+                    }
+                    landSelfStatus()
+                    noteUtilityCast()
+                    return true
+                }
+
+                const targets = resolveEnemyTargets(
+                    effect.target, living[0]!, living, enemies.length, { columnOf, rowOf }
+                )
+
+                for (const foeIndex of targets) {
+                    const foe = enemies[foeIndex]!
+                    if (multiplier > 0) {
+                        // Split into `hits` separate rolls — same total, but each rolls its own
+                        // crit, which is what makes a barrage worth more to a high-crit build.
+                        const hits = Math.max(1, Math.floor(effect.hits ?? 1))
+                        for (let hit = 0; hit < hits; hit++) {
+                            const hpFraction = foe.stats.hp.lte(0)
+                                ? 0
+                                : decMaxZero(foe.hp).div(foe.stats.hp).toNumber()
+                            const scaled = (multiplier / hits) * executeMultiplier(effect, hpFraction)
+                            const { damage, crit } = rollDamage(
+                                unit.stats, penetrationAgainst(foe), scaled, random, effect
+                            )
+                            foe.hp = foe.hp.sub(damage)
+                            dealtDamage = true
+                            events.push({
+                                at: elapsed,
+                                kind: skillId === undefined ? 'attack' : 'skill',
+                                unitIndex: index,
+                                enemyIndex: foeIndex,
+                                ...(skillId === undefined ? {} : { skillId }),
+                                damage: damage.toString(),
+                                crit,
+                                remainingHp: decMaxZero(foe.hp).toString()
+                            })
+                            if (foe.hp.lte(0)) break
+                        }
+                    }
+                    if (effect.extendDebuffs) {
+                        extendHostile(foe.statuses, effect.extendDebuffs)
+                    }
+                    if (effect.status) {
+                        const id = skillId ?? 'autoattack'
+                        applyStatus(foe.statuses, statusFrom(effect.status))
+                        events.push({
+                            at: elapsed, kind: 'status_applied', enemyIndex: foeIndex,
+                            onEnemy: true, statusId: id
+                        })
+
+                        // Frostbind's freeze: a second effect that lands once the stacking
+                        // debuff has built far enough. Checked against the stacks actually on
+                        // the target after this application, so it fires on whichever cast
+                        // crosses the line rather than on a fixed cast number.
+                        const built = foe.statuses.find(status => status.id === id)
+                        if (effect.escalation && built && built.stacks >= effect.escalation.atStacks) {
+                            const escalationId = `${id}_escalation`
+                            applyStatus(foe.statuses, {
+                                ...statusFrom(effect.escalation.status),
+                                id: escalationId
+                            })
+                            events.push({
+                                at: elapsed, kind: 'status_applied', enemyIndex: foeIndex,
+                                onEnemy: true, statusId: escalationId
+                            })
+                        }
+                    }
+                    if (foe.hp.lte(0)) {
+                        events.push({
+                            at: elapsed, kind: 'enemy_down', enemyIndex: foeIndex, remainingHp: '0'
+                        })
+                    }
+                }
+                landSelfStatus()
+                noteUtilityCast()
+                return true
+            }
+
+            const strike = (multiplier: number, skillId?: string) =>
+                cast(multiplier, SINGLE_TARGET, skillId)
 
             unit.attackTimer -= FIGHT_TICK_SECONDS
             if (unit.attackTimer <= 0) {
                 unit.attackTimer += attackIntervalFor(unit.stats.spd)
-                // strikesPerAttack folds Hunter's triple and Beast Master's quad in without
-                // a special case; each strike rolls its own crit, per §7.
-                for (let strike = 0; strike < unit.stats.strikesPerAttack; strike++) {
-                    const { damage, crit } = rollDamage(unit.stats, penetration, 1, random)
-                    enemyHp = enemyHp.sub(damage)
-                    events.push({
-                        at: elapsed,
-                        kind: 'attack',
-                        unitIndex: index,
-                        damage: damage.toString(),
-                        crit,
-                        remainingHp: decMaxZero(enemyHp).toString()
-                    })
-                    if (enemyHp.lte(0)) break
+                // A stun stops the swing but the timer still ran — the attack is lost, not
+                // banked, which is what makes hard control worth more than a slow.
+                if (canAutoattack(unit.statuses)) {
+                    // strikesPerAttack folds Hunter's triple and Beast Master's quad in
+                    // without a special case; each strike rolls its own crit, per §7. Overkill
+                    // rolls onto the next body rather than being wasted.
+                    for (let hit = 0; hit < unit.stats.strikesPerAttack; hit++) {
+                        if (!strike(1)) break
+                    }
                 }
             }
-            if (enemyHp.lte(0)) break
+            if (livingEnemies().length === 0) break
 
+            // Silence stops abilities while leaving autoattacks alone; stun stops both.
+            // Cooldowns keep running underneath either, so control delays a kit rather than
+            // erasing it — the difference the two ability rosters draw between them.
+            const silenced = !canCastAbilities(unit.statuses)
             for (const skill of unit.skills) {
                 skill.timer -= FIGHT_TICK_SECONDS
                 if (skill.timer > 0) continue
                 skill.timer += skill.interval
-                const { damage, crit } = rollDamage(unit.stats, penetration, skill.multiplier, random)
-                enemyHp = enemyHp.sub(damage)
-                events.push({
-                    at: elapsed,
-                    kind: 'skill',
-                    unitIndex: index,
-                    skillId: skill.id,
-                    damage: damage.toString(),
-                    crit,
-                    remainingHp: decMaxZero(enemyHp).toString()
-                })
-                if (enemyHp.lte(0)) break
+                if (silenced) continue
+                if (!cast(skill.multiplier, skill.effect, skill.id)) break
             }
-            if (enemyHp.lte(0)) break
+            if (livingEnemies().length === 0) break
         }
 
-        if (enemyHp.lte(0)) {
-            events.push({ at: elapsed, kind: 'enemy_down', remainingHp: '0' })
-            return result('win', elapsed, events, ZERO, enemy.hp, input.seed)
+        if (livingEnemies().length === 0) {
+            return result('win', elapsed, events, ZERO, enemyMaxHps, input.seed)
         }
 
-        // The boss strikes the front of the party — with a solo Hero that is the Hero, and
-        // formation only starts mattering once Champions exist (Phase 2). Incoming damage is
-        // resolved per defender, never pooled: party size is an offensive lever only.
-        enemyAttackTimer -= FIGHT_TICK_SECONDS
-        if (enemyAttackTimer <= 0) {
-            enemyAttackTimer += attackIntervalFor(0)
-            const target = party.find(unit => unit.hp.gt(0))
-            if (target) {
-                const targetIndex = party.indexOf(target)
-                const damage = enemy.pwr.mul(ONE.sub(mitigation(enemy.pwr, target.stats.def)))
-                target.hp = target.hp.sub(damage)
+        // Every living enemy strikes the front row, reaching the back row only once the front
+        // is empty or dead (`classes-and-combat.md` §6). Same rule the wave-survivability
+        // projection applies, so the boss fight and the idle rate can never disagree about who
+        // is taking the hits — and an escort is genuinely extra incoming damage, not flavour.
+        for (const foe of enemies) {
+            if (foe.hp.lte(0)) continue
+            foe.attackTimer -= FIGHT_TICK_SECONDS
+            if (foe.attackTimer > 0) continue
+            foe.attackTimer += attackIntervalFor(0)
+            if (!canAutoattack(foe.statuses)) continue
+
+            const target = chooseDefender()
+            if (!target) break
+            const targetIndex = party.indexOf(target)
+            // Through the shared helper rather than re-deriving the formula here, so the
+            // enemy's swing picks up the MIN_DAMAGE floor exactly as the party's does.
+            const raw = rawHitDamage(foe.stats.pwr, target.stats.def)
+            // Shields eat what mitigation left, never the raw hit — see `absorbDamage`.
+            const { throughput, absorbed, broken } = absorbDamage(target.statuses, raw)
+            target.hp = target.hp.sub(throughput)
+
+            if (absorbed.gt(0)) {
                 events.push({
                     at: elapsed,
-                    kind: 'enemy_attack',
+                    kind: 'shield',
                     unitIndex: targetIndex,
-                    damage: damage.toString(),
-                    remainingHp: decMaxZero(target.hp).toString()
+                    enemyIndex: enemies.indexOf(foe),
+                    damage: absorbed.toString()
                 })
-                if (target.hp.lte(0)) {
-                    events.push({ at: elapsed, kind: 'unit_down', unitIndex: targetIndex, remainingHp: '0' })
-                }
+            }
+            events.push({
+                at: elapsed,
+                kind: 'enemy_attack',
+                unitIndex: targetIndex,
+                enemyIndex: enemies.indexOf(foe),
+                damage: throughput.toString(),
+                remainingHp: decMaxZero(target.hp).toString()
+            })
+            for (const shield of broken) {
+                events.push({
+                    at: elapsed,
+                    kind: 'status_expired',
+                    unitIndex: targetIndex,
+                    statusId: shield.id
+                })
+            }
+            if (target.hp.lte(0)) {
+                events.push({ at: elapsed, kind: 'unit_down', unitIndex: targetIndex, remainingHp: '0' })
             }
         }
 
         if (party.every(unit => unit.hp.lte(0))) {
-            return result('wipe', elapsed, events, enemyHp, enemy.hp, input.seed)
+            return result('wipe', elapsed, events, enemyHpLeft(), enemyMaxHps, input.seed)
         }
     }
 
-    return result('timeout', BOSS_TIMER_SECONDS, events, enemyHp, enemy.hp, input.seed)
+    return result('timeout', BOSS_TIMER_SECONDS, events, enemyHpLeft(), enemyMaxHps, input.seed)
 }
 
 /** Crit rolled per strike, not averaged — the one place in the game that does. */
@@ -247,12 +642,21 @@ function rollDamage(
     unit: UnitStats,
     penetration: Decimal,
     abilityMultiplier: number,
-    random: () => number
+    random: () => number,
+    effect?: AbilityEffect
 ): { damage: Decimal; crit: boolean } {
-    if (penetration.lte(0)) return { damage: ZERO, crit: false }
-    const crit = random() < unit.critChance
-    const base = unit.pwr.mul(penetration).mul(abilityMultiplier)
-    return { damage: crit ? base.mul(unit.critMultiplier) : base, crit }
+    if (unit.pwr.lte(0)) return { damage: ZERO, crit: false }
+    // `alwaysCrits` skips the roll rather than forcing the chance to 1, so it consumes no
+    // entropy — the replay stays reproducible whatever a Kill Shot lands on.
+    const crit = effect?.alwaysCrits === true || random() < unit.critChance
+    // Floored before crit, mirroring `combat.rawHitDamage`: a fully-mitigated hit lands for
+    // MIN_DAMAGE, and a fully-mitigated *crit* for MIN_DAMAGE × critMultiplier.
+    const base = decMax(MIN_DAMAGE, unit.pwr.mul(penetration).mul(abilityMultiplier))
+    if (!crit) return { damage: base, crit }
+    // Kill Shot's "double crit damage" multiplies the crit itself, not the base hit — so it
+    // compounds with IMP investment rather than replacing it.
+    const critFactor = unit.critMultiplier.mul(effect?.critDamageMultiplier ?? 1)
+    return { damage: base.mul(critFactor), crit }
 }
 
 function decMaxZero(value: Decimal): Decimal {
@@ -264,9 +668,10 @@ function result(
     secondsElapsed: number,
     events: FightEvent[],
     enemyHpRemaining: Decimal,
-    enemyMaxHp: Decimal,
+    enemyMaxHps: readonly Decimal[],
     seed: number
 ): FightResult {
+    const enemyMaxHp = enemyMaxHps.reduce((total, hp) => total.add(hp), ZERO)
     const remaining = decMaxZero(enemyHpRemaining)
     const dealt = enemyMaxHp.lte(0) ? 1 : ONE.sub(remaining.div(enemyMaxHp)).toNumber()
     return {
@@ -275,6 +680,7 @@ function result(
         events,
         enemyHpRemaining: remaining.toString(),
         enemyMaxHp: enemyMaxHp.toString(),
+        enemyMaxHps: enemyMaxHps.map(hp => hp.toString()),
         damageDealtPct: Math.min(1, Math.max(0, dealt)),
         seed
     }

@@ -17,30 +17,87 @@ import {
     DELTA_EXTREME,
     DELTA_MODEST,
     DELTA_NORMAL,
+    ENRAGE_DEF_PENALTY,
+    ENRAGE_PWR_BONUS,
+    HASTE_SPD_BONUS,
+    KILL_SHOT_CRIT_MULTIPLIER,
+    SKILL_AOE_MULTIPLIER,
     SKILL_BASE_ABILITY_MULTIPLIER,
-    SKILL_BASE_COOLDOWN_SECONDS
+    SKILL_BASE_COOLDOWN_SECONDS,
+    SKILL_BUFF_FRACTION,
+    SKILL_CONTROL_DURATION_SECONDS,
+    SKILL_DEBUFF_FRACTION,
+    SKILL_DOT_MULTIPLIER,
+    SKILL_HEAL_MULTIPLIER,
+    SKILL_HOT_MULTIPLIER,
+    SKILL_LINE_MULTIPLIER,
+    SKILL_PIERCE_MULTIPLIER,
+    SKILL_STATUS_DURATION_SECONDS
 } from '../constants'
-import type { ClassId, ClassNode, ClassSkill } from '../types'
+import { SINGLE_TARGET } from '../effects'
+import type { AbilityEffect } from '../effects'
+import type { ClassId, ClassNode, ClassSkill, FormationRow } from '../types'
 
 export const ROOT_CLASS_ID: ClassId = 'class_beginner'
 
-/** Every skill on the shared placeholder pair. Differentiating them is a later content edit. */
-function skill(id: string, name: string): ClassSkill {
+/**
+ * A class node's ability.
+ *
+ * Cooldowns stay on the shared placeholder — `classes-and-combat.md` §3 says outright that
+ * "every skill's cooldown length will differ (set later during balancing)" and assigns none.
+ * What *is* authored here is each ability's **shape**: its target pattern, its damage relative
+ * to a plain hit, and any status it carries.
+ *
+ * Nine of the sixteen had a one-clause behavioural hint in the docs (Haste doubles SPD,
+ * Bouncebolt chains, Lightning Storm and Meteor Shower hit multiple targets, Totem Storm and
+ * Raise Dead affect the party or battlefield, Disciple and Man's Best Friend summon, Enrage
+ * trades max HP). The other seven had nothing but a name in a tree diagram and were specified
+ * during this pass; each carries a comment saying so, because "the doc said this" and "we
+ * decided this" must not become indistinguishable a year from now.
+ */
+function skill(
+    id: string,
+    name: string,
+    effect: AbilityEffect = SINGLE_TARGET,
+    abilityMultiplier: number = SKILL_BASE_ABILITY_MULTIPLIER
+): ClassSkill {
     return {
         id,
         name,
         cooldownSeconds: SKILL_BASE_COOLDOWN_SECONDS,
-        abilityMultiplier: SKILL_BASE_ABILITY_MULTIPLIER
+        abilityMultiplier,
+        effect
     }
 }
 
-export const CLASS_NODES: readonly ClassNode[] = [
+/** A pure-utility ability deals no weapon damage; its whole payload is the effect. */
+const NO_DAMAGE = 0
+
+/**
+ * Front-row defaults, from `classes-and-combat.md` §6: Beginner, Warrior, Barbarian,
+ * Berserker, Knight, Paladin — which is exactly the Beginner root plus the whole Warrior
+ * line, and nothing else. Derived from the tree rather than restated per node, so adding a
+ * Warrior specialization later cannot silently default it to the back row.
+ *
+ * A *default* only. Every slot stays manually reassignable, and the player's saved formation
+ * overrides this whenever one exists.
+ */
+const FRONT_ROW_LINE: ClassId = 'class_warrior'
+
+const CLASS_NODE_SPECS: readonly Omit<ClassNode, 'defaultRow'>[] = [
     {
         id: 'class_beginner',
         name: 'Beginner',
         parentId: null,
         tier: 'beginner',
-        skill: skill('skill_haste', 'Haste'),
+        skill: skill('skill_haste', 'Haste', {
+            // Doc-specified (§3): temporarily doubles SPD, shortening every owned cooldown.
+            target: 'self',
+            selfStatus: {
+                kind: 'buff', stat: 'spd',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: HASTE_SPD_BONUS
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'mid', spd: 'mid', lck: 'mid', imp: 'mid', vit: 'mid', def: 'mid' },
         delta: {},
         strikesPerAttack: 1,
@@ -53,7 +110,11 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Warrior',
         parentId: 'class_beginner',
         tier: 'base',
-        skill: skill('skill_whirlwind', 'Whirlwind'),
+        skill: skill('skill_whirlwind', 'Whirlwind', {
+            // Specified this pass. A melee spin reaches what is adjacent, so it sweeps the
+            // front line rather than the whole board — the Warrior's reach is its limit.
+            target: 'enemy_front_line'
+        }, SKILL_LINE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
         delta: {},
         strikesPerAttack: 1,
@@ -64,7 +125,18 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Barbarian',
         parentId: 'class_warrior',
         tier: 'elite',
-        skill: skill('skill_threatening_roar', 'Threatening Roar'),
+        skill: skill('skill_threatening_roar', 'Threatening Roar', {
+            // Specified this pass. The Warrior path carries a threat modifier (§7) but had no
+            // way to *use* it; this is that tool — a roar that cows the whole encounter and
+            // pulls it onto the roarer. Utility rather than damage, which is what makes it
+            // the path's aggro button instead of a second Whirlwind.
+            target: 'enemy_all',
+            status: {
+                kind: 'debuff', stat: 'pwr',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: SKILL_DEBUFF_FRACTION
+            },
+            selfStatus: { kind: 'taunt', duration: SKILL_STATUS_DURATION_SECONDS }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
         // doubling down on Warrior's damage focus
         delta: { pwr: DELTA_NORMAL, def: -DELTA_NORMAL, vit: -DELTA_NORMAL },
@@ -76,7 +148,20 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Berserker',
         parentId: 'class_barbarian',
         tier: 'master',
-        skill: skill('skill_enrage', 'Enrage'),
+        skill: skill('skill_enrage', 'Enrage', {
+            // Doc-specified (§2): trades incoming damage taken for output, as a skill-level
+            // cost rather than a base-stat one. Both halves land on the Berserker itself —
+            // the DEF debuff is the "cost" half and is what stops this being a free buff.
+            target: 'self',
+            selfStatus: {
+                kind: 'buff', stat: 'pwr',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: ENRAGE_PWR_BONUS
+            },
+            status: {
+                kind: 'debuff', stat: 'def',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: ENRAGE_DEF_PENALTY
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
         // Enrage trades max HP and incoming damage as a skill-level cost, not a base-stat one
         delta: { pwr: DELTA_EXTREME },
@@ -88,7 +173,13 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Knight',
         parentId: 'class_warrior',
         tier: 'elite',
-        skill: skill('skill_shockwave', 'Shockwave'),
+        skill: skill('skill_shockwave', 'Shockwave', {
+            // Specified this pass. A wave travels outward, so unlike Whirlwind it reaches the
+            // whole encounter — and being a Knight tool it staggers rather than shreds. The
+            // elite tier out-reaching its base tier is the intended progression.
+            target: 'enemy_all',
+            status: { kind: 'stun', duration: SKILL_CONTROL_DURATION_SECONDS }
+        }, SKILL_AOE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
         // near-opposite of Barbarian
         delta: { def: DELTA_NORMAL, vit: DELTA_NORMAL, pwr: -DELTA_NORMAL },
@@ -100,7 +191,17 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Paladin',
         parentId: 'class_knight',
         tier: 'master',
-        skill: skill('skill_disciple', 'Disciple'),
+        skill: skill('skill_disciple', 'Disciple', {
+            // Doc calls this a summon (§2) — but a summon needs a unit lifecycle (own stats,
+            // duration, formation slot) no doc designs, so the literal reading is deferred.
+            // Rendered as the disciple's *effect* on the party: it tends them.
+            target: 'ally_all',
+            heal: SKILL_HEAL_MULTIPLIER,
+            status: {
+                kind: 'hot', duration: SKILL_STATUS_DURATION_SECONDS,
+                magnitude: SKILL_HOT_MULTIPLIER, scalesWithPwr: true
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
         // "raw damage output not enhanced very much" — utility-weighted via its summon
         delta: { pwr: DELTA_MODEST },
@@ -114,7 +215,12 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Mage',
         parentId: 'class_beginner',
         tier: 'base',
-        skill: skill('skill_ethereal_bouncebolt', 'Ethereal Bouncebolt'),
+        skill: skill('skill_ethereal_bouncebolt', 'Ethereal Bouncebolt', {
+            // Doc-specified (§7): chains between enemies. Modelled as bouncing along the front
+            // line — a chain that spreads across rather than punching through, which is what
+            // keeps it distinct from Piercing Arrow.
+            target: 'enemy_front_line'
+        }, SKILL_LINE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'low', def: 'low' },
         delta: {},
         strikesPerAttack: 1,
@@ -125,7 +231,10 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Wizard',
         parentId: 'class_mage',
         tier: 'elite',
-        skill: skill('skill_lightning_storm', 'Lightning Storm'),
+        skill: skill('skill_lightning_storm', 'Lightning Storm', {
+            // Doc-specified (§7): hits multiple targets.
+            target: 'enemy_all'
+        }, SKILL_AOE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'low', def: 'low' },
         // "standard attack rate accelerated"
         delta: { pwr: DELTA_NORMAL, spd: DELTA_NORMAL },
@@ -137,7 +246,15 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Sorcerer',
         parentId: 'class_wizard',
         tier: 'master',
-        skill: skill('skill_meteor_shower', 'Meteor Shower'),
+        skill: skill('skill_meteor_shower', 'Meteor Shower', {
+            // Doc-specified (§7): hits multiple targets. The Sorcerer is the master tier of the
+            // same line, so it is Lightning Storm with a burn left behind.
+            target: 'enemy_all',
+            status: {
+                kind: 'dot', duration: SKILL_STATUS_DURATION_SECONDS,
+                magnitude: SKILL_DOT_MULTIPLIER, scalesWithPwr: true
+            }
+        }, SKILL_AOE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'low', def: 'low' },
         // most fragile class in the tree, by design — clamps to MIN_STAT_VALUE on VIT/DEF
         delta: { pwr: DELTA_EXTREME, vit: -DELTA_NORMAL, def: -DELTA_NORMAL },
@@ -149,7 +266,16 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Shaman',
         parentId: 'class_mage',
         tier: 'elite',
-        skill: skill('skill_totem_storm', 'Totem Storm'),
+        skill: skill('skill_totem_storm', 'Totem Storm', {
+            // Doc-specified only as affecting "the party or battlefield" (§7) — deliberately
+            // ambiguous between the two, resolved here as the party reading: a totem that
+            // empowers allies. The battlefield reading is still open, see open-items.
+            target: 'ally_all',
+            status: {
+                kind: 'buff', stat: 'pwr',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: SKILL_BUFF_FRACTION
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'low', def: 'low' },
         // "tougher... slightly more defensive" than Wizard
         delta: { vit: DELTA_NORMAL, def: DELTA_NORMAL },
@@ -161,7 +287,17 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Witch Doctor',
         parentId: 'class_shaman',
         tier: 'master',
-        skill: skill('skill_raise_dead', 'Raise Dead'),
+        skill: skill('skill_raise_dead', 'Raise Dead', {
+            // Grouped with Totem Storm as party-or-battlefield (§7) while the name implies a
+            // summon. Both readings need machinery no doc provides, so it lands as the party
+            // reading with a revival flavour: the fallen fight on as sustained healing.
+            target: 'ally_all',
+            heal: SKILL_HEAL_MULTIPLIER,
+            status: {
+                kind: 'hot', duration: SKILL_STATUS_DURATION_SECONDS,
+                magnitude: SKILL_HOT_MULTIPLIER, scalesWithPwr: true
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'low', def: 'low' },
         // inherits Shaman's spread, utility-weighted via Raise Dead
         delta: {},
@@ -175,7 +311,11 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Archer',
         parentId: 'class_beginner',
         tier: 'base',
-        skill: skill('skill_piercing_arrow', 'Piercing Arrow'),
+        skill: skill('skill_piercing_arrow', 'Piercing Arrow', {
+            // Specified this pass: hits everything in a line running away from the shooter,
+            // for slightly more than a basic attack — piercing exactly once on a two-deep grid.
+            target: 'enemy_pierce'
+        }, SKILL_PIERCE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'mid_high', lck: 'high', imp: 'mid', vit: 'mid', def: 'mid' },
         delta: {},
         strikesPerAttack: 1,
@@ -186,7 +326,10 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Bowman',
         parentId: 'class_archer',
         tier: 'elite',
-        skill: skill('skill_fan_of_arrows', 'Fan of Arrows'),
+        skill: skill('skill_fan_of_arrows', 'Fan of Arrows', {
+            // Specified this pass: a fan spreads across the front-most line.
+            target: 'enemy_front_line'
+        }, SKILL_LINE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'mid_high', lck: 'high', imp: 'mid', vit: 'mid', def: 'mid' },
         // multi-attack focus
         delta: { spd: DELTA_NORMAL },
@@ -198,7 +341,11 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Marksman',
         parentId: 'class_bowman',
         tier: 'master',
-        skill: skill('skill_arrow_rain', 'Arrow Rain'),
+        skill: skill('skill_arrow_rain', 'Arrow Rain', {
+            // Specified this pass: falls on every occupied spot. The Archer line escalates
+            // pierce (2) → line (3) → board (6) across base, elite and master.
+            target: 'enemy_all'
+        }, SKILL_AOE_MULTIPLIER),
         spread: { pwr: 'high', spd: 'mid_high', lck: 'high', imp: 'mid', vit: 'mid', def: 'mid' },
         delta: { spd: DELTA_NORMAL },
         strikesPerAttack: 1,
@@ -209,7 +356,14 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Hunter',
         parentId: 'class_archer',
         tier: 'elite',
-        skill: skill('skill_kill_shot', 'Kill Shot'),
+        skill: skill('skill_kill_shot', 'Kill Shot', {
+            // Specified this pass: a guaranteed crit that hits for double crit damage. Single
+            // target by design — the Hunter's multi-strike lives on its autoattack (§7), not
+            // here, which is how the stale "(triple-strike)" tag in §1 was resolved.
+            target: 'enemy_single',
+            alwaysCrits: true,
+            critDamageMultiplier: KILL_SHOT_CRIT_MULTIPLIER
+        }),
         spread: { pwr: 'high', spd: 'mid_high', lck: 'high', imp: 'mid', vit: 'mid', def: 'mid' },
         // single-target crit focus, reinforced by Kill Shot
         delta: { pwr: DELTA_NORMAL, lck: DELTA_NORMAL },
@@ -221,7 +375,16 @@ export const CLASS_NODES: readonly ClassNode[] = [
         name: 'Beast Master',
         parentId: 'class_hunter',
         tier: 'master',
-        skill: skill('skill_mans_best_friend', "Man's Best Friend"),
+        skill: skill('skill_mans_best_friend', "Man's Best Friend", {
+            // Doc calls this a wolf summon (§2). Same deferral as Disciple — no unit lifecycle
+            // exists — so the wolf is rendered as what it contributes: the Beast Master hits
+            // harder while it fights alongside.
+            target: 'self',
+            selfStatus: {
+                kind: 'buff', stat: 'pwr',
+                duration: SKILL_STATUS_DURATION_SECONDS, magnitude: SKILL_BUFF_FRACTION
+            }
+        }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'mid_high', lck: 'high', imp: 'mid', vit: 'mid', def: 'mid' },
         // inherits Hunter's spread, utility-weighted via its wolf summon
         delta: {},
@@ -229,6 +392,30 @@ export const CLASS_NODES: readonly ClassNode[] = [
         autoTarget: 'highest_pwr'
     }
 ]
+
+const SPEC_BY_ID = new Map(CLASS_NODE_SPECS.map(spec => [spec.id, spec]))
+
+/**
+ * Walks the spec array rather than calling `isDescendantOf`, which would be circular — that
+ * helper reads `CLASS_BY_ID`, which is built from the very array this feeds.
+ *
+ * Note the root is checked *before* the walk: every node descends from Beginner, so folding
+ * it into the loop condition would default the whole tree to the front row.
+ */
+function defaultRowFor(id: ClassId): FormationRow {
+    if (id === ROOT_CLASS_ID) return 'front'
+    let current = SPEC_BY_ID.get(id)
+    while (current) {
+        if (current.id === FRONT_ROW_LINE) return 'front'
+        current = current.parentId ? SPEC_BY_ID.get(current.parentId) : undefined
+    }
+    return 'back'
+}
+
+export const CLASS_NODES: readonly ClassNode[] = CLASS_NODE_SPECS.map(spec => ({
+    ...spec,
+    defaultRow: defaultRowFor(spec.id)
+}))
 
 export const CLASS_BY_ID: Readonly<Record<ClassId, ClassNode>> = Object.fromEntries(
     CLASS_NODES.map(node => [node.id, node])

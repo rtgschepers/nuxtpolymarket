@@ -67,7 +67,6 @@ prestigeCurrencyEarned(prestigeCompleted) = BASE_CURRENCY × CURRENCY_GROWTH^pre
 Starting point: `BASE_CURRENCY = 100`, `CURRENCY_GROWTH = 2`.
 
 **Sinks (locked, recapped from the progression doc's shop list):**
-- Global stat multipliers (ATK%, HP%, Gold gain%)
 - Idle/offline efficiency%
 - Slot expansions — Champion, Skill, and Artifact slots, each 2→5 via 3 purchase levels apiece (9 total purchase levels across the three systems)
 - Kill-count reduction% / boss-timer extension

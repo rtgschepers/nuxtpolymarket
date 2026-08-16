@@ -16,6 +16,8 @@ const props = defineProps<{
         secondsElapsed: number
         damageDealtPct: number
         enemyMaxHp: string
+        /** Each body's starting HP, escort first, boss last. */
+        enemyMaxHps: string[]
         enemyHpRemaining: string
         events: FightEvent[]
         runComplete: boolean
@@ -40,22 +42,59 @@ let ticker: ReturnType<typeof setInterval> | null = null
 const played = computed(() => (props.fight?.events ?? []).filter(event => event.at <= clock.value))
 const finished = computed(() => !props.fight || clock.value >= props.fight.secondsElapsed)
 
+/**
+ * HP across the **whole encounter** — a boss stands with an escort, so the bar tracks every
+ * body, not whichever one is currently being hit.
+ *
+ * Each enemy's latest `remainingHp` is kept per `enemyIndex` and summed. Reading only the last
+ * event would make the bar jump *up* the moment the party finishes a minion and turns to the
+ * boss, since it would switch to reporting a fresh body's HP.
+ */
 const enemyHpPct = computed(() => {
     if (!props.fight) return 100
-    const last = [...played.value].reverse().find(event => event.remainingHp !== undefined && event.kind !== 'enemy_attack')
-    if (!last?.remainingHp) return 100
     const max = Number(props.fight.enemyMaxHp)
     if (!Number.isFinite(max) || max <= 0) return 0
-    return Math.max(0, Math.min(100, (Number(last.remainingHp) / max) * 100))
+
+    // Seeded at full HP so a body nobody has struck yet counts as alive, not as zero.
+    const remainingPer = props.fight.enemyMaxHps.map(Number)
+    for (const event of played.value) {
+        // `enemy_attack` carries the *defender's* HP, so it must never be read as enemy HP.
+        if (event.kind === 'enemy_attack' || event.remainingHp === undefined) continue
+        const index = event.enemyIndex ?? 0
+        if (index < remainingPer.length) remainingPer[index] = Number(event.remainingHp)
+    }
+
+    const remaining = remainingPer.reduce((total, hp) => total + hp, 0)
+    return Math.max(0, Math.min(100, (remaining / max) * 100))
 })
+
+/**
+ * Kinds the feed shows. Anything with a number attached to it belongs here — a heal or an
+ * absorbed hit is as much a thing that happened as a sword swing.
+ *
+ * `status_applied` / `status_expired` are deliberately excluded: they carry no damage and
+ * would drown the eight-row feed in bookkeeping once Stage 3 starts applying effects.
+ */
+const FEED_KINDS = new Set(['attack', 'skill', 'enemy_attack', 'heal', 'shield', 'status_tick'])
 
 /** The last few hits, newest first — a readable feed rather than a scroll of 400 rows. */
 const recentHits = computed(() =>
     [...played.value]
-        .filter(event => event.kind === 'attack' || event.kind === 'skill' || event.kind === 'enemy_attack')
+        .filter(event => FEED_KINDS.has(event.kind))
         .slice(-8)
         .reverse()
 )
+
+/** Which side an event's number belongs to, for colour and arrow direction. */
+function isAgainstParty(kind: string) {
+    return kind === 'enemy_attack'
+}
+
+function feedIcon(kind: string) {
+    if (kind === 'heal') return '+'
+    if (kind === 'shield') return '⛊'
+    return isAgainstParty(kind) ? '←' : '→'
+}
 
 const outcomeCopy = computed(() => {
     switch (props.fight?.outcome) {
@@ -127,16 +166,19 @@ function skip() {
           <p
             v-for="(event, index) in recentHits"
             :key="index"
-            :class="event.kind === 'enemy_attack' ? 'text-error' : event.crit ? 'text-warning font-semibold' : 'text-muted'"
+            :class="event.kind === 'heal' ? 'text-success'
+              : event.kind === 'shield' ? 'text-info'
+                : isAgainstParty(event.kind) ? 'text-error'
+                  : event.crit ? 'text-warning font-semibold' : 'text-muted'"
           >
             <span class="opacity-60">{{ event.at.toFixed(1) }}s</span>
-            {{ event.kind === 'enemy_attack' ? '←' : '→' }}
+            {{ feedIcon(event.kind) }}
             {{ formatHq(event.damage ?? '0') }}
             <span v-if="event.crit">CRIT</span>
             <span
-              v-if="event.kind === 'skill'"
+              v-if="event.kind === 'skill' || event.statusId"
               class="opacity-60"
-            >{{ event.skillId }}</span>
+            >{{ event.skillId ?? event.statusId }}</span>
           </p>
         </div>
 

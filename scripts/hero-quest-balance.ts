@@ -24,6 +24,8 @@ import {
 } from '../shared/utils/hero-quest/constants'
 import {
     applyXp,
+    enemyPackAt,
+    packSize,
     enemyStatsAt,
     goldPerKill,
     killsRequired,
@@ -41,7 +43,9 @@ import { attacksPerSecondFor, partyDps } from '../shared/utils/hero-quest/combat
 import { heroStatBlock, partyUnitStats } from '../shared/utils/hero-quest/stats'
 import { CLASS_NODES } from '../shared/utils/hero-quest/content/classes'
 import { ZERO, formatHq, formatSeconds } from '../shared/utils/hero-quest/numbers'
-import type { ClassId, HeroSnapshot } from '../shared/utils/hero-quest/types'
+import type { ClassId, HeroSnapshot, HqStatBlock, HqStatKey } from '../shared/utils/hero-quest/types'
+
+const STAT_KEYS: readonly HqStatKey[] = ['pwr', 'spd', 'lck', 'imp', 'vit', 'def']
 
 // ── args ───────────────────────────────────────────────────────────────────────────────
 
@@ -102,11 +106,15 @@ function timeToBoss() {
         const enemy = enemyStatsAt(pos)
         const snapshot = hero({ heroLevel: level, heroXp: xp })
         const dps = dpsAt(snapshot, prestige, world, stage)
-        const spk = secondsPerKill(dps, enemy)
+        // Amortized per enemy, so `spk × kills` is still the stage's clear time even though
+        // the enemies now arrive `packSizeFor(stage)` at a time.
+        const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(pos))
         const archetype = stageArchetype(stage)
         const gate = archetype === 'boss' || archetype === 'super_boss'
         const kills = killsRequired(pos)
-        const clear = gate ? spk : spk * kills
+        // `spk` is amortized per enemy, so a gate is `packSize` of them — the boss and the
+        // escort standing with it — not a single body.
+        const clear = gate ? spk * packSize(enemyPackAt(pos)) : spk * kills
         if (Number.isFinite(clear)) cumulative += clear
 
         const startLevel = level
@@ -205,17 +213,24 @@ function attackRate() {
 }
 
 function levelCurve() {
+    // Stat blocks are Decimal, and `console.table` renders a Decimal as its object shape —
+    // so every stat is formatted on the way out. `formatHq` rather than `toFixed` because
+    // geometric growth takes these past what a fixed-point string can show by level ~500.
+    const stats = (block: HqStatBlock) => ({
+        PWR: formatHq(block.pwr),
+        SPD: formatHq(block.spd),
+        LCK: formatHq(block.lck),
+        IMP: formatHq(block.imp),
+        VIT: formatHq(block.vit),
+        DEF: formatHq(block.def)
+    })
+
     console.log(`\nLevel curve — ${classId}\n`)
     console.table([1, 5, 10, 25, 50, 100, 250, 500].map(level => {
         const block = heroStatBlock(classId, level)
         return {
             level,
-            PWR: block.pwr.toFixed(1),
-            SPD: block.spd.toFixed(1),
-            LCK: block.lck.toFixed(1),
-            IMP: block.imp.toFixed(1),
-            VIT: block.vit.toFixed(1),
-            DEF: block.def.toFixed(1),
+            ...stats(block),
             'atk/sec': attacksPerSecondFor(block.spd).toFixed(2),
             'xp to next': formatHq(xpToNextLevel(level))
         }
@@ -224,13 +239,14 @@ function levelCurve() {
     console.log('\nLevel-1 stat totals per class (spreads are directional — totals are not balanced by construction)\n')
     console.table(CLASS_NODES.map((node) => {
         const block = heroStatBlock(node.id, 1)
-        const total = block.pwr + block.spd + block.lck + block.imp + block.vit + block.def
+        // `.add`, not `+` — summing Decimals with `+` silently concatenates their string
+        // forms instead of adding them.
+        const total = STAT_KEYS.reduce((sum, key) => sum.add(block[key]), ZERO)
         return {
             class: node.name,
             tier: node.tier,
-            PWR: block.pwr, SPD: block.spd, LCK: block.lck,
-            IMP: block.imp, VIT: block.vit, DEF: block.def,
-            total,
+            ...stats(block),
+            total: formatHq(total),
             strikes: node.strikesPerAttack
         }
     }))

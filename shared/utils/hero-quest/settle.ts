@@ -15,10 +15,13 @@ import {
     BASE_OFFLINE_EFFICIENCY,
     BOSS_ATK_MULT,
     BOSS_HP_MULT,
+    BOSS_MINION_COUNT,
     BOSS_STAGE,
+    ELITE_PACK_SIZE,
     ELITE_STAGE_MAX,
     ELITE_STAGE_MIN,
     ELITE_STAT_MULT,
+    FORMATION_ROW_CAPACITY,
     ENEMY_PRESTIGE_STEP_MULT,
     ENEMY_STEP_BASE,
     GOLD_PLATEAU_GROWTH,
@@ -32,6 +35,7 @@ import {
     OFFLINE_CAP_HOURS_PER_LEVEL,
     OFFLINE_CAP_MAX_HOURS,
     OFFLINE_EFFICIENCY_PER_LEVEL,
+    PACK_LIVE_STREAM_FRACTION,
     PRESTIGE_GOLD_FACTOR,
     PRESTIGE_INDEX_STEPS,
     STAGES_PER_WORLD,
@@ -42,13 +46,20 @@ import {
     XP_BASE_PER_KILL,
     XP_STEP_BASE,
     XP_TO_LEVEL_BASE,
-    XP_TO_LEVEL_GROWTH
+    XP_TO_LEVEL_GROWTH,
+    WAVE_PACK_SIZE
 } from './constants'
-import { expectedIncomingDps, partyDps } from './combat'
+import { attacksPerSecondFor, expectedIncomingDps, partyDps, targetingOrder } from './combat'
 import { partyUnitStats } from './stats'
+import {
+    partyAbilityDps,
+    projectAbilities,
+    sustainedIncoming
+} from './projection'
+import type { AbilityModifiers } from './projection'
 import { D, ZERO, decPow } from './numbers'
 import type { Decimal } from './numbers'
-import type { EnemyStats, RunPosition, SettleInput, SettleResult, StageArchetype, UnitStats } from './types'
+import type { EnemyPack, EnemyStats, FormationRow, HeroSnapshot, RunPosition, SettleInput, SettleResult, StageArchetype, UnitStats } from './types'
 
 /**
  * How far into the game a position is, as one number.
@@ -114,47 +125,308 @@ export function enemyStatsAt(pos: RunPosition): EnemyStats {
     }
 }
 
+// ── Packs ──────────────────────────────────────────────────────────────────────────────
+
+/** How many bodies stand in one encounter at this stage, boss and escort together. */
+export function packSizeFor(stage: number): number {
+    switch (stageArchetype(stage)) {
+        case 'boss':
+        case 'super_boss':
+            return 1 + Math.max(0, Math.floor(BOSS_MINION_COUNT))
+        case 'elite':
+            return Math.max(1, Math.floor(ELITE_PACK_SIZE))
+        default:
+            return Math.max(1, Math.floor(WAVE_PACK_SIZE))
+    }
+}
+
 /**
- * secondsPerKill = max(MIN_SECONDS_PER_KILL, enemyEHP / partyDPS)
+ * A boss's escort: trash-tier bodies at the stage's own depth.
  *
- * The floor bounds the *rate* half of Gold/hour. A bounded per-kill value times an
- * unbounded kill rate is still unbounded income, so both halves are load-bearing. Live and
- * offline call this same function, so the two can never disagree.
+ * Built from the same curve index as everything else but with the **wave** stat layer rather
+ * than the boss layer, so a minion is an ordinary mob of that depth standing next to a ×3-HP
+ * boss. Deriving them from the shared curve rather than a bespoke number is what keeps them
+ * scaling automatically when `ENEMY_STEP_BASE` moves.
  */
-export function secondsPerKill(dps: Decimal, enemy: EnemyStats): number {
-    if (dps.lte(0)) return Number.POSITIVE_INFINITY
-    const raw = enemy.hp.div(dps).toNumber()
+function bossMinionStats(pos: RunPosition): EnemyStats {
+    const mult = enemyMultiplier(pos.prestige, pos.world, pos.stage)
+    return {
+        hp: D(BASE_ENEMY_HP).mul(mult),
+        pwr: D(BASE_ENEMY_PWR).mul(mult),
+        def: D(BASE_ENEMY_DEF).mul(mult)
+    }
+}
+
+/**
+ * The encounter at a run position.
+ *
+ * Wave and elite stages are homogeneous. **Boss stages are not** — they hold the boss plus
+ * `BOSS_MINION_COUNT` trash minions, which is the first genuinely mixed pack in the game and
+ * exactly what the addressable `members[]` shape was built for.
+ *
+ * **Minions come first, the boss last.** The party chews through the escort before reaching
+ * the boss, which matches the "lowest-HP% enemy" targeting three of the four class paths use,
+ * and makes the member order the fight resolves in the same order `rawSecondsPerPack` sums —
+ * so the projection and the fight can never disagree about how long an encounter takes.
+ */
+export function enemyPackAt(pos: RunPosition): EnemyPack {
+    const archetype = stageArchetype(pos.stage)
+    if (archetype === 'boss' || archetype === 'super_boss') {
+        const minions = Math.max(0, Math.floor(BOSS_MINION_COUNT))
+        const minion = bossMinionStats(pos)
+        return { members: [...Array.from({ length: minions }, () => minion), enemyStatsAt(pos)] }
+    }
+    const member = enemyStatsAt(pos)
+    return { members: Array.from({ length: packSizeFor(pos.stage) }, () => member) }
+}
+
+export function packSize(pack: EnemyPack): number {
+    return Math.max(1, pack.members.length)
+}
+
+/**
+ * Where a pack member stands, derived purely from its index and the pack's size.
+ *
+ * Enemies occupy the **same 3-wide, two-deep grid the party does**, which is what makes the
+ * Archer path's abilities expressible at all — "hits all enemies in a row", "the front
+ * column", "each spot" are statements about a shape, and a flat list has no shape.
+ *
+ * Front holds `ceil(size / 2)` up to the row capacity, which lands exactly where it should at
+ * both sizes that matter: a 6-strong wave pack splits 3 and 3, and a boss encounter puts its
+ * two minions in front with the boss behind them — the escort screening its boss, for free,
+ * with no boss-specific branch.
+ */
+export function enemyPosition(index: number, size: number): { row: FormationRow; col: number } {
+    const front = Math.min(FORMATION_ROW_CAPACITY, Math.ceil(Math.max(1, size) / 2))
+    return index < front
+        ? { row: 'front', col: index }
+        : { row: 'back', col: index - front }
+}
+
+/** Indices of every member sharing a column with `index` — the pierce line, front to back. */
+export function columnOf(index: number, size: number): number[] {
+    const { col } = enemyPosition(index, size)
+    const members: number[] = []
+    for (let candidate = 0; candidate < size; candidate++) {
+        if (enemyPosition(candidate, size).col === col) members.push(candidate)
+    }
+    return members
+}
+
+/** Indices of every member standing in `row`. */
+export function rowOf(row: FormationRow, size: number): number[] {
+    const members: number[] = []
+    for (let index = 0; index < size; index++) {
+        if (enemyPosition(index, size).row === row) members.push(index)
+    }
+    return members
+}
+
+export function packHp(pack: EnemyPack): Decimal {
+    return pack.members.reduce((total, member) => total.add(member.hp), ZERO)
+}
+
+/**
+ * How many of a pack are swinging at once, averaged over a stage attempt.
+ *
+ * See `PACK_LIVE_STREAM_FRACTION`. Always exactly 1 at size 1, which is the property that
+ * makes every pre-pack number reproduce bit-for-bit.
+ */
+export function effectiveStreams(size: number): number {
+    return 1 + (Math.max(1, size) - 1) * PACK_LIVE_STREAM_FRACTION
+}
+
+/**
+ * Seconds to clear a whole encounter, killing members one at a time.
+ *
+ * Focus fire, so each member is fought at its own mitigation — a sum of at most a handful of
+ * terms, closed-form, and correct for a mixed pack without special-casing one.
+ */
+export function rawSecondsPerPack(
+    units: readonly UnitStats[],
+    pack: EnemyPack,
+    /**
+     * Pass the hero to fold **ability damage** into the rate as well as autoattacks. Omitted,
+     * this is the autoattack-only model it has always been — which is what keeps every caller
+     * that does not care about abilities behaving exactly as before.
+     */
+    hero?: HeroSnapshot
+): number {
+    let total = 0
+    for (const member of pack.members) {
+        const dps = hero
+            ? partyDps(units, member.def).add(partyAbilityDps(hero, units, member.def, packSize(pack)))
+            : partyDps(units, member.def)
+        if (dps.lte(0)) return Number.POSITIVE_INFINITY
+        const seconds = member.hp.div(dps).toNumber()
+        if (!Number.isFinite(seconds)) return Number.POSITIVE_INFINITY
+        total += seconds
+    }
+    return total
+}
+
+/**
+ * Apply a projection's party-side factors by rewriting the units themselves.
+ *
+ * Transforming the *input* rather than threading multipliers through `partyDps`,
+ * `partyMitigation` and everything downstream means the formulas never learn that buffs exist
+ * — a buffed party is just a stronger party, and pooled mitigation picks the change up for
+ * free rather than needing its own buff-aware branch.
+ */
+export function buffedUnits(units: readonly UnitStats[], mods: AbilityModifiers): UnitStats[] {
+    if (mods.pwrFactor === 1 && mods.spdFactor === 1) return [...units]
+    return units.map((unit) => {
+        const spd = unit.spd.mul(mods.spdFactor)
+        return {
+            ...unit,
+            pwr: unit.pwr.mul(mods.pwrFactor),
+            spd,
+            // Recomputed rather than scaled: the attack-rate curve clamps at both ends, so
+            // doubling SPD does *not* double the swing rate near the cap. Scaling the derived
+            // value would quietly break that ceiling.
+            attacksPerSecond: attacksPerSecondFor(spd)
+        }
+    })
+}
+
+/**
+ * Everything the idle rate needs at one position, resolved once.
+ *
+ * `settle()`, the campaign sim and the projection specs all need the *same* four things —
+ * projected modifiers, buffed party, debuffed pack, and the resulting seconds-per-kill — and
+ * an earlier version of this had each of them assemble it independently. They drifted
+ * immediately: a spec that skipped `buffedUnits` was measuring a party the game does not
+ * field. One function, three callers.
+ */
+export interface RateContext {
+    abilities: AbilityModifiers
+    units: UnitStats[]
+    pack: EnemyPack
+    secondsPerKill: number
+}
+
+export function rateAt(hero: HeroSnapshot, position: RunPosition): RateContext {
+    const baseUnits = partyUnitStats(hero)
+    const basePack = enemyPackAt(position)
+    const abilities = projectAbilities(hero, baseUnits, packSize(basePack))
+    const units = buffedUnits(baseUnits, abilities)
+    const pack = debuffedPack(basePack, abilities)
+    return { abilities, units, pack, secondsPerKill: secondsPerKill(units, pack, hero) }
+}
+
+/** The same trick on the enemy side: shredded armour is just a softer pack. */
+export function debuffedPack(pack: EnemyPack, mods: AbilityModifiers): EnemyPack {
+    if (mods.enemyDefFactor === 1 && mods.incomingFactor === 1) return pack
+    return {
+        members: pack.members.map(member => ({
+            ...member,
+            def: member.def.mul(mods.enemyDefFactor),
+            pwr: member.pwr.mul(mods.incomingFactor)
+        }))
+    }
+}
+
+/** Throughput against a whole encounter — pack HP over the time it takes to clear. Display only. */
+export function packDps(units: readonly UnitStats[], pack: EnemyPack): Decimal {
+    const seconds = rawSecondsPerPack(units, pack)
+    if (!Number.isFinite(seconds) || seconds <= 0) return ZERO
+    return packHp(pack).div(seconds)
+}
+
+/** Seconds to clear one whole encounter, floor included. */
+export function secondsPerPack(units: readonly UnitStats[], pack: EnemyPack): number {
+    return secondsPerKill(units, pack) * packSize(pack)
+}
+
+/**
+ * secondsPerKill = max(MIN_SECONDS_PER_KILL, secondsToClearPack / packSize)
+ *
+ * **Amortized per enemy, deliberately.** `BASE_KILL_COUNT` counts individual bodies, so this
+ * has to stay "seconds per body" for the kill loop, `goldPerKill` and `xpPerKill` to keep
+ * their units. Against a homogeneous pack both halves scale by N and it comes out *exactly*
+ * what the single-enemy model returned — packs cost nothing on the offense axis by design.
+ *
+ * The floor bounds the *rate* half of Gold/hour. A bounded per-kill value times an unbounded
+ * kill rate is still unbounded income, so both halves are load-bearing. Live and offline call
+ * this same function, so the two can never disagree.
+ */
+export function secondsPerKill(
+    units: readonly UnitStats[],
+    pack: EnemyPack,
+    /** Pass the hero to count ability damage as well as autoattacks. */
+    hero?: HeroSnapshot
+): number {
+    const raw = rawSecondsPerPack(units, pack, hero)
     if (!Number.isFinite(raw)) return Number.POSITIVE_INFINITY
-    return Math.max(MIN_SECONDS_PER_KILL, raw)
+    return Math.max(MIN_SECONDS_PER_KILL, raw / packSize(pack))
 }
 
 // ── Survivability ──────────────────────────────────────────────────────────────────────
 
 /**
- * Total incoming DPS against the fielded party.
+ * Incoming DPS against whoever is currently being targeted — the **front-most living unit**,
+ * not the whole party.
  *
- * Deliberately **not** pooled, unlike offence (`partyDps`): each enemy attack resolves
- * against its own defender's DEF, so party size is an offensive lever only. A second body
- * adds its own damage taken alongside its own HP, which is why time-to-die is very nearly
- * party-size-invariant (`open-items.md` #11.2).
+ * The enemy has one attack stream, so only one defender is taking damage at a time. This
+ * used to sum across every fielded unit, which modelled the enemy as attacking all of them
+ * simultaneously: N bodies then brought N× HP *and* took N× damage, and time-to-die came out
+ * party-size-invariant (`open-items.md` #11.2). It also disagreed with `fight.ts`, which has
+ * always resolved one stream against one target.
  */
-export function incomingDps(units: readonly UnitStats[], enemy: EnemyStats): Decimal {
-    return units.reduce((total, unit) => total.add(expectedIncomingDps(enemy, unit)), ZERO)
+export function incomingDps(units: readonly UnitStats[], pack: EnemyPack): Decimal {
+    const target = targetingOrder(units)[0]
+    return target ? incomingDpsAgainst(pack, target) : ZERO
+}
+
+/**
+ * What one defender takes from a whole pack.
+ *
+ * **Every member focuses the same defender**, so this is the mean member's output times the
+ * number still swinging — not a sum across members hitting different people. Spreading the
+ * streams across the party would hand N bodies both N× HP and N× incoming, which is exactly
+ * how time-to-die became party-size-invariant before (`open-items.md` #11.2) and how the Tank
+ * archetype lost its function the first time.
+ */
+function incomingDpsAgainst(pack: EnemyPack, defender: UnitStats): Decimal {
+    const size = packSize(pack)
+    const mean = pack.members
+        .reduce((total, member) => total.add(expectedIncomingDps(member, defender)), ZERO)
+        .div(size)
+    return mean.mul(effectiveStreams(size))
 }
 
 /**
  * How long the party survives one uninterrupted stage attempt, from full HP.
  *
- * `Infinity` when nothing gets through — an enemy whose PWR is fully mitigated by the
- * party's DEF deals exactly 0, not an asymptotic sliver (that hard floor is the point of
- * the clamped mitigation form).
+ * One attack stream, front row first: the enemy spends `hp / dps` seconds on each defender
+ * in turn, so the total is the sum over the targeting order. **Party size is now a real
+ * survivability lever** — and a high-DEF body standing in front is worth more than its own
+ * HP suggests, because its own mitigation applies for the whole time it is the target.
+ *
+ * **No party is immortal any more.** Incoming damage floors at `MIN_DAMAGE` rather than 0, so
+ * a fully-mitigated defender still takes chip damage and every unit is eventually worn down.
+ * The remaining `Infinity` guards cover the degenerate cases only — an empty party, or HP so
+ * large the division overflows a JS number — not "the enemy cannot hurt us", which used to be
+ * reachable and no longer is.
  */
-export function secondsToDie(units: readonly UnitStats[], enemy: EnemyStats): number {
-    const incoming = incomingDps(units, enemy)
-    if (incoming.lte(0)) return Number.POSITIVE_INFINITY
-    const ehp = units.reduce((total, unit) => total.add(unit.maxHp), ZERO)
-    const raw = ehp.div(incoming).toNumber()
-    return Number.isFinite(raw) ? raw : Number.POSITIVE_INFINITY
+export function secondsToDie(
+    units: readonly UnitStats[],
+    pack: EnemyPack,
+    /** Party healing per second, which extends every defender's life proportionally. */
+    healingPerSecond: Decimal = ZERO
+): number {
+    let total = 0
+    for (const unit of targetingOrder(units)) {
+        const raw = incomingDpsAgainst(pack, unit)
+        // Sustain is subtracted from the stream, floored so healing can never fully cancel it
+        // — see `MAX_SUSTAIN_MITIGATION` for why an immortal projection is the failure mode.
+        const incoming = sustainedIncoming(raw, healingPerSecond)
+        if (incoming.lte(0)) return Number.POSITIVE_INFINITY
+        const seconds = unit.maxHp.div(incoming).toNumber()
+        if (!Number.isFinite(seconds)) return Number.POSITIVE_INFINITY
+        total += seconds
+    }
+    return total
 }
 
 /**
@@ -167,10 +439,16 @@ export function secondsToDie(units: readonly UnitStats[], enemy: EnemyStats): nu
  *
  * That makes an unsurvivable wave a self-resolving wall rather than a dead end. Kills still
  * land at `secondsPerKill` right up to the wipe, so Gold and XP keep flowing at the usual
- * rate and the Hero levels its way out. Returns `Infinity` when the party cannot die.
+ * rate and the Hero levels its way out. Returns `Infinity` only for a party `secondsToDie`
+ * calls undying, which since the `MIN_DAMAGE` floor means an empty party and nothing else.
  */
-export function killsBeforeWipe(units: readonly UnitStats[], enemy: EnemyStats, spk: number): number {
-    const survives = secondsToDie(units, enemy)
+export function killsBeforeWipe(
+    units: readonly UnitStats[],
+    pack: EnemyPack,
+    spk: number,
+    healingPerSecond: Decimal = ZERO
+): number {
+    const survives = secondsToDie(units, pack, healingPerSecond)
     if (!Number.isFinite(survives)) return Number.POSITIVE_INFINITY
     if (!Number.isFinite(spk) || spk <= 0) return 0
     return Math.floor(survives / spk)
@@ -350,10 +628,14 @@ export function offlineFarmStage(pos: RunPosition): RunPosition {
  * the same rate, so the wall unsticks itself as the Hero levels.
  */
 export function settle(input: SettleInput): SettleResult {
-    const units = partyUnitStats(input.hero)
-    const startEnemy = enemyStatsAt(input.position)
-    const dps = partyDps(units, startEnemy.def)
-    const spk = secondsPerKill(dps, startEnemy)
+    /**
+     * Ability effects, averaged into the rate (`projection.ts`).
+     *
+     * Applied by rewriting the units and the pack rather than by threading multipliers through
+     * every formula: a buffed party is simply a stronger party, and a shredded pack a softer
+     * one, so pooled mitigation and everything downstream pick the change up for free.
+     */
+    const { abilities, units, pack: startPack, secondsPerKill: spk } = rateAt(input.hero, input.position)
 
     const effectiveSeconds = input.online
         ? applyBoost(Math.max(0, input.elapsedSeconds), input)
@@ -389,7 +671,7 @@ export function settle(input: SettleInput): SettleResult {
     // offline holds one rate, and the two halves of that rate have to agree. A window that
     // carries the run into deeper stages fights all of them at the departure stage's
     // difficulty — generous, and the same generosity `secondsPerKill` already grants.
-    const wipeAt = killsBeforeWipe(units, startEnemy, spk)
+    const wipeAt = killsBeforeWipe(units, startPack, spk, abilities.healingPerSecond)
 
     while (remaining > 0) {
         if (isBossStage(pos.stage)) {

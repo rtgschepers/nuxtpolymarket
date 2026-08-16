@@ -91,11 +91,13 @@ Rosters are deliberately partial:
 | Class nodes | 16 | All 16 — small, and fully specified |
 | Skills | 36 | All 36 — full draft already written |
 | Gear | 36 | All 36 — fully named by the epithet table |
-| Champions | 48 | **8–12** in Phase 2 (2 per archetype at Common/Rare/Mythic) |
+| Champions | 48 | **All 48 — done.** Filled during the ability-effects pass |
 | Artifacts | 48 | Effects pool first; names deferred |
 | Worlds | 10 | **Placeholder names and enemies.** World design has not happened. |
 
-Champion and Artifact names are deferred *by design*, not by oversight — they're pure content, addable later with zero code change. Do not generate 48 names to "fill in the gaps."
+**Champions are complete.** The roster was filled deliberately during the ability-effects pass, overriding the earlier guidance below — the deciding argument was that a complete roster is what lets `foldToAvailableRarity` be retired, and that the rarity-overlap goal is served by the *small* 7-ability pool rather than by more content. All 48 exist, assembled from two tables (`ROSTER`, `ABILITY_SLOTS`) so the structural rules are properties of one distribution.
+
+**Artifact names remain deferred** *by design*, not by oversight — pure content, addable later with zero code change. Do not generate 48 names to "fill in the gaps" there.
 
 **World 10 must be named The Void**, or Void Shards needs renaming.
 

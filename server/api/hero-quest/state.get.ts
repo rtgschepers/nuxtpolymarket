@@ -1,9 +1,11 @@
 import { requireUserId } from '#server/utils/auth'
 import {
+    getCollection,
     getHqState,
     getShopLevels,
     heroSnapshotOf,
     serializeClassTree,
+    serializeGuild,
     serializeHero,
     serializeRun,
     serializeShop,
@@ -35,6 +37,7 @@ export default defineEventHandler(async (event) => {
             run: null,
             hero: null,
             shop: [],
+            guild: null,
             classTree: [],
             voidShards: '0',
             nextPrestigeReward: voidShardsFor(0).toString(),
@@ -44,9 +47,11 @@ export default defineEventHandler(async (event) => {
 
     const { state, result, online, previousLevel } = await settleHq(userId)
     const shopLevels = await getShopLevels(userId)
-    const hero = heroSnapshotOf(state, shopLevels)
+    const collection = await getCollection(userId, 'champion')
+    const hero = heroSnapshotOf(state, shopLevels, collection)
 
     return {
+        guild: serializeGuild(state, collection, shopLevels),
         initialized: true as const,
         // Lets the client interpolate accrual without drifting against its own clock.
         serverNow: Date.now(),

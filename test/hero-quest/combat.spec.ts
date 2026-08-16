@@ -20,6 +20,7 @@ import {
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
     MIN_COOLDOWN_SECONDS,
+    MIN_DAMAGE,
     SKILL_BASE_COOLDOWN_SECONDS,
     HP_PER_VIT,
     K,
@@ -41,17 +42,19 @@ describe('hero-quest combat math', () => {
             expect(rawHitDamage(100, 0).toNumber()).toBe(100)
         })
 
-        it('floors at exactly zero once DEF reaches PWR × K', () => {
+        it('reaches full mitigation at DEF = PWR × K, and floors damage at MIN_DAMAGE', () => {
             const pwr = 100
             const def = pwr * K
+            // Mitigation itself is still a clean 100% — the floor lives in the damage
+            // formula, not in the ratio.
             expect(mitigation(pwr, def).toNumber()).toBe(1)
-            expect(rawHitDamage(pwr, def).toNumber()).toBe(0)
+            expect(rawHitDamage(pwr, def).toNumber()).toBe(MIN_DAMAGE)
         })
 
-        it('stays at exactly zero past the threshold, never negative', () => {
+        it('stays on the floor past the threshold, never zero and never negative', () => {
             const pwr = 100
             for (const def of [pwr * K, pwr * K * 2, pwr * K * 1000]) {
-                expect(rawHitDamage(pwr, def).toNumber()).toBe(0)
+                expect(rawHitDamage(pwr, def).toNumber()).toBe(MIN_DAMAGE)
             }
         })
 
@@ -76,19 +79,19 @@ describe('hero-quest combat math', () => {
         it('converts LCK linearly up to 100%', () => {
             const lck = 20
             expect(critChanceFor(lck).critChance).toBeCloseTo(lck * CRIT_CHANCE_PER_POINT, 10)
-            expect(critChanceFor(lck).overflow).toBe(0)
+            expect(critChanceFor(lck).overflow.toNumber()).toBe(0)
         })
 
         it('caps chance at 100% and overflows the excess', () => {
             const lck = 2 / CRIT_CHANCE_PER_POINT // twice what's needed for 100%
             expect(critChanceFor(lck).critChance).toBe(1)
-            expect(critChanceFor(lck).overflow).toBeCloseTo(1, 10)
+            expect(critChanceFor(lck).overflow.toNumber()).toBeCloseTo(1, 10)
         })
 
         it('converts overflow LCK into crit damage rather than wasting it', () => {
             const atCap = 1 / CRIT_CHANCE_PER_POINT
             const beyond = 2 / CRIT_CHANCE_PER_POINT
-            expect(critMultiplierFor(beyond, 10)).toBeGreaterThan(critMultiplierFor(atCap, 10))
+            expect(critMultiplierFor(beyond, 10).gt(critMultiplierFor(atCap, 10))).toBe(true)
         })
 
         it('keeps overflow well below direct IMP investment', () => {
@@ -96,7 +99,7 @@ describe('hero-quest combat math', () => {
         })
 
         it('scales crit damage from IMP', () => {
-            expect(critMultiplierFor(0, 10)).toBeCloseTo(1 + 10 * CRIT_DAMAGE_PER_POINT, 10)
+            expect(critMultiplierFor(0, 10).toNumber()).toBeCloseTo(1 + 10 * CRIT_DAMAGE_PER_POINT, 10)
         })
     })
 
@@ -202,15 +205,27 @@ describe('hero-quest combat math', () => {
             expect(expectedHitDamage(unit, 0).toNumber()).toBeCloseTo(expected, 6)
         })
 
-        it('produces zero DPS when the defender fully mitigates a lone attacker', () => {
+        it('floors at MIN_DAMAGE, not zero, when the defender fully mitigates a lone attacker', () => {
             const beginner = getClass('class_beginner')
             const unit = deriveUnitStats(heroStatBlock('class_beginner', 1), beginner)
-            expect(unitDps(unit, unit.pwr.mul(K)).toNumber()).toBe(0)
+
+            // The hit itself lands on the floor exactly...
+            expect(rawHitDamage(unit.pwr, unit.pwr.mul(K)).toNumber()).toBe(MIN_DAMAGE)
+            // ...so the derived rate is small but never nothing. A wall is slow, not sealed.
+            expect(unitDps(unit, unit.pwr.mul(K)).toNumber()).toBeGreaterThan(0)
+        })
+
+        it('cannot be pushed below the floor by any amount of DEF', () => {
+            const beginner = getClass('class_beginner')
+            const unit = deriveUnitStats(heroStatBlock('class_beginner', 1), beginner)
+            for (const def of ['1e6', '1e50', '1e300']) {
+                expect(rawHitDamage(unit.pwr, D(def)).toNumber()).toBe(MIN_DAMAGE)
+            }
         })
     })
 
     /**
-     * Pooling is what lets unit count move the zero-damage threshold instead of only scaling
+     * Pooling is what lets unit count move the mitigation threshold instead of only scaling
      * the residual below it. Without it, mitigation resolves per attacker and N units share
      * one ceiling — a party could never open a wall the Hero alone could not.
      */
@@ -226,16 +241,22 @@ describe('hero-quest combat math', () => {
             }
         })
 
-        it('pools PWR, so the zero-damage threshold scales with party size', () => {
+        it('pools PWR, so the mitigation threshold scales with party size', () => {
             const solo = unit()
             const wall = solo.pwr.mul(K)
 
-            // The DEF that shuts one unit out entirely leaves a party still swinging.
-            expect(unitDps(solo, wall).toNumber()).toBe(0)
-            expect(partyDps(party(3), wall).toNumber()).toBeGreaterThan(0)
+            // What a party of N looks like once DEF is so far past the clamp that every unit
+            // is pinned to MIN_DAMAGE. Since the floor replaced the hard zero, "shut out" is
+            // this value rather than 0 — measured rather than hardcoded so it survives a
+            // retune of MIN_DAMAGE or the crit constants.
+            const floored = (size: number) => partyDps(party(size), D('1e300')).toNumber()
+
+            // The DEF that pins one unit to the floor leaves a party of three still cutting.
+            expect(partyDps([solo], wall).toNumber()).toBe(floored(1))
+            expect(partyDps(party(3), wall).toNumber()).toBeGreaterThan(floored(3))
 
             // ...and the party has its own threshold, three times further out.
-            expect(partyDps(party(3), wall.mul(3)).toNumber()).toBe(0)
+            expect(partyDps(party(3), wall.mul(3)).toNumber()).toBe(floored(3))
         })
 
         it('beats a plain sum of solo DPS whenever mitigation is biting', () => {

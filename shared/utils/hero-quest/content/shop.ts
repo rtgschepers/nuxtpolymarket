@@ -17,6 +17,10 @@
  */
 
 import {
+    BASE_CHAMPION_SLOTS,
+    CHAMPION_SLOT_BASE_COST,
+    CHAMPION_SLOT_COST_GROWTH,
+    MAX_CHAMPION_SLOTS,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
     OFFLINE_CAP_BASE_COST,
@@ -25,7 +29,7 @@ import {
     OFFLINE_EFFICIENCY_COST_GROWTH
 } from '../constants'
 
-export type ShopTrackId = 'offlineEfficiency' | 'offlineCap'
+export type ShopTrackId = 'offlineEfficiency' | 'offlineCap' | 'championSlots'
 
 export interface ShopTrack {
     id: ShopTrackId
@@ -60,6 +64,15 @@ export const SHOP_TRACKS: readonly ShopTrack[] = [
         maxLevel: MAX_OFFLINE_CAP_LEVEL,
         baseCost: OFFLINE_CAP_BASE_COST,
         costGrowth: OFFLINE_CAP_COST_GROWTH,
+        roundCost: true
+    },
+    {
+        id: 'championSlots',
+        name: 'Champion Slots',
+        description: 'Champions you can field alongside the Hero, 2 → 5.',
+        maxLevel: MAX_CHAMPION_SLOTS - BASE_CHAMPION_SLOTS,
+        baseCost: CHAMPION_SLOT_BASE_COST,
+        costGrowth: CHAMPION_SLOT_COST_GROWTH,
         roundCost: true
     }
 ]

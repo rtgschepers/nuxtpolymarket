@@ -28,6 +28,7 @@ export const useHeroQuest = () => {
     const serverNow = computed(() => state.value?.serverNow ?? Date.now())
     const refreshIntervalMs = computed(() => state.value?.refreshIntervalMs ?? 60_000)
 
+    const guild = computed(() => state.value?.guild ?? null)
     const atBossGate = computed(() => run.value?.atBossGate ?? false)
     const walled = computed(() => run.value?.walled ?? false)
     const canPrestige = computed(() => state.value?.run?.runCleared ?? false)
@@ -55,6 +56,8 @@ export const useHeroQuest = () => {
         secondsElapsed: number
         damageDealtPct: number
         enemyMaxHp: string
+        /** Per body, escort first — a boss stands with minions, so the pack is mixed. */
+        enemyMaxHps: string[]
         enemyHpRemaining: string
         events: FightEvent[]
         landing: { world: number; stage: number }
@@ -98,6 +101,63 @@ export const useHeroQuest = () => {
         return call('/api/hero-quest/prestige/shop-buy', { upgradeId }, 'Upgrade purchased')
     }
 
+    interface PullRecord {
+        championId: string
+        name: string
+        rarity: string
+        isNew: boolean
+        star: number
+        level: number
+        essence: number
+    }
+
+    /**
+     * Pull from the Guild. Toast is suppressed — the result reel is the feedback, and a
+     * 10-pull would otherwise stack ten toasts.
+     */
+    async function pullChampions(count: 1 | 10) {
+        return call<{ pulls: PullRecord[]; essenceGained: number; gachaLevel: number }>(
+            '/api/hero-quest/guild/pull', { count }, ''
+        )
+    }
+
+    /** Party and formation save together — a formation is only valid against a given party. */
+    async function saveParty(championIds: string[], formation: Record<string, 'front' | 'back'>) {
+        return call('/api/hero-quest/guild/party', { championIds, formation }, 'Party updated')
+    }
+
+    /** Spend Champion Essence on a specific Champion — the full RNG bypass. */
+    async function craftChampion(championId: string) {
+        return call<{ name: string; isNew: boolean }>(
+            '/api/hero-quest/guild/craft', { championId }, ''
+        ).then((res) => {
+            if (res) {
+                toast.add({
+                    title: res.isNew ? `Crafted ${res.name}` : `${res.name} levelled`,
+                    color: 'success'
+                })
+            }
+            return res
+        })
+    }
+
+    /** Buy Guild Seals with Gold on the daily escalating ladder. */
+    async function buySeals(count: number) {
+        const res = await call<{ sealsBought: number; goldSpent: number }>(
+            '/api/hero-quest/guild/buy-seals', { count }, ''
+        )
+        if (res) {
+            toast.add({
+                title: `+${res.sealsBought} Guild Seals`,
+                description: `${formatNumber(res.goldSpent)} Gold`,
+                color: 'success'
+            })
+        }
+        // Gold left the shared balance — the header has to follow it.
+        await fetchSession()
+        return res
+    }
+
     // Gold accrues into the shared balance on every settle, so the header has to follow it.
     let timer: ReturnType<typeof setInterval> | null = null
     onMounted(() => {
@@ -118,6 +178,7 @@ export const useHeroQuest = () => {
         run,
         hero,
         shop,
+        guild,
         classTree,
         voidShards,
         nextPrestigeReward,
@@ -130,6 +191,10 @@ export const useHeroQuest = () => {
         engageBoss,
         prestige,
         pickClass,
-        buyUpgrade
+        buyUpgrade,
+        pullChampions,
+        saveParty,
+        craftChampion,
+        buySeals
     }
 }

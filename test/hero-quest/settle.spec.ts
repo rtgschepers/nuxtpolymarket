@@ -4,6 +4,7 @@ import {
     cappedOfflineSeconds,
     curveIndex,
     enemyMultiplier,
+    enemyPackAt,
     enemyStatsAt,
     fallbackStage,
     goldPerKill,
@@ -16,6 +17,7 @@ import {
     offlineEfficiency,
     offlineFarmStage,
     prestigeGoldFactor,
+    rateAt,
     secondsPerKill,
     settle,
     stageArchetype,
@@ -59,15 +61,23 @@ function at(world: number, stage: number, killsInStage = 0, prestige = 0): RunPo
     return { prestige, world, stage, killsInStage }
 }
 
-/** First position along the play order where the hero deals literally zero damage. */
+/**
+ * First position along the play order where the hero cannot land a single kill inside the
+ * longest window the game ever settles (the 72h offline cap).
+ *
+ * Since `MIN_DAMAGE` replaced the hard zero, no position produces literally zero damage any
+ * more — the wall is a *rate* wall rather than an absolute one. "Cannot progress" therefore
+ * has to be expressed against a time budget, and the offline cap is the natural one: a stage
+ * that yields nothing across a maximal offline window yields nothing in practice.
+ */
+const LONGEST_SETTLE_SECONDS = 72 * 3600
+
 function firstStallingPosition(snapshot: HeroSnapshot, prestige = 0): RunPosition | null {
     for (let world = 1; world <= WORLD_COUNT; world++) {
         for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
             const position = at(world, stage, 0, prestige)
-            const enemy = enemyStatsAt(position)
-            if (!Number.isFinite(secondsPerKill(partyDps(partyUnitStats(snapshot), enemy.def), enemy))) {
-                return position
-            }
+            const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(position))
+            if (!(spk <= LONGEST_SETTLE_SECONDS)) return position
         }
     }
     return null
@@ -160,15 +170,21 @@ describe('hero-quest settle', () => {
 
     describe('secondsPerKill', () => {
         it('never dips below the throughput floor, however high DPS climbs', () => {
-            const enemy = enemyStatsAt(at(1, 1))
-            for (const dps of [1e6, 1e12, 1e30]) {
-                expect(secondsPerKill(D(dps), enemy)).toBeGreaterThanOrEqual(MIN_SECONDS_PER_KILL)
+            const member = enemyStatsAt(at(1, 1))
+            // Level stands in for raw DPS now that the signature takes the party rather than
+            // a bare number — and it exercises the real stat pipeline while it's at it.
+            for (const level of [200, 500, 2000]) {
+                const units = partyUnitStats({ ...hero, heroLevel: level })
+                expect(secondsPerKill(units, { members: [member] }))
+                    .toBeGreaterThanOrEqual(MIN_SECONDS_PER_KILL)
             }
-            expect(secondsPerKill(D(1e30), enemy)).toBe(MIN_SECONDS_PER_KILL)
+            expect(secondsPerKill(partyUnitStats({ ...hero, heroLevel: 2000 }), { members: [member] }))
+                .toBe(MIN_SECONDS_PER_KILL)
         })
 
         it('returns Infinity for a party that cannot damage the enemy', () => {
-            expect(secondsPerKill(D(0), enemyStatsAt(at(1, 1)))).toBe(Number.POSITIVE_INFINITY)
+            // An empty party is the only way to deal literally nothing since MIN_DAMAGE.
+            expect(secondsPerKill([], enemyPackAt(at(1, 1)))).toBe(Number.POSITIVE_INFINITY)
         })
     })
 
@@ -236,21 +252,28 @@ describe('hero-quest settle', () => {
 
         function secondsPerKillAt(position: RunPosition, heroLevel = 1) {
             const units = partyUnitStats({ ...hero, heroLevel })
-            const enemy = enemyStatsAt(position)
-            return secondsPerKill(partyDps(units, enemy.def), enemy)
+            return secondsPerKill(units, enemyPackAt(position))
         }
 
         function wipeCount(position: RunPosition, heroLevel = 1) {
             const units = partyUnitStats({ ...hero, heroLevel })
-            return killsBeforeWipe(units, enemyStatsAt(position), secondsPerKillAt(position, heroLevel))
+            return killsBeforeWipe(units, enemyPackAt(position), secondsPerKillAt(position, heroLevel))
         }
 
-        it('is unreachable while the party cannot be killed at all', () => {
+        it('is effectively unreachable for a party the enemy can barely scratch', () => {
             const units = partyUnitStats({ ...hero, heroLevel: 200 })
-            const enemy = enemyStatsAt(at(1, 1))
-            // Enemy PWR fully mitigated means exactly 0 damage, not an asymptotic sliver.
-            expect(secondsToDie(units, enemy)).toBe(Number.POSITIVE_INFINITY)
-            expect(wipeCount(at(1, 1), 200)).toBe(Number.POSITIVE_INFINITY)
+            const enemy = enemyPackAt(at(1, 1))
+
+            // No longer literally infinite: since MIN_DAMAGE landed, a fully-mitigated
+            // defender still takes chip damage, so every party dies *eventually*.
+            //
+            // What makes the wipe unreachable is measured against the **stage**, not against
+            // a wall-clock figure: an over-levelled party clears the 30 kills thousands of
+            // times over before dropping. A raw seconds threshold would also be a hidden
+            // assertion about pack size, since packs scale survival by `1/streams(N)`.
+            const survives = secondsToDie(units, enemy)
+            expect(Number.isFinite(survives)).toBe(true)
+            expect(wipeCount(at(1, 1), 200)).toBeGreaterThan(BASE_KILL_COUNT * 1000)
         })
 
         it('holds the stage instead of advancing when the party cannot outlast it', () => {
@@ -312,7 +335,15 @@ describe('hero-quest settle', () => {
         })
 
         it('lands the player at the boss, not past it and not short of it', () => {
-            const result = settle(input({ position: at(1, 4, BASE_KILL_COUNT - 1), elapsedSeconds: 8 * 3600 }))
+            // Levelled enough to outlast a Stage 4 attempt: this is a spec about the *gate*,
+            // and a hero that wipes on the wave before it never reaches the gate to be gated.
+            // The threshold rose with `WAVE_PACK_SIZE` — six attackers per encounter is a
+            // real survivability cost, and the wave-wipe rule is tested on its own elsewhere.
+            const result = settle(input({
+                hero: { ...hero, heroLevel: 10 },
+                position: at(1, 4, BASE_KILL_COUNT - 1),
+                elapsedSeconds: 8 * 3600
+            }))
             expect(result.position.stage).toBe(5)
             expect(result.position.killsInStage).toBe(0)
             expect(result.blockedAtBoss).toBe(true)
@@ -329,9 +360,10 @@ describe('hero-quest settle', () => {
 
         it('gates Stage 10 the same way it gates Stage 5', () => {
             // Needs a leveled hero: a level-1 Beginner cannot scratch a Stage 9 elite (below),
-            // and below ~level 20 it cannot outlast a full elite stage attempt either.
+            // and below level 35 it cannot outlast a full elite stage attempt either — six
+            // elites per encounter is a much heavier incoming stream than one.
             const result = settle(input({
-                hero: { ...hero, heroLevel: 25 },
+                hero: { ...hero, heroLevel: 40 },
                 position: at(1, 9, BASE_KILL_COUNT - 1),
                 elapsedSeconds: 8 * 3600
             }))
@@ -341,22 +373,24 @@ describe('hero-quest settle', () => {
 
         it('stalls a hero whose PWR the enemy DEF curve has outrun', () => {
             // Emergent, and deliberate: enemy DEF rides the same exponential as everything
-            // else, so a static hero eventually crosses DEF >= PWR x K and deals exactly 0.
-            // Levelling is not optional — this is the wall the run is supposed to hit.
-            // Where that lands moves with ENEMY_CURVE_T, so the test finds it rather than
-            // naming a stage: what matters is that it exists and that levels answer it.
+            // else, so a static hero eventually crosses DEF >= PWR x K. Past that point it is
+            // pinned to MIN_DAMAGE per swing, which against an exponential HP pool is not a
+            // route through — the wall is slow rather than sealed, but it is still a wall.
+            // Levelling is not optional. Where it lands moves with ENEMY_CURVE_T, so the test
+            // finds it rather than naming a stage: what matters is that it exists and that
+            // levels answer it.
             const wall = firstStallingPosition(hero)
             expect(wall).not.toBeNull()
 
-            const stalled = settle(input({ position: wall!, elapsedSeconds: 72 * 3600 }))
-            expect(stalled.secondsPerKill).toBe(Number.POSITIVE_INFINITY)
+            const stalled = settle(input({ position: wall!, elapsedSeconds: LONGEST_SETTLE_SECONDS }))
+            expect(stalled.secondsPerKill).toBeGreaterThan(LONGEST_SETTLE_SECONDS)
             expect(stalled.kills).toBe(0)
             expect(stalled.goldEarned).toBe(0)
 
             const levelled = settle(input({
                 hero: { ...hero, heroLevel: 200 },
                 position: wall!,
-                elapsedSeconds: 72 * 3600
+                elapsedSeconds: LONGEST_SETTLE_SECONDS
             }))
             expect(levelled.kills).toBeGreaterThan(0)
         })
@@ -373,9 +407,13 @@ describe('hero-quest settle', () => {
             const start = at(1, 1)
             const result = settle(input({ position: start, elapsedSeconds: 8 * 3600 }))
 
-            const dps = partyDps(partyUnitStats(hero), enemyStatsAt(start).def)
-            const departureRate = secondsPerKill(dps, enemyStatsAt(start))
-            const arrivalRate = secondsPerKill(dps, enemyStatsAt(result.position))
+            const units = partyUnitStats(hero)
+            // Through `rateAt`, the same helper `settle()` uses — it applies the ability
+            // projection (buffed party, debuffed pack) before pricing the rate. Rebuilding
+            // that here by hand is how this spec would silently start measuring a party the
+            // game does not field.
+            const departureRate = rateAt(hero, start).secondsPerKill
+            const arrivalRate = rateAt(hero, result.position).secondsPerKill
 
             expect(result.position.stage).toBeGreaterThan(start.stage)
             expect(result.secondsPerKill).toBeCloseTo(departureRate, 10)
@@ -550,7 +588,8 @@ describe('hero-quest settle', () => {
             // The window was fought at the departure level throughout: the reported rate
             // still matches level-1 stats, not the level the hero ended on.
             const departureDps = partyDps(partyUnitStats(hero), enemyStatsAt(at(1, 1)).def)
-            expect(result.secondsPerKill).toBeCloseTo(secondsPerKill(departureDps, enemyStatsAt(at(1, 1))), 10)
+            expect(result.secondsPerKill)
+                .toBeCloseTo(rateAt(hero, at(1, 1)).secondsPerKill, 10)
 
             const ended = partyDps(partyUnitStats({ ...hero, heroLevel: result.heroLevel }), enemyStatsAt(at(1, 1)).def)
             expect(ended.gt(departureDps)).toBe(true)

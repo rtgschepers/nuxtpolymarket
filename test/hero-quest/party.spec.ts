@@ -1,24 +1,30 @@
 /**
- * Party composition — the Phase 1 seam Champions drop into.
+ * Party composition.
  *
- * No roster exists yet, so these specs are about *shape*: that a Champion's power is driven
- * by the Hero's level rather than its own (Champions have no XP level — only the bounded
- * `star × 10 + level` dupe scalar), and that nothing downstream assumes a party of one.
+ * These specs are about *shape*: that a Champion's power is driven by the Hero's level rather
+ * than its own (Champions have no XP level — only the bounded `star × 10 + level` dupe
+ * scalar), and that nothing downstream assumes a party of one. Roster content is covered in
+ * `content.spec.ts`; survivability and formation in `formation.spec.ts`.
  */
 
 import { describe, expect, it } from 'vitest'
 import { championStatBlock, heroStatBlock, partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { partyDps } from '#shared/utils/hero-quest/combat'
 import { CHAMPION_INVESTMENT_PER_POINT } from '#shared/utils/hero-quest/constants'
-import { ZERO } from '#shared/utils/hero-quest/numbers'
+import { D, ZERO } from '#shared/utils/hero-quest/numbers'
 import type { ChampionSnapshot, HeroSnapshot } from '#shared/utils/hero-quest/types'
 
 function champion(overrides: Partial<ChampionSnapshot> = {}): ChampionSnapshot {
     return {
         championId: 'champ_test',
+        archetype: 'damage',
         rarityMultiplier: 1,
         investment: 1,
         strikesPerAttack: 1,
+        row: 'back',
+        // Stat-pipeline specs — `partyUnitStats` derives no skill term, so an ability list
+        // would be inert here either way.
+        abilities: [],
         ...overrides
     }
 }
@@ -54,9 +60,9 @@ describe('party composition', () => {
         const low = championStatBlock(base, champion(), 1)
         const high = championStatBlock(base, champion(), 50)
 
-        expect(high.pwr).toBeGreaterThan(low.pwr)
+        expect(high.pwr.gt(low.pwr)).toBe(true)
         // An un-invested Champion is exactly a Hero-equivalent body, never a penalty.
-        expect(low.pwr).toBeCloseTo(base.pwr, 10)
+        expect(low.pwr.toNumber()).toBeCloseTo(base.pwr.toNumber(), 10)
     })
 
     it('rewards rarity and investment on top of the Hero-driven baseline', () => {
@@ -70,13 +76,15 @@ describe('party composition', () => {
     })
 
     it('makes party size worth real depth, not just speed', () => {
-        // A DEF that shuts the solo Hero out completely is still beatable by a party —
-        // the property the whole pooling change exists to produce.
+        // A DEF that pins the solo Hero to the damage floor is still genuinely cut by a
+        // party — the property the whole pooling change exists to produce.
         const solo = partyUnitStats(hero(30))
         const wall = solo[0]!.pwr.mul(2)
+        const trio = partyUnitStats(hero(30, [champion(), champion()]))
 
-        expect(partyDps(solo, wall).toNumber()).toBe(0)
-        expect(partyDps(partyUnitStats(hero(30, [champion(), champion()])), wall).toNumber())
-            .toBeGreaterThan(0)
+        // "Shut out" means pinned to MIN_DAMAGE since the floor landed, not zero. Measured
+        // against an unreachable DEF rather than hardcoded, so it survives a retune.
+        expect(partyDps(solo, wall).toNumber()).toBe(partyDps(solo, D('1e300')).toNumber())
+        expect(partyDps(trio, wall).toNumber()).toBeGreaterThan(partyDps(trio, D('1e300')).toNumber())
     })
 })

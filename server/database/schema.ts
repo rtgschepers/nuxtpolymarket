@@ -751,9 +751,82 @@ export const hqState = pgTable('hq_state', {
   /** Prestige currency. Decimal as text — see the note above. */
   voidShards: text('void_shards').notNull().default('0'),
 
-  /** Slot → 'front' | 'back'. One occupant until Champions land in Phase 2. */
-  formation: jsonb('formation').$type<Record<string, 'front' | 'back'>>().notNull().default({})
+  /**
+   * Unit ID → row. Keyed by `'hero'` for the Hero and by Champion ID for everyone else, so a
+   * placement survives a Champion being benched and re-fielded. Absent keys fall back to the
+   * class node's / archetype's default row (`classes-and-combat.md` §6).
+   */
+  formation: jsonb('formation').$type<Record<string, 'front' | 'back'>>().notNull().default({}),
+
+  /**
+   * The fielded Champions, in party order, capped by the purchased slot count. IDs only —
+   * their star/level live in `hqCollection`, so fielding never duplicates collection state.
+   */
+  partyChampionIds: jsonb('party_champion_ids').$type<string[]>().notNull().default([]),
+
+  // ── Gacha currencies (`tech-architecture.md` §3) ─────────────────────────────────
+  //
+  // Plain integers, not Decimal: Seal and Essence balances are bounded by real spending, not
+  // by the exponential curve. All four of each are declared together because §3 specifies
+  // them as one group and `hqCollection` already serves all four systems — Phase 3 adds Gear,
+  // Skills and Artifacts with no migration. Only the Guild pair is written in Phase 2.
+  forgeSeals: integer('forge_seals').notNull().default(0),
+  guildSeals: integer('guild_seals').notNull().default(0),
+  skillSeals: integer('skill_seals').notNull().default(0),
+  excavationSeals: integer('excavation_seals').notNull().default(0),
+
+  gearEssence: integer('gear_essence').notNull().default(0),
+  championEssence: integer('champion_essence').notNull().default(0),
+  skillEssence: integer('skill_essence').notNull().default(0),
+  artifactEssence: integer('artifact_essence').notNull().default(0),
+
+  /** system → 1..10, and pulls banked toward the next level. Each gacha levels independently. */
+  gachaLevels: jsonb('gacha_levels').$type<Record<string, number>>().notNull().default({}),
+  gachaProgress: jsonb('gacha_progress').$type<Record<string, number>>().notNull().default({}),
+
+  /**
+   * The Gold-purchase ladder's daily counters — one per gacha, one shared reset date
+   * (`gold-economy.md` §7). Buying Champion pulls today must not move the Skill price, which
+   * is why this is a per-system map and not a single integer.
+   *
+   * `sealLadderDate` is a plain `YYYY-MM-DD` string, not a timestamp: it is compared for
+   * equality to decide "is this still the same day", and a timestamp compare-and-swap is the
+   * exact pattern the platform guidance forbids.
+   */
+  sealLadderPurchasedToday: jsonb('seal_ladder_purchased_today').$type<Record<string, number>>().notNull().default({}),
+  sealLadderDate: text('seal_ladder_date'),
+
+  /** Free time-gated Seal grant clock. Null means never granted — the first settle pays out. */
+  lastSealGrantAt: timestamp('last_seal_grant_at')
 }, t => [index('hq_state_userId_idx').on(t.userId)])
+
+/**
+ * One row per owned item, across **all four gachas** — `system` discriminates
+ * (`tech-architecture.md` §3, locked).
+ *
+ * `contentId` is an unconstrained string rather than a foreign key: the four systems' content
+ * lives in separate `content/*.ts` modules, not a content table, so it is validated at the
+ * application layer against whichever module `system` names. The unique constraint is what
+ * makes "own one copy, level it with duplicates" expressible at all — a second pull of the
+ * same item is an UPDATE to `dupeProgress`, never a second row.
+ */
+export const hqCollection = pgTable('hq_collection', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  /** 'gear' | 'champion' | 'skill' | 'artifact'. */
+  system: text('system').notNull(),
+  contentId: text('content_id').notNull(),
+  /** 0–5. Everything starts at 0★. */
+  star: integer('star').notNull().default(0),
+  /** 1–10 within the current star. */
+  level: integer('level').notNull().default(1),
+  /** Duplicates banked toward the next level. */
+  dupeProgress: integer('dupe_progress').notNull().default(0),
+  acquiredAt: timestamp('acquired_at').defaultNow().notNull()
+}, t => [
+  unique('hq_collection_unique').on(t.userId, t.system, t.contentId),
+  index('hq_collection_userId_system_idx').on(t.userId, t.system)
+])
 
 /**
  * Every purchasable track in the game, whatever currency pays for it. Deliberately generic:

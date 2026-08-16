@@ -3,15 +3,22 @@ import { db } from '#server/database'
 import { hqFights, hqState } from '#server/database/schema'
 import { requireUserId } from '#server/utils/auth'
 import {
+    getCollection,
     getShopLevels,
     heroSnapshotOf,
     isBossStage,
     positionOf,
+    sealGrantSet,
     settleHq
 } from '#server/utils/hero-quest'
 import { runFight } from '#shared/utils/hero-quest/fight'
 import { fallbackStage, nextStage } from '#shared/utils/hero-quest/settle'
-import { SUPER_BOSS_STAGE, WORLD_COUNT } from '#shared/utils/hero-quest/constants'
+import {
+    SEAL_GRANT_PER_BOSS,
+    SEAL_GRANT_PER_WORLD_CLEAR,
+    SUPER_BOSS_STAGE,
+    WORLD_COUNT
+} from '#shared/utils/hero-quest/constants'
 import { randomInt } from '#shared/utils/random'
 
 /**
@@ -43,7 +50,10 @@ export default defineEventHandler(async (event) => {
         }
 
         const shopLevels = await getShopLevels(userId, tx)
-        const hero = heroSnapshotOf(state, shopLevels)
+        // Both read inside the lock — the boss is a DPS check against the *fielded party*,
+        // and a stale collection would resolve it with the wrong Champions.
+        const collection = await getCollection(userId, 'champion', tx)
+        const hero = heroSnapshotOf(state, shopLevels, collection)
 
         // CSPRNG for the seed; everything downstream is deterministic from it, which is what
         // lets the client replay the exact fight without being trusted with the outcome.
@@ -62,13 +72,21 @@ export default defineEventHandler(async (event) => {
             && position.world === WORLD_COUNT
             && position.stage === SUPER_BOSS_STAGE
 
+        // Milestone Seals, granted on the win only and paid in all four types at once
+        // (`economy-and-currencies.md` §5). Clearing Stage 10 finishes a World, which is the
+        // larger of the two batches; the Stage 5 boss pays the small one.
+        const sealsEarned = won
+            ? SEAL_GRANT_PER_BOSS + (position.stage === SUPER_BOSS_STAGE ? SEAL_GRANT_PER_WORLD_CLEAR : 0)
+            : 0
+
         const [updated] = await tx.update(hqState)
             .set({
                 world: landing.world,
                 stage: landing.stage,
                 killCount: 0,
                 atBossGate: isBossStage(landing.stage),
-                runCleared: state.runCleared || clearedTheRun
+                runCleared: state.runCleared || clearedTheRun,
+                ...(sealsEarned > 0 ? sealGrantSet(sealsEarned) : {})
             })
             .where(eq(hqState.userId, userId))
             .returning()
@@ -83,6 +101,8 @@ export default defineEventHandler(async (event) => {
                 heroLevel: hero.heroLevel,
                 classId: hero.classId,
                 enemyMaxHp: fight.enemyMaxHp,
+            /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
+            enemyMaxHps: fight.enemyMaxHps,
                 secondsElapsed: fight.secondsElapsed,
                 landing: { world: landing.world, stage: landing.stage }
             }
@@ -94,6 +114,8 @@ export default defineEventHandler(async (event) => {
             secondsElapsed: fight.secondsElapsed,
             damageDealtPct: fight.damageDealtPct,
             enemyMaxHp: fight.enemyMaxHp,
+            /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
+            enemyMaxHps: fight.enemyMaxHps,
             enemyHpRemaining: fight.enemyHpRemaining,
             events: fight.events,
             landing: { world: updated?.world ?? landing.world, stage: updated?.stage ?? landing.stage },

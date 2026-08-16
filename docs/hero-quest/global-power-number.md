@@ -71,7 +71,6 @@ Recomputed on every settle (`tech-architecture.md` §4a, unchanged) from the par
 - Fielding a stronger Champion into an open party slot — their own DPS/EHP joins the party sum directly
 - Equipped Skills, Active or Passive (`skills-gacha.md` §3) — modify Hero stats/damage directly
 - Equipped Artifacts (`artifacts-dig-site-gacha.md` §2) — party-wide passive modifiers apply to every fielded member's stats directly
-- Prestige-shop stat multipliers (ATK%/HP%/DEF% etc., `core-progression-and-prestige.md` §4) — apply to the same stats DPS/EHP are computed from
 - Party slot unlocks — indirectly, once an unlocked slot is actually filled with a fielded Champion
 
 **Does not flow in, under current mechanics:**
