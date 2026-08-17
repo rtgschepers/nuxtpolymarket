@@ -764,6 +764,30 @@ export const hqState = pgTable('hq_state', {
    */
   partyChampionIds: jsonb('party_champion_ids').$type<string[]>().notNull().default([]),
 
+  // ── The rest of the live loadout (`loadouts.md` §1) ──────────────────────────────
+  //
+  // A Loadout is a snapshot of five things: party, formation, Skills, Artifacts and Gear. The
+  // first two shipped with Champions; these three arrive with the gachas that fill them. IDs
+  // only, same as the party — star/level live in `hqCollection` and are never duplicated here.
+  //
+  // `hqLoadouts` mirrors this exact column group per saved slot, which is why they are grouped.
+
+  /** Equipped Skills, up to the purchased slot count (`skills-gacha.md` §5–6). Hero-only. */
+  equippedSkillIds: jsonb('equipped_skill_ids').$type<string[]>().notNull().default([]),
+
+  /** Equipped Artifacts, up to the purchased slot count. Party-wide in effect, not Hero-only. */
+  equippedArtifactIds: jsonb('equipped_artifact_ids').$type<string[]>().notNull().default([]),
+
+  /**
+   * Gear slot → item ID, for all six slots from account start (`gear-equipment.md` §1, §3).
+   *
+   * Persisted rather than derived because equip is **manual**: the strongest owned piece and the
+   * equipped one are allowed to differ, and closing that gap is the player's decision. An
+   * auto-equip design would have needed no column at all, which is exactly why the doc's revision
+   * to manual added one.
+   */
+  equippedGear: jsonb('equipped_gear').$type<Record<string, string>>().notNull().default({}),
+
   // ── Gacha currencies (`tech-architecture.md` §3) ─────────────────────────────────
   //
   // Plain integers, not Decimal: Seal and Essence balances are bounded by real spending, not
@@ -826,6 +850,36 @@ export const hqCollection = pgTable('hq_collection', {
 }, t => [
   unique('hq_collection_unique').on(t.userId, t.system, t.contentId),
   index('hq_collection_userId_system_idx').on(t.userId, t.system)
+])
+
+/**
+ * Saved Loadout presets (`loadouts.md` §1, §3) — one row per slot.
+ *
+ * The same column group as `hqState`'s live loadout, per slot instead of singular, which is the
+ * whole design: applying a preset copies five columns across, and saving copies them back.
+ *
+ * **Slot count needs no schema.** It reads `hqShopUpgrades` at `upgradeId = 'loadoutSlots'`, the
+ * one track in the game priced in Gems rather than Void Shards — Loadout slots add zero combat
+ * power on their own, so they take the convenience currency.
+ *
+ * A preset never goes stale: nothing in this game is ever un-owned and slot counts only grow, so
+ * an old preset saved under fewer slots stays valid and simply fills fewer of them.
+ */
+export const hqLoadouts = pgTable('hq_loadouts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  /** 0-based, bounded by the purchased slot count at write time. */
+  slotIndex: integer('slot_index').notNull(),
+  name: text('name').notNull().default('Loadout'),
+  partyChampionIds: jsonb('party_champion_ids').$type<string[]>().notNull().default([]),
+  formation: jsonb('formation').$type<Record<string, 'front' | 'back'>>().notNull().default({}),
+  equippedSkillIds: jsonb('equipped_skill_ids').$type<string[]>().notNull().default([]),
+  equippedArtifactIds: jsonb('equipped_artifact_ids').$type<string[]>().notNull().default([]),
+  equippedGear: jsonb('equipped_gear').$type<Record<string, string>>().notNull().default({}),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+}, t => [
+  unique('hq_loadouts_unique').on(t.userId, t.slotIndex),
+  index('hq_loadouts_userId_idx').on(t.userId)
 ])
 
 /**
