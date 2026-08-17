@@ -263,6 +263,28 @@ New placeholders, all `// UNTUNED ╧`: `SLOT_BASE_BONUS` (×6), `GEAR_PASSIVE_C
 
 ---
 
+### 19. The playtest harness — **landed, and it unblocks the whole tuning list**
+
+`server/utils/hero-quest-dev.ts` plus five routes under `server/api/hero-quest/dev/` and a `Dev` tab that only exists in development builds.
+
+**Why it was built before Phase 4.** `implementation-plan.md` Phase 1 ends with "stop here and actually play it before continuing", and that had been deferred through two whole phases. The obstacle was never willingness — the campaign sim puts two prestiges at three and a half days of wall clock, the free Seal grant is on a 24-hour timer, and the Gold ladder resets on a date key, so an evening of honest play reaches World 2. Every constant in the section below is waiting on data that was, in practice, unobtainable. This is what makes it obtainable.
+
+**What it does:** skip time (as one offline window, or as consecutive presence-length ones), grant any currency, own every roster entry at a chosen star/level, max the prestige shop, teleport the run, force `runCleared`, switch class node, and wipe back to unfounded so the first hour can be played twice.
+
+**The one design rule it follows: it never reimplements game math.** Every function moves an *input* — the clock, a balance, a position, an owned row — and lets the production path do the work. `devSkip` does not compute what eight hours would have earned; it rewinds `lastSettledAt` and calls the real `settleHq`. A harness that models the game separately is one that lies to you about the game.
+
+Three details worth knowing, because each is a place it could have been silently wrong:
+
+- **Offline and online are two experiments, not a preference.** `settleHq` classifies a window by its own length, so there is no flag to pass. Eight offline hours is one window, which is what the cap and the efficiency tax apply to; eight online hours is 160 consecutive three-minute windows, which is what a present player would have produced. `skipPlan` is unit-tested for `chunkMs <= ONLINE_THRESHOLD_MS` specifically — one millisecond over and every "online" chunk settles at the offline rate while reporting otherwise.
+- **Every clock moves together.** A skipped day rewinds `lastSealGrantAt` too, or the skip hands back a day of combat and none of the Seals that day owed. The Gold ladder is the exception it cannot rewind — it is keyed on a real calendar date — so a skip of a day or more clears it instead, which is the honest approximation and is documented as one.
+- **The gate is `import.meta.dev` alone**, deliberately *not* the `devMode` runtime config that `server/api/pathwarden/*` also accepts. These routes mint Gold and Gems, which are shared balances across every polynux game rather than Hero Quest scrip, so a deploy-time flag must not be able to open them. It throws **404, not 403**, so the routes are indistinguishable from undeployed. Verified in the built bundle, not just in source: `import.meta.dev` folds to a literal `false` and the gate becomes unconditional.
+
+`devReset` clears Hero Quest's five tables and **does not touch `balance` or `gems`** — granting into a shared balance is a dev convenience, silently deleting from one is data loss.
+
+No new game constants; the harness's own limits live beside it rather than in `constants.ts`, since nothing about balance changes if they move.
+
+---
+
 ## ⚪ Standing numeric tuning — **all of it deferred to playtest**
 
 Almost all of these are named constants with a formula shape already locked, just waiting on a value. Consolidated so the tuning pass has one list instead of hunting through 20 docs. `SEAL_LADDER_GROWTH[gear]` is no longer here since it's set (`gold-economy.md` section 7).
@@ -325,11 +347,15 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 5. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 6. **Playtest, then tune.** The full constant list is settled here and nowhere earlier — see the standing-tuning section. The balance script and campaign sim stay in use throughout for sanity checks, not for picking values.
 
+**On that last step's position in this list.** It is written sixth because tuning wants every system present, and that is still the right place to *finish*. But it is no longer the right place to *start*: `implementation-plan.md` Phase 1 says "stop here and actually play it before continuing", which this order has now overridden twice, and the harness (#19) removed the practical obstacle that made overriding it reasonable. Playing before step 2 is cheap now and World design is partly downstream of it — nothing settles how long a world should take like having felt one. Read step 6 as "the tuning pass lands here", not "nobody plays until then".
+
 ---
 
 ## 🔬 Watch during playtest
 
 Things that are **built and working** but whose *feel* has never been observed against a real session. None of these is a bug or a blocked decision, so none belongs in the lists above — they are the questions only playing the game can answer.
+
+**Raw observations go in `playtest-notes.md`, not here.** This section holds the questions and, eventually, the decisions; that file holds what actually happened. The split matters later: this doc will say *what* was changed, and that one will say *why it felt wrong*, which is the half that normally evaporates. It also carries the sim's falsifiable predictions and the known-inert list, so a session does not burn time re-deriving either.
 
 ### Champion rarity modifier — is a Mythic too far ahead of a Common?
 

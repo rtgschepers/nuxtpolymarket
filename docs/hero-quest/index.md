@@ -1,6 +1,6 @@
 # Design Doc Index
 
-Master navigation for the project. **22 files**: 18 design docs (all **Locked** except `idea-backlog.md`, a running list) plus 4 project-meta docs catalogued in §1a.
+Master navigation for the project. **23 files**: 18 design docs (all **Locked** except `idea-backlog.md`, a running list) plus 5 project-meta docs catalogued in §1a.
 
 > **Read first:** `open-items.md` lists everything still open — design questions, undesigned passes, and the standing constant-tuning list. Anything below marked ⚠️ points at a section two docs disagree about; there are currently none outstanding.
 
@@ -43,6 +43,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | `open-items.md` | Every open question, undesigned pass, and untuned constant. **The freshest doc in the project** | Before implementing anything numeric or contested; before starting a design session |
 | `implementation-plan.md` | 5-phase build order, per-phase scope + deferral lists, how to brief Claude Code | Before writing any code |
 | `asset-list.md` | Full art/VFX/icon/background production list, all 10 fidelity decisions locked | Art production planning; blocked on world design for enemies + backgrounds |
+| `playtest-notes.md` | Raw session observations, the sim's falsifiable predictions, and what is known-inert so it isn't chased | While playing; and before any tuning pass, since it holds the *why* behind what `open-items.md` decided |
 
 `CLAUDE.md` (the implementation brief for Claude Code) lives with the code, not here.
 
