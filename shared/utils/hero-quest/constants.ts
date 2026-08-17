@@ -256,28 +256,58 @@ export const CRIT_DAMAGE_PER_POINT = 0.05 // UNTUNED ╧
  */
 export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
 
-/** HP = BASE_HP + VIT × HP_PER_VIT */
-export const BASE_HP = 100 // UNTUNED ╧
+/**
+ * HP = BASE_HP + VIT × HP_PER_VIT
+ *
+ * **The early-game survivability lever, and only that.** Flat, so it dominates at level 1 and
+ * is arithmetic noise by the time VIT has compounded — which used to make it useless and is
+ * now exactly why it is load-bearing. It carries the level-1 solo opening on its own, freeing
+ * `HP_PER_VIT` to be tuned for how a *levelled party* feels without breaking a fresh account.
+ *
+ * Raised 100 → 2000 in the session-1 playtest pass, alongside the `HP_PER_VIT` cut below.
+ * Verified irrelevant past the opening: a party of 3 walls at exactly P2 W2S6 / level 808 for
+ * every value from 1000 to 8000. Solo needs ≥2000 — at 1000 a level-1 Hero still cannot clear
+ * World 1 Stage 1 and the campaign is unfarmable from the first screen.
+ */
+export const BASE_HP = 2000 // UNTUNED ╧
 
 /**
- * Re-derived when Phase 1 settled the HP model, and the reason it is this large.
+ * **The levelled-party survivability dial.** Cut 200 → 10 by the session-1 playtest.
  *
- * HP is **one pool across a whole stage attempt** (`settle.killsBeforeWipe`), so the number
- * a wave stage asks for is not "survive an enemy" but "survive thirty of them back to back"
- * — about five minutes of uninterrupted fire at World 1. At the old value of 10 a level-1
- * Hero had 200 HP against 476 damage over a Stage 1 attempt: it wiped at kill 12, restarted,
- * and the campaign sim never completed a single prestige. Sized so that opening clears with
- * ~4× margin and every World 1 elite stage holds ≥1.6×.
+ * HP is **one pool across a whole stage attempt** (`settle.killsBeforeWipe`), so the number a
+ * wave stage asks for is not "survive an enemy" but "survive thirty of them back to back" —
+ * about five minutes of uninterrupted fire at World 1. That is why it was ever this large.
  *
- * It is the only survivability lever that keeps working: `BASE_HP` is flat and goes
- * irrelevant within a few levels, and moving `BASE_ENEMY_PWR` instead sits on a knife edge —
- * mitigation clamps to 100% the moment enemy PWR drops under `heroDef / K`, flipping the
- * party from fragile to immortal with nothing in between.
+ * ## Why it moved
  *
- * The wall did not move: the campaign still ends at prestige 2 / World 8 in 3d 14h, exactly
- * as before, because survivability was never what bound it at depth — party DPS is.
+ * The playtest reported taking **zero damage across three worlds**, and the sim agrees
+ * outright: at 100 and at 200 the campaign is byte-identical — same wall, same level, same
+ * prestige count, solo *and* with a party. The top half of the old value was doing nothing at
+ * all. Survivability was simply not a constraint anywhere in the run.
+ *
+ * ## Why Phase 1's derivation was still right at the time
+ *
+ * Phase 1 raised this from 10 to 200 because at 10 a level-1 solo Hero had 200 HP against 476
+ * damage over a Stage 1 attempt: it wiped at kill 12 and the campaign never completed a single
+ * prestige. That reasoning holds and the failure still reproduces — a straight cut back to 10
+ * with `BASE_HP` at 100 makes World 1 Stage 1 unfarmable, so a brand-new account cannot start.
+ *
+ * What resolves it is that the two ends want different levers. `BASE_HP` at 2000 carries the
+ * opening; this carries everything after. Phase 1 lacked that split because it was tuning a
+ * solo Hero, where the two are the same number.
+ *
+ * ## What it cost
+ *
+ * Damage is now a real constraint, and the campaign is correspondingly shorter: a party of 3
+ * falls from P4 W3S6 / 4 prestiges to **P2 W2S6 / 2 prestiges**, and grind time rises from
+ * 4d 0h to 4d 13h. Chosen deliberately over 25 (3 prestiges, 3d 7h) and 50 (3 prestiges,
+ * 2d 22h), both of which are also safe at `BASE_HP` 2000 if this proves too punishing.
+ *
+ * Note `BASE_ENEMY_PWR` remains the wrong lever for this: mitigation clamps to 100% the moment
+ * enemy PWR drops under `heroDef / K`, flipping the party from fragile to immortal with nothing
+ * in between.
  */
-export const HP_PER_VIT = 200 // UNTUNED ╧
+export const HP_PER_VIT = 10 // UNTUNED ╧
 
 // ── Attack rate ────────────────────────────────────  basic attacks only
 
@@ -510,7 +540,15 @@ export const CHAMPION_INVESTMENT_PER_POINT = 0.05 // UNTUNED ╧
 
 // ── XP ─────────────────────────────────────────────
 
-export const XP_BASE_PER_KILL = 10 // UNTUNED ╧
+/**
+ * Re-denominated 10 → 1 by the session-1 playtest, together with `XP_TO_LEVEL_BASE` below.
+ *
+ * The pair moves together or not at all: level pace, level count and wall position are all set
+ * by the **ratio** of XP earned to XP required, so dividing both by ten is provably neutral —
+ * a pure change of units. Nothing about the run moves; the displayed numbers are one order of
+ * magnitude smaller at every depth.
+ */
+export const XP_BASE_PER_KILL = 1 // UNTUNED ╧
 
 /**
  * xpToNextLevel(level) = XP_TO_LEVEL_BASE × XP_TO_LEVEL_GROWTH^(level-1)
@@ -521,7 +559,28 @@ export const XP_BASE_PER_KILL = 10 // UNTUNED ╧
  *
  * Declared ahead of the XP-income constants because `XP_STEP_EXPONENT` is derived from it.
  */
-export const XP_TO_LEVEL_BASE = 100 // UNTUNED ╧
+/** Re-denominated 100 → 10 with `XP_BASE_PER_KILL`. See its note — the two move as a pair. */
+export const XP_TO_LEVEL_BASE = 10 // UNTUNED ╧
+
+/**
+ * ⚠ **Not the lever for "XP numbers are too big", despite being the obvious candidate.**
+ *
+ * The session-1 playtest asked for smaller XP numbers and this looks like the dial, since it is
+ * what makes them climb. It is the wrong one: cheaper levels mean *more* levels, so lowering it
+ * makes the displayed **level** larger while lengthening the run. Swept on the campaign report:
+ *
+ *     1.16 (here)   P2 W8S6   level 1,025   2 prestiges   3d 11h grind
+ *     1.12          P3 W2S6   level 1,185   3 prestiges   5d 9h
+ *     1.08          P3 W10S6  level 1,505   3 prestiges   9d 17h
+ *     1.06          P4 W7S6   level 1,785   4 prestiges   11d 9h
+ *
+ * `XP_STEP_EXPONENT` below is derived from this and does compensate — but for XP *income*, not
+ * for the level count, which is why the pace does not simply self-preserve. The re-denomination
+ * on `XP_TO_LEVEL_BASE` is what addresses the legibility complaint; this stays put.
+ *
+ * Worth keeping in view for a different question: the same sweep shows lower growth buys 4
+ * prestiges instead of 2 out of the identical curve, so this **is** the dial for *run length*.
+ */
 export const XP_TO_LEVEL_GROWTH = 1.16 // UNTUNED ╧
 
 /**

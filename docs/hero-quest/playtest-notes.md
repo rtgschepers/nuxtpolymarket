@@ -36,18 +36,21 @@ Forge — couldn't tell which of two pieces was better
 
 The campaign sim (`bun run sim:hero-quest --report=campaign`) projects the run below. It projects *what the formulas say* — the value of playing is finding where lived experience departs from it.
 
-| Prediction | Value |
-|---|---|
-| **Grind wall** | P2 W8S6 (elite) — level 1,025, needs 1,039 |
-| Why it stalls | 1.1 days farming W8S4, against a 1.0-day budget |
-| Prestiges reached | 2 |
-| Hero level, start → end | 1 → 1,025 |
-| Total time | 3d 13h — 2h 2m fighting, 3d 11h grinding |
-| Gold earned | 91,572,455 |
-| Live Gold/hr from W1S1 | 2.46K (8.28s/kill) |
-| One-hour settle from a fresh account | reaches level 24, blocked at a boss |
+**Current, after the session-1 HP change.** Run both — the solo figure is what a brand-new account experiences, and the two now diverge sharply.
 
-**The single most valuable data point in a session is reaching P2 W8S6 and seeing whether it walls where and how the sim says.** If it feels *worse* than projected, the other power sources — Champions, Gear, Skills, Artifacts — are not carrying what the model thinks they carry, which is a larger finding than any individual constant.
+| Prediction | Solo Hero (`--party=1`) | Party of 3 (`--party=3`) |
+|---|---|---|
+| **Grind wall** | P1 W1S6 (elite) | P2 W2S6 (elite) |
+| Level at the wall | 410, needs 427 | 808, needs 825 |
+| Prestiges reached | 1 | 2 |
+| Total time | 3d 6h — 1h 9m fighting | 4d 14h — 49m fighting |
+| Gold earned | 19,481,007 | 61,518,656 |
+| Live Gold/hr from W1S1 | 2.46K (8.28s/kill) | — |
+| One-hour settle, fresh account | reaches level 24, blocked at a boss | — |
+
+**Pre-session-1 baseline, for comparison:** P2 W8S6, level 1,025, 2 prestiges, 3d 13h, 91.6M Gold solo — and P4 W3S6, level 1,567, 4 prestiges with a party. The HP cut roughly halved the run at both ends. That was the accepted price of making damage matter; **whether it reads as "tense" or "truncated" is the single most important thing to judge in session 2.**
+
+**The most valuable data point is reaching the wall and seeing whether it walls where and how the sim says.** If it feels *worse* than projected, the other power sources — Champions, Gear, Skills, Artifacts — are not carrying what the model thinks they carry, which is a larger finding than any individual constant.
 
 ---
 
@@ -96,4 +99,53 @@ Append below. Newest session at the bottom. Anything goes.
 - Hero level progression pace feels like, but the numbers feel a bit high. Lower everything by a factor of 10.
 - I currently start out with 1 gacha pull for each gacha (I guess this resets daily to one). I want the players to 
   start out with enough seals for a 10-pull
-- The gacha pages are very cluttered at the moment. Move all gacha's to one gacha page and place them in a 2x2 square 
+- The gacha pages are very cluttered at the moment. Move all gacha's to one gacha page and place them in a 2x2 
+  square. Also for each gacha add an information icon which shows its specific drop rates for all level when clicked.
+- Collections should be moved to a generic collections page with a submenu per collection. There each collection 
+  should firstly be sorted by rarity, then archetype. Add filters where it makes sense.
+- A new player currently has no idea what each skill of stat means. Add more information icons, and also definitely 
+  add a wiki page like some other games have.
+- In the collections, instead of the word dupes add a small progress bar
+
+#### Decisions taken on the above — 2026-08-17
+
+Resolved item by item rather than assumed. Where a decision goes against something already written down, that is called out, because #1 and #2 both do.
+
+**1 — HP. ✅ Applied.** `HP_PER_VIT` 200 → 10 **and `BASE_HP` 100 → 2000.** The second constant was not requested and is what makes the first one safe.
+
+The sim confirmed the observation outright and then blocked the naive fix:
+
+- **The complaint is real and larger than reported.** `HP_PER_VIT` at 100 and at 200 produce byte-identical campaigns — same wall, same level, same prestige count, solo *and* with a party. The top half of the old value was doing nothing whatsoever.
+- **A straight cut breaks a fresh account.** Phase 1's derivation still reproduces: at `HP_PER_VIT` 10 with `BASE_HP` at 100, a level-1 solo Hero cannot clear World 1 Stage 1 and the run is unfarmable from the first screen. A new account *is* solo, so this was a hard blocker rather than a theoretical one.
+- **`BASE_HP` resolves it because it is flat.** It dominates at level 1 and is arithmetic noise once VIT has compounded — a party of 3 walls at exactly P2 W2S6 / level 808 for every value from 1000 to 8000. So it carries the opening while `HP_PER_VIT` governs everything after. Phase 1 could not see this split because it was tuning a solo Hero, where the two ends are the same number.
+
+Chosen over the two safer options at `BASE_HP` 2000: `HP_PER_VIT` 25 (3 prestiges, 3d 7h) and 50 (3 prestiges, 2d 22h). Both remain available if ÷20 proves too punishing.
+
+Also still true and worth re-checking in play: mitigation is `min(1, DEF / (PWR × K))` with damage floored at `MIN_DAMAGE`, so **if the party has clamped to 100% mitigation, enemies deal 1 per hit regardless of pool size** and no HP change addresses it. The sim says HP was genuinely the binding issue here, but that is a model result — confirm it by actually taking damage next session.
+
+**Four specs broke and were repaired rather than re-pinned.** Three encoded party durability against the old HP (`fight.spec` needed level 80 rather than 30 to reach the boss timer without wiping; `settle.spec`'s elite gate needed 80 rather than 40; the "unreachable wipe" threshold came from 1000 stage clears to 100, with the level-200 fixture kept). The fourth was more interesting: `applyXp`'s remainder spec hard-coded an overshoot of 25, which was a quarter of a level at `XP_TO_LEVEL_BASE` 100 and **more than two whole levels** at 10 — it had been asserting "overshoot by a bit" while supplying something else entirely, and only passed because the two coincided at the original base. It is now expressed as a fraction of the level's own price and survives any future re-denomination.
+
+**2 — XP. ✅ Applied.** `XP_TO_LEVEL_BASE` 100 → 10 and `XP_BASE_PER_KILL` 10 → 1. A pure re-denomination: level pace, level count and wall position are all set by the *ratio* of the two, so dividing both is provably neutral. Confirmed empirically as well as on paper — the post-change campaign lands on exactly the levels (410 solo, 808 party) that the HP sweep produced while still running the old XP constants.
+
+**Rejected: lowering `XP_TO_LEVEL_GROWTH`.** It was the intuitive lever and it is the wrong one — cheaper levels mean *more* levels, so it works against the stated goal. Swept, campaign report:
+
+| `XP_TO_LEVEL_GROWTH` | Wall | Level | Prestiges | Grind |
+|---|---|---|---|---|
+| 1.16 (current) | P2 W8S6 | 1,025 | 2 | 3d 11h |
+| 1.12 | P3 W2S6 | 1,185 | 3 | 5d 9h |
+| 1.08 | P3 W10S6 | 1,505 | 3 | 9d 17h |
+| 1.06 | P4 W7S6 | 1,785 | 4 | 11d 9h |
+
+`XP_STEP_EXPONENT` is derived from the growth and compensates for XP *income*, not for the level count — which is why the pace does not self-preserve here. Worth keeping: the sweep also shows lower growth buys 4 prestiges instead of 2 out of the same curve, so it is a real lever for *run length* if that ever becomes the question.
+
+**3 — Free pulls.** `SEAL_GRANT_AMOUNT` 1 → 9, so the daily grant is a free 10-pull (a 10-pull costs 9). Plus **2 further free 10-pulls per day per gacha**, as a true entitlement that must be spent as a 10-pull rather than as bankable Seals, unlocking on a 30-minute cooldown after each claim. Needs its own column and clock; the lazy-grant pattern in `dueSealGrants` is the shape to follow, so no cron.
+
+⚠ **Consequence to watch next session:** this takes a gacha from 1 pull/day to 9 Seals plus 30 free pulls/day — around 120× the pull volume, ×4 systems. The collection curve, Essence income and crafting economy all move with it.
+
+**4 — Gacha pages.** All four collapse to one page, 2×2. Each gets an info icon opening its drop rates across all 10 gacha levels.
+
+**5 — Collections.** Own page with a submenu per collection. Sorted rarity **low→high**, then the system's own second axis (`archetype` for Champions, `slot` for Gear, active/passive for Skills, `category` for Artifacts). Unowned stay inline as locked `???`. Filters where they make sense. **Equipping moves here** — each collection shows its equipped slots above the grid, which is what frees the gacha page to be pull-only.
+
+**6 — Wiki.** Static explainer (stats, damage/mitigation/crit, currencies, gacha/dupe/star, prestige) *plus* a reference section generated from the content modules, so it cannot go stale while ~99 constants are still moving.
+
+**7 — Dupes.** Progress bar with the count inside it, replacing the word.

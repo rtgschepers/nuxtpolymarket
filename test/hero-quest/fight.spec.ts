@@ -89,8 +89,11 @@ describe('hero-quest seeded fights', () => {
         })
 
         it('times out at exactly the boss timer, never past it', () => {
-            // Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s.
-            const result = runFight({ hero: hero(30), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+            // Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s —
+            // and now also enough HP to still be standing at 30s, which is the narrow part.
+            // The window is genuinely narrow after the session-1 HP cut: level 50 wipes at 24s,
+            // level 120 wins in 5s. Level 80 is the band where neither side resolves it.
+            const result = runFight({ hero: hero(80), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
             expect(result.outcome).toBe('timeout')
             expect(result.secondsElapsed).toBe(BOSS_TIMER_SECONDS)
             expect(D(result.enemyHpRemaining).gt(0)).toBe(true)

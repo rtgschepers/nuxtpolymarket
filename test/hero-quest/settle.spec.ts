@@ -268,12 +268,18 @@ describe('hero-quest settle', () => {
             // defender still takes chip damage, so every party dies *eventually*.
             //
             // What makes the wipe unreachable is measured against the **stage**, not against
-            // a wall-clock figure: an over-levelled party clears the 30 kills thousands of
+            // a wall-clock figure: an over-levelled party clears the 30 kills hundreds of
             // times over before dropping. A raw seconds threshold would also be a hidden
             // assertion about pack size, since packs scale survival by `1/streams(N)`.
+            //
+            // The multiplier is a proxy for "unreachable", not a measured quantity, and it
+            // came down from 1000 to 100 with the session-1 HP cut — this fixture now survives
+            // 377 full clears rather than 1000+. Still unreachable by any playable standard;
+            // the level-200 fixture is kept rather than inflated to chase the old number,
+            // since the claim under test is about the shape, not the magnitude.
             const survives = secondsToDie(units, enemy)
             expect(Number.isFinite(survives)).toBe(true)
-            expect(wipeCount(at(1, 1), 200)).toBeGreaterThan(BASE_KILL_COUNT * 1000)
+            expect(wipeCount(at(1, 1), 200)).toBeGreaterThan(BASE_KILL_COUNT * 100)
         })
 
         it('holds the stage instead of advancing when the party cannot outlast it', () => {
@@ -360,10 +366,11 @@ describe('hero-quest settle', () => {
 
         it('gates Stage 10 the same way it gates Stage 5', () => {
             // Needs a leveled hero: a level-1 Beginner cannot scratch a Stage 9 elite (below),
-            // and below level 35 it cannot outlast a full elite stage attempt either — six
-            // elites per encounter is a much heavier incoming stream than one.
+            // and below level 80 it cannot outlast a full elite stage attempt either — six
+            // elites per encounter is a much heavier incoming stream than one. That threshold
+            // was 35 before the session-1 HP cut took `HP_PER_VIT` from 200 to 10.
             const result = settle(input({
-                hero: { ...hero, heroLevel: 40 },
+                hero: { ...hero, heroLevel: 80 },
                 position: at(1, 9, BASE_KILL_COUNT - 1),
                 elapsedSeconds: 8 * 3600
             }))
@@ -541,9 +548,16 @@ describe('hero-quest settle', () => {
         })
 
         it('carries the remainder forward instead of dropping it', () => {
-            const result = applyXp(1, ZERO, xpToNextLevel(1).add(25))
+            // Expressed as a fraction of level 2's own price rather than as a literal, so it
+            // stays a *partial* level under any re-denomination of the XP curve. A hard-coded
+            // 25 was a quarter of a level at `XP_TO_LEVEL_BASE` 100 and more than two whole
+            // levels once session 1 took it to 10 — so the spec had been asserting "overshoot
+            // by a bit" while actually supplying "overshoot by two levels", and only passed
+            // because the two happened to coincide at the original base.
+            const remainder = xpToNextLevel(2).div(4)
+            const result = applyXp(1, ZERO, xpToNextLevel(1).add(remainder))
             expect(result.level).toBe(2)
-            expect(result.xp.toNumber()).toBeCloseTo(25, 6)
+            expect(result.xp.toNumber()).toBeCloseTo(remainder.toNumber(), 6)
         })
 
         it('respects XP already banked toward the next level', () => {
