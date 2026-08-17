@@ -192,6 +192,45 @@ export const useHeroQuest = () => {
         return call('/api/hero-quest/loadout/apply', { slotIndex }, 'Loadout applied')
     }
 
+    /**
+     * The playtest harness (`server/utils/hero-quest-dev.ts`) — **development only.**
+     *
+     * Guarded twice on purpose. `devMode` hides the tab and the page, and the routes themselves
+     * 404 outside dev regardless of what the client believes. The client guard is a convenience;
+     * the server guard is the security boundary, and neither is trusted to do the other's job.
+     */
+    const devMode = import.meta.dev
+
+    interface SkipResult {
+        chunksRun: number
+        kills: number
+        goldEarned: number
+        levelsGained: number
+        blockedAtBoss: boolean
+        world: number
+        stage: number
+        heroLevel: number
+    }
+
+    const dev = {
+        /** Settle `hours` as one offline window, or as consecutive presence-length ones. */
+        skip: (hours: number, mode: 'offline' | 'online') =>
+            call<SkipResult>('/api/hero-quest/dev/skip', { hours, mode }, '').then(async (res) => {
+                await fetchSession()
+                return res
+            }),
+        grant: (body: Record<string, number>) =>
+            call('/api/hero-quest/dev/grant', body, 'Granted').then(async (res) => {
+                await fetchSession()
+                return res
+            }),
+        unlock: (body: Record<string, unknown>) =>
+            call('/api/hero-quest/dev/unlock', body, 'Collection unlocked'),
+        set: (body: Record<string, unknown>) =>
+            call('/api/hero-quest/dev/set', body, 'Run moved'),
+        reset: () => call('/api/hero-quest/dev/reset', {}, 'Hero Quest wiped')
+    }
+
     // Gold accrues into the shared balance on every settle, so the header has to follow it.
     let timer: ReturnType<typeof setInterval> | null = null
     onMounted(() => {
@@ -235,6 +274,8 @@ export const useHeroQuest = () => {
         buySeals,
         setLoadout,
         saveLoadout,
-        applyLoadout
+        applyLoadout,
+        devMode,
+        dev
     }
 }

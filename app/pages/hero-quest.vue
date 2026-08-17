@@ -11,7 +11,12 @@ const tabs = [
   { label: 'Training', to: '/hero-quest/training', icon: 'i-lucide-dumbbell' },
   { label: 'Dig-site', to: '/hero-quest/dig-site', icon: 'i-lucide-pickaxe' },
   { label: 'Loadouts', to: '/hero-quest/loadouts', icon: 'i-lucide-layout-grid' },
-  { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' }
+  { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' },
+  // The playtest harness. Dev builds only — the routes behind it 404 in production regardless,
+  // so this is the convenience half of a guard whose real half lives on the server.
+  ...(import.meta.dev
+    ? [{ label: 'Dev', to: '/hero-quest/dev', icon: 'i-lucide-flask-conical' }]
+    : [])
 ]
 
 const activeTab = computed(() => route.path)
