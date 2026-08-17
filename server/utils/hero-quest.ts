@@ -39,12 +39,14 @@ import {
     craftCostFor,
     dropRatesFor,
     dupesToLevelUp,
+    freePullState,
     investmentScalar,
     isMaxed,
     ladderDateKey,
     pullCost,
     pullsToNextLevel,
     sealLadderPrice,
+    type FreePullState,
     type GachaSystem
 } from '#shared/utils/hero-quest/gacha'
 import {
@@ -705,6 +707,8 @@ export interface GachaCommonPayload {
     tenPullCost: number
     sealsBoughtToday: number
     nextSealPrice: number
+    /** Today's free 10-pull entitlement: whether one is ready, and when the next unlocks. */
+    freePull: FreePullState
 }
 
 /**
@@ -791,7 +795,18 @@ export function serializeGachaCommon(state: HqStateRow, system: GachaSystem): Ga
     const gachaLevel = levels[system] ?? 1
     const bought = sealsBoughtToday(state, system)
 
+    // The same pure function the pull route enforces with and the client counts down against,
+    // so what the button says and what the server allows cannot drift apart.
+    const claimedAt = (state.freePullClaimedAt as Record<string, string>)[system]
+    const lastClaim = claimedAt ? Date.parse(claimedAt) : Number.NaN
+    const freePull = freePullState(
+        (state.freePullsUsedToday as Record<string, number>)[system] ?? 0,
+        state.freePullDate,
+        Number.isFinite(lastClaim) ? lastClaim : null
+    )
+
     return {
+        freePull,
         system,
         label: gachaContent(system).label,
         seals: sealBalance(state, system),
@@ -1189,6 +1204,72 @@ export function serializeClassTree(state: HqStateRow) {
         pickable: pickable.has(node.id),
         current: node.id === state.heroNodeId
     }))
+}
+
+/**
+ * Spend one of today's free 10-pull entitlements. **Lock-then-read**, and it has to be.
+ *
+ * Availability is a function of three coupled values — the per-system counter, the day key that
+ * resets it, and the last claim time — so there is no single column to conditionally decrement
+ * the way the Seal path does. The platform guidance's pattern B covers exactly this: take
+ * `SELECT … FOR UPDATE`, read *inside* the lock, and write before releasing it. A read taken
+ * before the lock would be stale, and two concurrent claims would both see the same entitlement
+ * and both spend it — the same shape that once paid out ten rakeback claims.
+ *
+ * A conditional `UPDATE` on the claim timestamp is specifically **not** an option: Postgres
+ * stores microseconds and a JS `Date` only milliseconds, so a `WHERE claimed_at = <what I read>`
+ * guard matches zero rows and fails closed forever.
+ *
+ * Lives here rather than in the route so the race is testable against a real lock — the
+ * concurrency behaviour *is* the design, and a guard nobody can burst is a guard nobody has
+ * checked.
+ */
+export async function claimFreePull(
+    tx: DbExecutor,
+    userId: string,
+    system: GachaSystem,
+    now = Date.now()
+): Promise<HqStateRow> {
+    const [locked] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
+    if (!locked) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run' })
+
+    const used = locked.freePullsUsedToday as Record<string, number>
+    const claimedAt = locked.freePullClaimedAt as Record<string, string>
+
+    const parsed = claimedAt[system] ? Date.parse(claimedAt[system]!) : Number.NaN
+    const state = freePullState(
+        used[system] ?? 0,
+        locked.freePullDate,
+        Number.isFinite(parsed) ? parsed : null,
+        now
+    )
+
+    if (!state.available) {
+        const waitMinutes = Math.ceil(((state.unlocksAt ?? now) - now) / 60_000)
+        throw createError({
+            statusCode: 400,
+            statusMessage: state.remaining > 0
+                ? `Next free 10-pull in ${waitMinutes} min`
+                : 'No free 10-pulls left today'
+        })
+    }
+
+    const today = ladderDateKey(now)
+    const [consumed] = await tx.update(hqState)
+        .set({
+            freePullDate: today,
+            // On a day rollover every system's counter is stale, so the map is rebuilt rather
+            // than spread — carrying yesterday's other-system counts forward would silently eat
+            // today's allowance for gachas this request never touched.
+            freePullsUsedToday: locked.freePullDate === today
+                ? { ...used, [system]: state.used + 1 }
+                : { [system]: state.used + 1 },
+            freePullClaimedAt: { ...claimedAt, [system]: new Date(now).toISOString() }
+        })
+        .where(eq(hqState.userId, userId))
+        .returning()
+
+    return consumed ?? locked
 }
 
 /** Bump a shop track by exactly one level, or return null if someone else got there first. */

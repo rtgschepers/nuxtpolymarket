@@ -18,6 +18,8 @@ import {
     DUPE_LEVEL_CAP,
     DUPE_LEVEL_FACTOR,
     ESSENCE_VALUE_PER_RARITY,
+    FREE_PULLS_PER_DAY,
+    FREE_PULL_COOLDOWN_MINUTES,
     LEVELS_PER_STAR,
     MAX_GACHA_LEVEL,
     MAX_STAR,
@@ -234,6 +236,70 @@ export function sealLadderPrice(system: GachaSystem, boughtToday: number): numbe
  */
 export function ladderDateKey(now: number | Date = Date.now()): string {
     return new Date(now).toISOString().slice(0, 10)
+}
+
+/** First instant of the next UTC day — when every daily counter in the game rolls over. */
+export function nextDayResetAt(now: number = Date.now()): number {
+    return Date.UTC(
+        new Date(now).getUTCFullYear(),
+        new Date(now).getUTCMonth(),
+        new Date(now).getUTCDate() + 1
+    )
+}
+
+export interface FreePullState {
+    /** How many of today's free 10-pulls are already spent, after the day-rollover reset. */
+    used: number
+    remaining: number
+    /** True when one can be taken right now. */
+    available: boolean
+    /**
+     * When the next one becomes takeable, ms epoch — **null exactly when `available` is true.**
+     *
+     * One value rather than separate cooldown and reset fields, because the client only ever
+     * asks "when can I pull again" and answering it needs both: today's allowance can be spent
+     * while the cooldown is also still running, and the later of the two is what actually gates.
+     */
+    unlocksAt: number | null
+}
+
+/**
+ * Whether a free 10-pull is available for one gacha, and when the next one is.
+ *
+ * Pure, so the countdown the client renders and the check the server enforces are the same
+ * function rather than two implementations that drift. The server still owns the decision — this
+ * being pure is what makes it *shareable*, not what makes it trusted.
+ *
+ * Two independent gates, and both have to pass:
+ *
+ * - **The daily allowance**, keyed on a `YYYY-MM-DD` string exactly like the Gold ladder. A
+ *   stored counter from a previous day reads as zero rather than being migrated, so nothing has
+ *   to run at midnight — the same reason the ladder does it this way.
+ * - **The cooldown since the last claim**, which deliberately carries *across* the day boundary.
+ *   Claiming at 23:59 does not hand you another at 00:00; the gap is always the full interval,
+ *   which is what stops the reset being farmable by timing.
+ */
+export function freePullState(
+    usedToday: number,
+    dateKey: string | null,
+    lastClaimedAtMs: number | null,
+    now: number = Date.now()
+): FreePullState {
+    const used = dateKey === ladderDateKey(now) ? Math.max(0, Math.floor(usedToday)) : 0
+    const remaining = Math.max(0, FREE_PULLS_PER_DAY - used)
+
+    const readyAt = lastClaimedAtMs === null
+        ? 0
+        : lastClaimedAtMs + FREE_PULL_COOLDOWN_MINUTES * 60_000
+
+    if (remaining > 0 && now >= readyAt) {
+        return { used, remaining, available: true, unlocksAt: null }
+    }
+
+    // Out of allowance waits for the rollover; in-allowance waits for the cooldown. When both
+    // are pending the later one gates, which is why this is a max rather than a branch.
+    const unlocksAt = remaining > 0 ? readyAt : Math.max(nextDayResetAt(now), readyAt)
+    return { used, remaining, available: false, unlocksAt }
 }
 
 /**

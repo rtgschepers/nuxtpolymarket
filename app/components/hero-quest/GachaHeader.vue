@@ -27,6 +27,12 @@ const props = defineProps<{
         tenPullCost: number
         sealsBoughtToday: number
         nextSealPrice: number
+        freePull: {
+            used: number
+            remaining: number
+            available: boolean
+            unlocksAt: number | null
+        }
     }
     /** Player-facing name of this gacha's pull currency. */
     sealName: string
@@ -37,11 +43,36 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     pull: [count: 1 | 10]
+    freePull: []
     buySeals: []
 }>()
 
 const { user } = useAuth()
 const goldBalance = computed(() => parseFloat(user.value?.balance ?? '0'))
+
+/**
+ * A ticking clock, so the cooldown counts down instead of sitting stale until the next poll.
+ *
+ * Local only — it drives the *label*, never the decision. The button's enabled state comes from
+ * the server's `available` flag, and the route re-checks with the same pure function under a row
+ * lock, so a client whose clock is wrong or tampered with gets a 400 rather than a free pull.
+ */
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | null = null
+onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 1000) })
+onUnmounted(() => { if (ticker) clearInterval(ticker) })
+
+const countdown = computed(() => {
+    const at = props.gacha.freePull.unlocksAt
+    if (props.gacha.freePull.available || at === null) return null
+
+    const seconds = Math.max(0, Math.ceil((at - now.value) / 1000))
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return hours > 0 ? `${hours}h ${pad(minutes)}m` : `${pad(minutes)}:${pad(secs)}`
+})
 </script>
 
 <template>
@@ -80,7 +111,30 @@ const goldBalance = computed(() => parseFloat(user.value?.balance ?? '0'))
         </div>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        <!--
+          The free 10-pull sits first and stays visible while on cooldown rather than vanishing —
+          a button that disappears reads as a bug, and the countdown is the point of the mechanic.
+        -->
+        <UButton
+          v-if="props.gacha.freePull.available || countdown"
+          :disabled="props.busy || !props.gacha.freePull.available"
+          :color="props.gacha.freePull.available ? 'success' : 'neutral'"
+          :variant="props.gacha.freePull.available ? 'solid' : 'soft'"
+          icon="i-lucide-gift"
+          @click="emit('freePull')"
+        >
+          <template v-if="props.gacha.freePull.available">
+            Free 10-pull
+            <span
+              v-if="props.gacha.freePull.remaining > 1"
+              class="text-xs opacity-75"
+            >· {{ props.gacha.freePull.remaining }} left</span>
+          </template>
+          <template v-else>
+            Free in {{ countdown }}
+          </template>
+        </UButton>
         <UButton
           :disabled="props.busy || props.gacha.seals < props.gacha.singleCost"
           icon="i-lucide-dices"

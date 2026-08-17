@@ -131,6 +131,19 @@ export const useHeroQuest = () => {
         )
     }
 
+    /**
+     * Spend one of the day's free 10-pull entitlements.
+     *
+     * Same route as `pull`, because a free pull *is* a pull — only the payment differs, and the
+     * server decides whether one is owed. Count is not sent: the entitlement is always ten, and
+     * letting the client name a size would be letting it name a price.
+     */
+    async function freePull(system: GachaSystem) {
+        return call<{ pulls: PullRecord[]; essenceGained: number; gachaLevel: number; free: boolean }>(
+            '/api/hero-quest/gacha/pull', { system, free: true }, ''
+        )
+    }
+
     /** Spend a gacha's Essence on a specific item — the full RNG bypass. */
     async function craft(system: GachaSystem, contentId: string) {
         return call<{ name: string; isNew: boolean }>(
@@ -270,6 +283,7 @@ export const useHeroQuest = () => {
         pickClass,
         buyUpgrade,
         pull,
+        freePull,
         craft,
         buySeals,
         setLoadout,

@@ -15,7 +15,7 @@
  *   skills (§7). The class tree uses square icon slots; these use round ones.
  */
 
-const { initialized, training, pull, craft, buySeals, setLoadout } = useHeroQuest()
+const { initialized, training, pull, freePull, craft, buySeals, setLoadout } = useHeroQuest()
 
 const busy = ref(false)
 const lastPulls = ref<{ name: string; rarity: string; isNew: boolean; star: number; level: number; essence: number }[]>([])
@@ -41,6 +41,14 @@ function toggle(id: string) {
     else if (current.length < (training.value?.slotCount ?? 0)) current.push(id)
     else return
     draft.value = current
+}
+
+/** The daily entitlement. Always ten — the server owns the size, not the button. */
+async function takeFreePull() {
+    await withBusy(async () => {
+        const result = await freePull('skill')
+        lastPulls.value = result?.pulls ?? []
+    })
 }
 
 async function withBusy(action: () => Promise<unknown>) {
@@ -96,6 +104,7 @@ function asPercent(fraction: number) {
         essence-name="Skill Essence"
         :busy="busy"
         @pull="pullSkills"
+        @free-pull="takeFreePull"
         @buy-seals="buy"
       />
 

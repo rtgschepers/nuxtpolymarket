@@ -820,6 +820,28 @@ export const hqState = pgTable('hq_state', {
   sealLadderPurchasedToday: jsonb('seal_ladder_purchased_today').$type<Record<string, number>>().notNull().default({}),
   sealLadderDate: text('seal_ladder_date'),
 
+  /**
+   * Free 10-pull entitlements: how many of today's are spent per gacha, and one shared reset
+   * date — deliberately the same shape as the Gold ladder two fields up, since it answers the
+   * same question. Spending Champion entitlements must not touch the Skill allowance, which is
+   * why it is a per-system map rather than an integer.
+   *
+   * An entitlement is **not** Seals. It cannot be banked, split into singles, or spent on
+   * anything but a 10-pull, which is the whole point of it existing alongside the Seal grant.
+   */
+  freePullsUsedToday: jsonb('free_pulls_used_today').$type<Record<string, number>>().notNull().default({}),
+  freePullDate: text('free_pull_date'),
+
+  /**
+   * Last free-pull claim per gacha, ISO strings in a map rather than four timestamp columns.
+   *
+   * Stored as text on purpose. The cooldown is evaluated by *comparison* under a row lock, never
+   * by compare-and-swap — Postgres keeps microseconds a JS `Date` cannot, so a CAS on a real
+   * timestamp column matches zero rows and fails closed forever (the standing platform warning).
+   * Keeping these out of the column type makes that mistake harder to make later.
+   */
+  freePullClaimedAt: jsonb('free_pull_claimed_at').$type<Record<string, string>>().notNull().default({}),
+
   /** Free time-gated Seal grant clock. Null means never granted — the first settle pays out. */
   lastSealGrantAt: timestamp('last_seal_grant_at')
 }, t => [index('hq_state_userId_idx').on(t.userId)])

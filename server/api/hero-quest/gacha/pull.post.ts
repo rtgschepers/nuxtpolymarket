@@ -5,11 +5,13 @@ import { requireUserId } from '#server/utils/auth'
 import {
     SEAL_COLUMN,
     SEAL_NAME,
+    claimFreePull,
     essenceBalance,
     essenceGain,
     sealBalance,
     sealSpend,
-    settleHq
+    settleHq,
+    type HqStateRow
 } from '#server/utils/hero-quest'
 import {
     applyDupes,
@@ -18,7 +20,8 @@ import {
     newEntry,
     pullCost,
     rarityFromRoll,
-    type CollectionEntry
+    type CollectionEntry,
+    type GachaSystem
 } from '#shared/utils/hero-quest/gacha'
 import { gachaContent } from '#shared/utils/hero-quest/content/registry'
 import { autoEquipFirstPieces, isGearId } from '#shared/utils/hero-quest/content/gear'
@@ -39,6 +42,29 @@ interface PullRecord {
     essence: number
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * Pay for a pull with Seals. **Claim-then-reward** — the conditional debit *is* the mutex.
+ *
+ * The balance is decremented with a `WHERE <seals> >= cost`, so if no row comes back the request
+ * throws before a single die is rolled. Ten parallel pulls against one Seal: one wins, nine 400.
+ */
+async function claimWithSeals(tx: Tx, userId: string, system: GachaSystem, seals: number): Promise<HqStateRow> {
+    const [claimed] = await tx.update(hqState)
+        .set(sealSpend(system, seals))
+        .where(and(
+            eq(hqState.userId, userId),
+            sql`${SEAL_COLUMN[system]} >= ${seals}`
+        ))
+        .returning()
+
+    if (!claimed) {
+        throw createError({ statusCode: 400, statusMessage: `Not enough ${SEAL_NAME[system]}` })
+    }
+    return claimed
+}
+
 /**
  * Pull from any of the four gachas — `system` in the body (`tech-architecture.md` §5).
  *
@@ -50,18 +76,25 @@ interface PullRecord {
  * `SEAL_COLUMN` / `ESSENCE_COLUMN` in the domain layer cover the second, so everything below is
  * identical for all four by construction rather than by four files staying in sync.
  *
+ * ## Two ways to pay, one way to pull
+ *
+ * `free: true` spends one of the day's free 10-pull entitlements instead of Seals. Everything
+ * after the payment is byte-identical — same rarity roll, same dupe merge, same level bump, same
+ * auto-equip — because a free pull *is* a pull and only the payment differs. That is why this is
+ * a branch inside one route rather than a second route: duplicating it would mean two copies of
+ * the roll loop, which is precisely what §3's one-route rule exists to prevent.
+ *
  * ## Why the whole thing sits inside one transaction
  *
- * A pull reads a Seal balance, reads the gacha level, rolls an outcome, and writes three
- * different things (Seals, gacha level/progress, collection rows). Every one of those is a
+ * A pull reads a balance, reads the gacha level, rolls an outcome, and writes three different
+ * things (currency, gacha level/progress, collection rows). Every one of those is a
  * read-then-write, which is the exact shape the platform guidance calls "always a bug" — ten
- * parallel pulls would otherwise all read the same Seal balance, all pass the check, and all
- * pay out.
+ * parallel pulls would otherwise all read the same balance, all pass the check, and all pay out.
  *
- * The **conditional Seal debit is the guard** (claim-then-reward): the balance is decremented
- * with a `WHERE <seals> >= cost`, and if no row comes back the request throws before a single die
- * is rolled. Everything downstream — the roll, the dupe merge, the level bump — only runs for the
- * request that actually won the Seals.
+ * **The payment is the guard, and the two paths guard differently** — see `claimWithSeals`
+ * (claim-then-reward, the conditional debit is the mutex) and `claimFreePull` (lock-then-read,
+ * because availability is three coupled values and one of them is a timestamp). Either way,
+ * nothing downstream runs for a request that did not win the payment.
  *
  * ## Randomness
  *
@@ -71,14 +104,17 @@ interface PullRecord {
  */
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
-    const body = await readBody<{ system?: string; count?: number }>(event)
+    const body = await readBody<{ system?: string; count?: number; free?: boolean }>(event)
 
     const system = body?.system
     if (typeof system !== 'string' || !isGachaSystem(system)) {
         throw createError({ statusCode: 400, statusMessage: 'Unknown gacha' })
     }
     const content = gachaContent(system)
-    const requested = body?.count === TEN_PULL_SIZE ? TEN_PULL_SIZE : 1
+    // A free pull is always the full ten — the entitlement exists for the 10-pull moment, and
+    // letting it be spent as a single would quietly make it worth a ninth of itself.
+    const free = body?.free === true
+    const requested = free || body?.count === TEN_PULL_SIZE ? TEN_PULL_SIZE : 1
     const cost = pullCost(requested)
 
     // Bank progress first so the pull can't be used to dodge a settle, and so the Seals a
@@ -86,18 +122,9 @@ export default defineEventHandler(async (event) => {
     await settleHq(userId)
 
     return db.transaction(async (tx) => {
-        // Claim-then-reward. The debit is the mutex; nothing is rolled until it succeeds.
-        const [claimed] = await tx.update(hqState)
-            .set(sealSpend(system, cost.seals))
-            .where(and(
-                eq(hqState.userId, userId),
-                sql`${SEAL_COLUMN[system]} >= ${cost.seals}`
-            ))
-            .returning()
-
-        if (!claimed) {
-            throw createError({ statusCode: 400, statusMessage: `Not enough ${SEAL_NAME[system]}` })
-        }
+        const claimed = free
+            ? await claimFreePull(tx, userId, system)
+            : await claimWithSeals(tx, userId, system, cost.seals)
 
         const levels = claimed.gachaLevels as Record<string, number>
         const progress = claimed.gachaProgress as Record<string, number>
@@ -190,7 +217,9 @@ export default defineEventHandler(async (event) => {
         return {
             system,
             pulls,
-            sealsSpent: cost.seals,
+            /** True when this came out of the daily entitlement rather than the Seal balance. */
+            free,
+            sealsSpent: free ? 0 : cost.seals,
             seals: sealBalance(after, system),
             essence: essenceBalance(after, system),
             gachaLevel: advanced.level,

@@ -14,7 +14,7 @@
  *    earned — and the badge exists so that gap is never hidden, only left for them to close.
  */
 
-const { initialized, forge, pull, craft, buySeals, setLoadout } = useHeroQuest()
+const { initialized, forge, pull, freePull, craft, buySeals, setLoadout } = useHeroQuest()
 
 const busy = ref(false)
 const lastPulls = ref<{ name: string; rarity: string; isNew: boolean; star: number; level: number; essence: number }[]>([])
@@ -28,6 +28,14 @@ function piecesFor(slot: string) {
     return (forge.value?.roster ?? [])
         .filter(entry => entry.slot === slot && entry.owned)
         .sort((a, b) => b.equippedBonus - a.equippedBonus)
+}
+
+/** The daily entitlement. Always ten — the server owns the size, not the button. */
+async function takeFreePull() {
+    await withBusy(async () => {
+        const result = await freePull('gear')
+        lastPulls.value = result?.pulls ?? []
+    })
 }
 
 async function withBusy(action: () => Promise<unknown>) {
@@ -93,6 +101,7 @@ function asPercent(fraction: number) {
         essence-name="Gear Essence"
         :busy="busy"
         @pull="pullGear"
+        @free-pull="takeFreePull"
         @buy-seals="buy"
       />
 

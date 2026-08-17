@@ -842,12 +842,35 @@ export const FORMATION_ROW_CAPACITY = 3
 export const CHAMPION_PASSIVE_PER_POINT = 0.002 // UNTUNED ╧
 
 /**
- * Free Seal grant: one of each type per real-time interval, bankable up to a cap
+ * Free Seal grant: a batch of each type per real-time interval, bankable up to a cap
  * (`economy-and-currencies.md` §5). Deliberately *not* a stage-clear drop — keeping Seals
  * discrete is what preserves "buy extra Seals with Gold" as a genuine choice.
+ *
+ * Raised 1 → `TEN_PULL_COST` by the session-1 playtest. The old value gave a new account a
+ * single pull per gacha per day, which the playtest reported as the opening being unable to
+ * demonstrate its own core loop. Tied to the 10-pull price rather than written as a literal 9,
+ * so the grant stays "exactly one free 10-pull" if that price ever moves.
  */
 export const SEAL_GRANT_INTERVAL_HOURS = 24 // UNTUNED ╧
-export const SEAL_GRANT_AMOUNT = 1 // UNTUNED ╧
+export const SEAL_GRANT_AMOUNT = TEN_PULL_COST // UNTUNED ╧
+
+/**
+ * Free 10-pulls on top of the daily Seal grant, per gacha, per day (session-1 playtest).
+ *
+ * A **true entitlement, not Seals**: it must be spent as a 10-pull and cannot be banked or split
+ * into singles. That is the deliberate difference from `SEAL_GRANT_AMOUNT` above — Seals are
+ * fungible and this is not, because the point is the 10-pull *moment* rather than the pull count.
+ *
+ * The cooldown gates the gap between claims, so an active player collects all of them inside an
+ * hour and an idle one still finds them waiting. It is a re-engagement hook on a game whose whole
+ * premise is not having to re-engage — worth watching in play, since that tension is real.
+ *
+ * ⚠ Together with the grant above this takes a gacha from 1 pull/day to 9 Seals plus 20 free
+ * pulls/day — roughly 30× the volume, ×4 systems. The collection curve, Essence income and the
+ * crafting economy all move with it, and none of them has been re-derived since.
+ */
+export const FREE_PULLS_PER_DAY = 2 // UNTUNED ╧
+export const FREE_PULL_COOLDOWN_MINUTES = 30 // UNTUNED ╧
 export const SEAL_GRANT_BANK_CAP_DAYS = 7 // UNTUNED ╧
 
 /**

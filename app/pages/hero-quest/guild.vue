@@ -8,7 +8,7 @@
  * saved.
  */
 
-const { initialized, guild, pull, craft, buySeals, setLoadout } = useHeroQuest()
+const { initialized, guild, pull, freePull, craft, buySeals, setLoadout } = useHeroQuest()
 const { user } = useAuth()
 
 const goldBalance = computed(() => parseFloat(user.value?.balance ?? '0'))
@@ -59,6 +59,31 @@ function toggleRow(id: string) {
 function resetDraft() {
     draftParty.value = null
     draftFormation.value = null
+}
+
+/** Ticks the cooldown label. Drives the text only; the server decides availability. */
+const now = ref(Date.now())
+let freeTicker: ReturnType<typeof setInterval> | null = null
+onMounted(() => { freeTicker = setInterval(() => { now.value = Date.now() }, 1000) })
+onUnmounted(() => { if (freeTicker) clearInterval(freeTicker) })
+
+const freeCountdown = computed(() => {
+    const at = guild.value?.freePull.unlocksAt
+    if (!guild.value || guild.value.freePull.available || at == null) return null
+
+    const seconds = Math.max(0, Math.ceil((at - now.value) / 1000))
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return hours > 0 ? `${hours}h ${pad(minutes)}m` : `${pad(minutes)}:${pad(seconds % 60)}`
+})
+
+/** The daily entitlement. Always ten — the server owns the size, not the button. */
+async function takeFreePull() {
+    await withBusy(async () => {
+        const result = await freePull('champion')
+        lastPulls.value = result?.pulls ?? []
+    })
 }
 
 async function withBusy(action: () => Promise<unknown>) {
@@ -142,7 +167,31 @@ async function buy() {
             </div>
           </div>
 
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
+            <!--
+              Guild predates `GachaHeader` and still renders its own pull row, so the free-pull
+              button is duplicated here rather than inherited. Finding 4 folds all four gachas
+              onto one page, which is what will delete this copy.
+            -->
+            <UButton
+              v-if="guild.freePull.available || freeCountdown"
+              :disabled="busy || !guild.freePull.available"
+              :color="guild.freePull.available ? 'success' : 'neutral'"
+              :variant="guild.freePull.available ? 'solid' : 'soft'"
+              icon="i-lucide-gift"
+              @click="takeFreePull"
+            >
+              <template v-if="guild.freePull.available">
+                Free 10-pull
+                <span
+                  v-if="guild.freePull.remaining > 1"
+                  class="text-xs opacity-75"
+                >· {{ guild.freePull.remaining }} left</span>
+              </template>
+              <template v-else>
+                Free in {{ freeCountdown }}
+              </template>
+            </UButton>
             <UButton
               :disabled="busy || guild.seals < guild.singleCost"
               icon="i-lucide-dices"

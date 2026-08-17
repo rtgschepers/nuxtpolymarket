@@ -138,9 +138,19 @@ Also still true and worth re-checking in play: mitigation is `min(1, DEF / (PWR 
 
 `XP_STEP_EXPONENT` is derived from the growth and compensates for XP *income*, not for the level count — which is why the pace does not self-preserve here. Worth keeping: the sweep also shows lower growth buys 4 prestiges instead of 2 out of the same curve, so it is a real lever for *run length* if that ever becomes the question.
 
-**3 — Free pulls.** `SEAL_GRANT_AMOUNT` 1 → 9, so the daily grant is a free 10-pull (a 10-pull costs 9). Plus **2 further free 10-pulls per day per gacha**, as a true entitlement that must be spent as a 10-pull rather than as bankable Seals, unlocking on a 30-minute cooldown after each claim. Needs its own column and clock; the lazy-grant pattern in `dueSealGrants` is the shape to follow, so no cron.
+**3 — Free pulls. ✅ Applied.** `SEAL_GRANT_AMOUNT` 1 → `TEN_PULL_COST`, so the daily grant is exactly one free 10-pull. Written as the constant rather than a literal 9, so the grant still means "a 10-pull" if that price ever moves. Plus **2 further free 10-pulls per day per gacha** as a true entitlement — spendable only as a 10-pull, never banked or split — on a 30-minute cooldown after each claim.
 
-⚠ **Consequence to watch next session:** this takes a gacha from 1 pull/day to 9 Seals plus 30 free pulls/day — around 120× the pull volume, ×4 systems. The collection curve, Essence income and crafting economy all move with it.
+Built as a **payment branch on `gacha/pull.post.ts`, not a second route.** A free pull *is* a pull: same rarity roll, same dupe merge, same level bump, same Gear auto-equip. Only the payment differs, and duplicating the route would have meant two copies of the roll loop — exactly what `CLAUDE.md` §3's one-route rule exists to prevent.
+
+**The two payment paths need different concurrency guards, which is the one genuinely interesting thing here.** Seals use claim-then-reward — the conditional `WHERE seals >= cost` debit *is* the mutex. Entitlements cannot: availability is three coupled values (the per-system counter, the day key that resets it, and the last claim time), so there is no single column to conditionally decrement. `claimFreePull` therefore uses lock-then-read — `SELECT … FOR UPDATE`, read inside the lock, write before releasing. A conditional update on the claim timestamp was specifically not an option, per the standing warning about microsecond-vs-millisecond CAS. It lives in `server/utils/hero-quest.ts` rather than the route so the race is testable: **10 concurrent claims resolve to exactly 1 winner and 9 rejections.**
+
+Storage mirrors the Gold ladder exactly — `freePullsUsedToday` (per-system map) + `freePullDate` (`YYYY-MM-DD`) + `freePullClaimedAt`. Nothing runs at midnight; a stale day key simply reads as zero. The cooldown deliberately carries *across* the day boundary so claiming at 23:59 does not hand out another at 00:00.
+
+One spec was wrong before the code was: it advanced a third claim by twenty cooldowns expecting a refusal, but twenty cooldowns is ten hours, which crosses UTC midnight and legitimately refills the allowance. Worth remembering that "long enough later" and "still today" are different questions here.
+
+⚠ **Consequence to watch next session:** this takes a gacha from 1 pull/day to 9 Seals plus 20 free pulls/day — roughly 30× the volume, ×4 systems. The collection curve, Essence income and the crafting economy all move with it and none has been re-derived.
+
+Note the Guild page predates `GachaHeader` and still renders its own pull row, so the free-pull button is duplicated there. Finding 4 folds all four gachas onto one page, which deletes that copy.
 
 **4 — Gacha pages.** All four collapse to one page, 2×2. Each gets an info icon opening its drop rates across all 10 gacha levels.
 
