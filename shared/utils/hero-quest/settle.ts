@@ -50,7 +50,7 @@ import {
     WAVE_PACK_SIZE
 } from './constants'
 import { attacksPerSecondFor, expectedIncomingDps, partyDps, targetingOrder } from './combat'
-import { partyUnitStats } from './stats'
+import { economyBonuses, partyUnitStats } from './stats'
 import {
     partyAbilityDps,
     projectAbilities,
@@ -314,6 +314,38 @@ export function rateAt(hero: HeroSnapshot, position: RunPosition): RateContext {
     return { abilities, units, pack, secondsPerKill: secondsPerKill(units, pack, hero) }
 }
 
+/**
+ * How many hours of the player's *current* income they are sitting on in banked Gold.
+ *
+ * The only input the Gambler's Strike family takes (`skills-gacha.md` §4¹). Lives here rather
+ * than on the server because it is arithmetic over the rate model, and both the server and the
+ * campaign sim need the same answer.
+ *
+ * ⚠ **Resolved against the wealth-neutral rate, deliberately — this is one fixed-point
+ * iteration, not a converged answer.** The quantity is self-referential: a wealth-scaled ability
+ * raises DPS, which raises Gold per hour, which lowers the banked-hours figure, which lowers the
+ * ability. Iterating to a fixed point would be exact and would also make every rate read in the
+ * game a loop. One pass, computed from a party whose wealth factor is 1.0, is stable, cheap and
+ * within a factor bounded by `WEALTH_FACTOR_MAX` of the converged answer — and the factor it
+ * feeds is clamped anyway. Stated rather than hidden.
+ */
+export function wealthHoursFor(
+    hero: HeroSnapshot,
+    position: RunPosition,
+    bankedGold: number
+): number {
+    if (!Number.isFinite(bankedGold) || bankedGold <= 0) return 0
+    // `wealthHours` stripped so the rate this is measured against cannot depend on itself.
+    const neutral: HeroSnapshot = { ...hero, wealthHours: undefined }
+    const { secondsPerKill: spk } = rateAt(neutral, position)
+    if (!Number.isFinite(spk) || spk <= 0) return 0
+
+    const perKill = goldPerKill(position.prestige, position.world, position.stage)
+    const goldPerHour = (3600 / spk) * perKill * (1 + economyBonuses(neutral).goldPct)
+    if (!Number.isFinite(goldPerHour) || goldPerHour <= 0) return 0
+    return bankedGold / goldPerHour
+}
+
 /** The same trick on the enemy side: shredded armour is just a softer pack. */
 export function debuffedPack(pack: EnemyPack, mods: AbilityModifiers): EnemyPack {
     if (mods.enemyDefFactor === 1 && mods.incomingFactor === 1) return pack
@@ -413,11 +445,18 @@ export function secondsToDie(
     units: readonly UnitStats[],
     pack: EnemyPack,
     /** Party healing per second, which extends every defender's life proportionally. */
-    healingPerSecond: Decimal = ZERO
+    healingPerSecond: Decimal = ZERO,
+    /**
+     * Flat damage-reduction factor from passive modifiers (Artifacts' Defense category, Skills'
+     * Adaptive Plating). Applied to the **finished** incoming number rather than to enemy PWR,
+     * because mitigation is non-linear in PWR: routing a flat reduction through the enemy's stat
+     * line would make a "−20% damage taken" line worth considerably more than 20%.
+     */
+    damageTakenFactor = 1
 ): number {
     let total = 0
     for (const unit of targetingOrder(units)) {
-        const raw = incomingDpsAgainst(pack, unit)
+        const raw = incomingDpsAgainst(pack, unit).mul(Math.max(0, damageTakenFactor))
         // Sustain is subtracted from the stream, floored so healing can never fully cancel it
         // — see `MAX_SUSTAIN_MITIGATION` for why an immortal projection is the failure mode.
         const incoming = sustainedIncoming(raw, healingPerSecond)
@@ -446,9 +485,10 @@ export function killsBeforeWipe(
     units: readonly UnitStats[],
     pack: EnemyPack,
     spk: number,
-    healingPerSecond: Decimal = ZERO
+    healingPerSecond: Decimal = ZERO,
+    damageTakenFactor = 1
 ): number {
-    const survives = secondsToDie(units, pack, healingPerSecond)
+    const survives = secondsToDie(units, pack, healingPerSecond, damageTakenFactor)
     if (!Number.isFinite(survives)) return Number.POSITIVE_INFINITY
     if (!Number.isFinite(spk) || spk <= 0) return 0
     return Math.floor(survives / spk)
@@ -555,6 +595,14 @@ export function offlineCapHours(level: number): number {
     return Math.min(OFFLINE_CAP_MAX_HOURS, OFFLINE_CAP_BASE_HOURS + OFFLINE_CAP_HOURS_PER_LEVEL * clamped)
 }
 
+/**
+ * `extraSources` is the additive offline-efficiency% Skills and Artifacts contribute — Tycoon's
+ * Vault, Emperor's Treasury, Night Owl.
+ *
+ * Still clamped at `MAX_OFFLINE_EFFICIENCY`, which matters: a maxed prestige-shop track is already
+ * at 100%, and letting content push past it would mint income out of nothing rather than
+ * recovering income lost to being away.
+ */
 export function offlineEfficiency(level: number, extraSources = 0): number {
     const raw = BASE_OFFLINE_EFFICIENCY + OFFLINE_EFFICIENCY_PER_LEVEL * Math.max(0, level) + extraSources
     return Math.min(MAX_OFFLINE_EFFICIENCY, raw)
@@ -572,7 +620,10 @@ export function cappedOfflineSeconds(realElapsed: number, capLevel: number): num
 export function effectiveOfflineSeconds(input: SettleInput): number {
     const capped = cappedOfflineSeconds(input.elapsedSeconds, input.hero.offlineCapLevel)
     const boosted = applyBoost(capped, input)
-    return boosted * offlineEfficiency(input.hero.offlineEfficiencyLevel)
+    return boosted * offlineEfficiency(
+        input.hero.offlineEfficiencyLevel,
+        economyBonuses(input.hero).offlineEfficiencyPct
+    )
 }
 
 function applyBoost(seconds: number, input: SettleInput): number {
@@ -658,7 +709,19 @@ export function settle(input: SettleInput): SettleResult {
     const totalKills = Math.floor(effectiveSeconds / spk)
     if (totalKills <= 0) return empty
 
-    const goldMultiplier = 1 + input.hero.goldBonusPct
+    /**
+     * Two channels into one multiplier each, and they compose differently by design.
+     *
+     * `economyBonuses` sums the **passive** Gold%/XP% lines (Skills' ledger family, Artifacts'
+     * Fortune category, plus `hero.goldBonusPct`) — additive across sources, per
+     * `gold-economy.md` §5. `abilities.goldFactor` carries the **burst** family, which is already
+     * a multiplier because a burst worth M minutes of income every C seconds *is* `1 + 60M/C`
+     * times the rate. Multiplying the two is right: one says "your kills are worth more", the
+     * other says "you also get paid for casting", and those are not the same claim.
+     */
+    const economy = economyBonuses(input.hero)
+    const goldMultiplier = (1 + economy.goldPct) * abilities.goldFactor
+    const xpMultiplier = D((1 + economy.xpPct) * abilities.xpFactor)
     let pos: RunPosition = { ...input.position }
     let remaining = totalKills
     let gold = 0
@@ -671,7 +734,7 @@ export function settle(input: SettleInput): SettleResult {
     // offline holds one rate, and the two halves of that rate have to agree. A window that
     // carries the run into deeper stages fights all of them at the departure stage's
     // difficulty — generous, and the same generosity `secondsPerKill` already grants.
-    const wipeAt = killsBeforeWipe(units, startPack, spk, abilities.healingPerSecond)
+    const wipeAt = killsBeforeWipe(units, startPack, spk, abilities.healingPerSecond, abilities.damageTakenFactor)
 
     while (remaining > 0) {
         if (isBossStage(pos.stage)) {
@@ -679,7 +742,7 @@ export function settle(input: SettleInput): SettleResult {
             blockedAtBoss = true
             const farm = offlineFarmStage(pos)
             gold += remaining * goldPerKill(pos.prestige, farm.world, farm.stage) * goldMultiplier
-            xp = xp.add(xpPerKill(pos.prestige, farm.world, farm.stage).mul(remaining))
+            xp = xp.add(xpPerKill(pos.prestige, farm.world, farm.stage).mul(remaining).mul(xpMultiplier))
             killsLanded += remaining
             remaining = 0
             break
@@ -694,7 +757,7 @@ export function settle(input: SettleInput): SettleResult {
             wipedOnWave = true
             if (wipeAt > 0) {
                 gold += remaining * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
-                xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(remaining))
+                xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(remaining).mul(xpMultiplier))
                 killsLanded += remaining
                 // Where the current attempt stands, having restarted every `wipeAt` kills.
                 pos = { ...pos, killsInStage: (pos.killsInStage + remaining) % wipeAt }
@@ -714,7 +777,7 @@ export function settle(input: SettleInput): SettleResult {
         }
 
         gold += applied * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
-        xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(applied))
+        xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(applied).mul(xpMultiplier))
         killsLanded += applied
         remaining -= applied
         pos = { ...pos, killsInStage: pos.killsInStage + applied }

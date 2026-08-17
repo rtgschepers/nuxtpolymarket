@@ -21,7 +21,10 @@ import {
     MIN_COOLDOWN_SECONDS,
     MIN_DAMAGE,
     OVERFLOW_CONVERSION_RATE,
-    SPD_ATTACK_RATE_PER_POINT
+    SPD_ATTACK_RATE_PER_POINT,
+    WEALTH_FACTOR_MAX,
+    WEALTH_FACTOR_MIN,
+    WEALTH_NEUTRAL_HOURS
 } from './constants'
 import { D, ONE, ZERO, decMax, decMin } from './numbers'
 import type { Decimal, DecimalSource } from './numbers'
@@ -117,18 +120,43 @@ export function attacksPerSecondFor(spd: DecimalSource): number {
  * A skill's cooldown after SPD shortens it — the same curve `attackIntervalFor` rides, with
  * the skill's own base in place of the flat 3s and its own floor.
  *
- *     cooldownFor(base, spd) = clamp(base / (1 + spd × rate), MIN_COOLDOWN_SECONDS, base)
+ *     cooldownFor(base, spd) = clamp(base × factor / (1 + spd × rate), MIN_COOLDOWN_SECONDS, base)
  *
  * `classes-and-combat.md` §3 gives SPD exactly one job — "reduces cooldown duration across
  * the board, for every skill on every path" — which is this. Sharing the rate constant with
  * the autoattack interval is what keeps SPD one stat with one shape rather than two dials
  * that happen to share a name.
+ *
+ * `factor` is the flat cooldown reduction passive modifiers grant (Artifacts' Tempo category —
+ * Quickening, Slipstream, Chain Reaction, Double Cast). Deliberately a **separate multiplicand
+ * rather than folded into SPD**: SPD also drives the autoattack rate, so routing a cooldown-only
+ * bonus through it would silently speed up basic attacks too. `MIN_COOLDOWN_SECONDS` still
+ * floors the result, so stacking Tempo can shorten a cooldown but never invert it.
  */
-export function cooldownFor(baseSeconds: number, spd: DecimalSource): number {
+export function cooldownFor(baseSeconds: number, spd: DecimalSource, factor = 1): number {
     const base = Math.max(0, baseSeconds)
     const divisor = D(spd).max(0).mul(SPD_ATTACK_RATE_PER_POINT).add(1)
-    const scaled = D(base).div(divisor).toNumber()
+    const scaled = D(base).mul(Math.max(0, factor)).div(divisor).toNumber()
     return Math.min(base, Math.max(MIN_COOLDOWN_SECONDS, scaled))
+}
+
+/**
+ * The Gambler's Strike family's bounded wealth factor (`skills-gacha.md` §4¹).
+ *
+ *     damage = PWR × abilityMultiplier × wealthFactorFor(bankedGold / goldPerHour)
+ *
+ * Linear in banked hours through `WEALTH_NEUTRAL_HOURS`, where it passes through exactly 1.0, and
+ * clamped hard at both ends. The clamping is the whole design: unbounded in either direction the
+ * family either trivialises combat for a hoarder or decays to nothing for a spender, and
+ * `gold-economy.md` §8 rejected both readings.
+ *
+ * A caller that has no idea what the player has banked passes nothing and gets 1.0 — the
+ * wealth-neutral answer, which is also what keeps every pre-existing spec's numbers unmoved.
+ */
+export function wealthFactorFor(bankedHours?: number): number {
+    if (bankedHours === undefined || !Number.isFinite(bankedHours)) return 1
+    const ratio = Math.max(0, bankedHours) / WEALTH_NEUTRAL_HOURS
+    return Math.min(WEALTH_FACTOR_MAX, Math.max(WEALTH_FACTOR_MIN, ratio))
 }
 
 /** Flat accuracy check with no attacker-side ACC stat. Total EVA is clamped at MAX_EVASION. */

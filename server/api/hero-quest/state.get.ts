@@ -1,14 +1,20 @@
 import { requireUserId } from '#server/utils/auth'
+import { getBalance } from '#server/utils/balance'
 import {
-    getCollection,
+    getCollections,
     getHqState,
+    getLoadouts,
     getShopLevels,
     heroSnapshotOf,
     serializeClassTree,
+    serializeDigSite,
+    serializeForge,
     serializeGuild,
     serializeHero,
+    serializeLoadouts,
     serializeRun,
     serializeShop,
+    serializeTrainingGrounds,
     settleHq,
     voidShardsFor
 } from '#server/utils/hero-quest'
@@ -21,6 +27,10 @@ import { fromStore } from '#shared/utils/hero-quest/numbers'
  * Settles first, always, so every read sees a settled world. Returns derived display values
  * rather than raw rows — it has two consumers (the composable and the AI agent's executor
  * overview) and neither should be re-deriving game math. Decimals go out as strings.
+ *
+ * All four gacha tabs are served from one call rather than one endpoint each, because they share
+ * a settle and three of them read the same `hqCollection` query. Splitting them would mean four
+ * settles per page load, and a settle is a write.
  */
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
@@ -38,6 +48,10 @@ export default defineEventHandler(async (event) => {
             hero: null,
             shop: [],
             guild: null,
+            forge: null,
+            training: null,
+            digSite: null,
+            loadouts: null,
             classTree: [],
             voidShards: '0',
             nextPrestigeReward: voidShardsFor(0).toString(),
@@ -46,12 +60,15 @@ export default defineEventHandler(async (event) => {
     }
 
     const { state, result, online, previousLevel } = await settleHq(userId)
-    const shopLevels = await getShopLevels(userId)
-    const collection = await getCollection(userId, 'champion')
-    const hero = heroSnapshotOf(state, shopLevels, collection)
+    const [shopLevels, collections, loadoutRows, balance] = await Promise.all([
+        getShopLevels(userId),
+        getCollections(userId),
+        getLoadouts(userId),
+        getBalance(userId)
+    ])
+    const hero = heroSnapshotOf(state, shopLevels, collections, parseFloat(balance) || 0)
 
     return {
-        guild: serializeGuild(state, collection, shopLevels),
         initialized: true as const,
         // Lets the client interpolate accrual without drifting against its own clock.
         serverNow: Date.now(),
@@ -63,6 +80,12 @@ export default defineEventHandler(async (event) => {
         hero: serializeHero(state, hero),
         shop: serializeShop(shopLevels),
         classTree: serializeClassTree(state),
+
+        guild: serializeGuild(state, collections.champion, shopLevels),
+        forge: serializeForge(state, collections.gear),
+        training: serializeTrainingGrounds(state, collections.skill, shopLevels),
+        digSite: serializeDigSite(state, collections.artifact, shopLevels),
+        loadouts: serializeLoadouts(loadoutRows, shopLevels),
 
         voidShards: fromStore(state.voidShards).toString(),
         nextPrestigeReward: voidShardsFor(state.prestige).toString(),

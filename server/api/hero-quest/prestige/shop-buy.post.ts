@@ -2,11 +2,12 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '#server/database'
 import { hqShopUpgrades, hqState } from '#server/database/schema'
 import { requireUserId } from '#server/utils/auth'
+import { debitGems } from '#server/utils/balance'
 import { claimShopLevel, spendVoidShards } from '#server/utils/hero-quest'
 import { getShopTrack, isShopTrackId, shopTrackCost } from '#shared/utils/hero-quest/content/shop'
 
 /**
- * Buy one level of a prestige-shop track with Void Shards.
+ * Buy one level of a prestige-shop track.
  *
  * Claim-then-reward, twice over, and both guards matter:
  *
@@ -14,11 +15,20 @@ import { getShopTrack, isShopTrackId, shopTrackCost } from '#shared/utils/hero-q
  *    request that finds the row still at that level wins; the rest match nothing and throw
  *    before any currency moves. Integer compare-and-swap is safe here in a way a timestamp
  *    CAS never is (Postgres keeps microseconds, JS `Date` does not).
- * 2. The shard balance is read *inside* the `hqState` row lock and written in the same
- *    transaction, so two purchases cannot both spend the same shards.
+ * 2. The balance is spent under a guard of its own — the shard read happens *inside* the
+ *    `hqState` row lock and is written in the same transaction, and `debitGems` carries its
+ *    `gems >= cost` check in its own WHERE clause. Either way two purchases cannot both spend
+ *    the same currency.
  *
  * Without the first, N parallel clicks all read level 3 and all pay for level 4. Without the
  * second, two different tracks bought at once could each debit against the same balance.
+ *
+ * ## Two currencies
+ *
+ * Every track was Void Shards until Loadouts. `loadouts.md` §3 prices Loadout slots in **Gems**
+ * because they add zero combat power on their own — a player with 2 slots can manually re-equip
+ * everything a 10-slot player can, just with more taps. Gems are a shared platform balance, so
+ * that path goes through `balance.ts` with the transaction threaded, never `user.gems` directly.
  */
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
@@ -43,8 +53,12 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: `${track.name} is already maxed` })
         }
 
-        const remaining = spendVoidShards(state.voidShards, cost)
-        if (remaining === null) {
+        // Affordability is checked before the level is claimed, so a player who cannot pay never
+        // burns the claim and forces everyone else into a 409.
+        const remaining = track.currency === 'voidShards'
+            ? spendVoidShards(state.voidShards, cost)
+            : null
+        if (track.currency === 'voidShards' && remaining === null) {
             throw createError({ statusCode: 400, statusMessage: 'Not enough Void Shards' })
         }
 
@@ -53,13 +67,22 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 409, statusMessage: 'That upgrade is already being bought, try again' })
         }
 
-        await tx.update(hqState).set({ voidShards: remaining }).where(eq(hqState.userId, userId))
+        if (track.currency === 'voidShards') {
+            await tx.update(hqState).set({ voidShards: remaining! }).where(eq(hqState.userId, userId))
+        } else {
+            // `debitGems` guards `gems >= cost` in its own WHERE and throws 400 otherwise, so the
+            // check and the spend are one statement. The tx is threaded because this transaction
+            // already holds the `hqState` lock — without it the write goes out on a second pool
+            // connection and deadlocks against a lock this request is holding.
+            await debitGems(userId, Math.round(cost), tx)
+        }
 
         return {
             upgradeId,
             level: claimed.level,
             spent: cost,
-            voidShards: remaining,
+            currency: track.currency,
+            voidShards: remaining ?? state.voidShards,
             nextCost: shopTrackCost(upgradeId, claimed.level)
         }
     })

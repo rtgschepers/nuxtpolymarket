@@ -13,9 +13,7 @@ import {
     craftCostFor,
     dropRatesFor,
     dupesToLevelUp,
-    effectiveDropRates,
     essenceValueFor,
-    foldToAvailableRarity,
     investmentScalar,
     isMaxed,
     ladderDateKey,
@@ -36,8 +34,14 @@ import {
     SEAL_LADDER_BASE_GOLD,
     TEN_PULL_SIZE
 } from '#shared/utils/hero-quest/constants'
-import { RARITIES, championFromRoll, getChampion } from '#shared/utils/hero-quest/content/champions'
-import type { Rarity } from '#shared/utils/hero-quest/types'
+import {
+    RARITIES,
+    championFromRoll,
+    championRarityHasContent
+} from '#shared/utils/hero-quest/content/champions'
+import { gearFromRoll, gearRarityHasContent } from '#shared/utils/hero-quest/content/gear'
+import { skillFromRoll, skillRarityHasContent } from '#shared/utils/hero-quest/content/skills'
+import { artifactFromRoll, artifactRarityHasContent } from '#shared/utils/hero-quest/content/artifacts'
 
 describe('gacha leveling', () => {
     it('needs the pull counts the doc locks, and ~50,240 in total', () => {
@@ -94,76 +98,54 @@ describe('drop table', () => {
 })
 
 /**
- * Partial-roster folding.
+ * Every roster populates every rarity — the invariant that replaced the fold.
  *
- * These pin the repair for the Phase 2 roster gap: Uncommon, Epic and Legendary have no
- * Champions, and more than half of all rolls at gacha level 7+ name one of them. Folding
- * *down* is what keeps a partial roster stingier than the finished one rather than richer —
- * the uniform-pick alternative pushed effective Mythic at level 10 from 3.0% to 28.7%.
+ * `foldToAvailableRarity` used to live here, repairing the Phase 2 Champion roster's gaps by
+ * rounding a rolled rarity *down* to the nearest shipped one. All four rosters are complete now,
+ * which made it the identity function everywhere, so it is deleted (`implementation-plan.md`,
+ * Phase 3). These specs are what keep the deletion honest: the moment any roster stops covering
+ * a rarity, a pull at that rarity throws instead of silently paying out something else, and this
+ * is the test that says so before a player finds it.
  */
-describe('folding unshipped rarities', () => {
-    const shipped = (rarity: Rarity) => rarity === 'common' || rarity === 'rare' || rarity === 'mythic'
+describe('roster coverage — why no rarity fold is needed', () => {
+    const rosters = [
+        ['champion', championRarityHasContent, championFromRoll],
+        ['gear', gearRarityHasContent, gearFromRoll],
+        ['skill', skillRarityHasContent, skillFromRoll],
+        ['artifact', artifactRarityHasContent, artifactFromRoll]
+    ] as const
 
-    it('folds each unshipped rarity down to its nearest shipped neighbour', () => {
-        expect(foldToAvailableRarity('uncommon', shipped)).toBe('common')
-        expect(foldToAvailableRarity('epic', shipped)).toBe('rare')
-        expect(foldToAvailableRarity('legendary', shipped)).toBe('rare')
-    })
-
-    it('leaves shipped rarities untouched', () => {
-        for (const rarity of ['common', 'rare', 'mythic'] as const) {
-            expect(foldToAvailableRarity(rarity, shipped)).toBe(rarity)
-        }
-    })
-
-    it('is the identity once every rarity has content', () => {
-        for (const rarity of RARITIES) {
-            expect(foldToAvailableRarity(rarity, () => true)).toBe(rarity)
-        }
-    })
-
-    it('walks up only when nothing exists below', () => {
-        const onlyMythic = (rarity: Rarity) => rarity === 'mythic'
-        expect(foldToAvailableRarity('common', onlyMythic)).toBe('mythic')
-    })
-
-    it('throws rather than guessing when a gacha has no content at all', () => {
-        expect(() => foldToAvailableRarity('common', () => false)).toThrow()
-    })
-
-    it('never pays out above the rolled rarity — the whole point of folding down', () => {
-        for (const rarity of RARITIES) {
-            const folded = foldToAvailableRarity(rarity, shipped)
-            expect(RARITIES.indexOf(folded), rarity).toBeLessThanOrEqual(RARITIES.indexOf(rarity))
-        }
-    })
-
-    it('keeps the effective table summing to 100% and Mythic on its designed rate', () => {
-        for (let level = 1; level <= MAX_GACHA_LEVEL; level++) {
-            const effective = effectiveDropRates(level, shipped)
-            expect(effective.reduce((a, b) => a + b, 0), `level ${level}`).toBeCloseTo(100, 9)
-            // Nothing folds *into* Mythic, so it keeps exactly the rate the doc designed.
-            expect(effective[5], `level ${level}`).toBeCloseTo(dropRatesFor(level)[5]!, 9)
-            // And the unshipped bands are genuinely empty.
-            for (const index of [1, 3, 4]) {
-                expect(effective[index], `level ${level} band ${index}`).toBe(0)
+    it('populates all six rarities in all four gachas', () => {
+        for (const [system, hasContent] of rosters) {
+            for (const rarity of RARITIES) {
+                expect(hasContent(rarity), `${system} @ ${rarity}`).toBe(true)
             }
         }
     })
 
-    it('pays out the rarity that was rolled, now that every rarity is populated', () => {
-        // This used to assert an Epic roll folded *down* to a Rare, because Phase 2 shipped no
-        // Epics. The roster is complete, so the fold is gone from the Champion path and a roll
-        // means what it says.
-        for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
-            expect(championFromRoll('epic', roll).rarity).toBe('epic')
+    it('pays out exactly the rarity that was rolled, in every gacha', () => {
+        for (const [system, , fromRoll] of rosters) {
+            for (const rarity of RARITIES) {
+                for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+                    expect(fromRoll(rarity, roll).rarity, `${system} @ ${rarity}`).toBe(rarity)
+                }
+            }
         }
     })
 
-    it('spreads the roll across the whole pool for the resolved rarity', () => {
-        const picked = new Set([0, 0.3, 0.6, 0.9].map(roll => championFromRoll('mythic', roll).id))
-        expect(picked.size).toBeGreaterThan(1)
-        expect([...picked].every(id => getChampion(id).rarity === 'mythic')).toBe(true)
+    it('spreads a roll across the whole pool rather than always picking the first', () => {
+        for (const [system, , fromRoll] of rosters) {
+            const picked = new Set([0, 0.3, 0.6, 0.9].map(roll => fromRoll('mythic', roll).id))
+            expect(picked.size, system).toBeGreaterThan(1)
+        }
+    })
+
+    it('clamps a roll at both ends rather than indexing off the end of a pool', () => {
+        for (const [system, , fromRoll] of rosters) {
+            expect(fromRoll('common', -1), system).toBeDefined()
+            expect(fromRoll('common', 1), system).toBeDefined()
+            expect(fromRoll('common', 1.5), system).toBeDefined()
+        }
     })
 })
 

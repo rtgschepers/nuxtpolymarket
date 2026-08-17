@@ -8,7 +8,10 @@ import {
 } from '#shared/utils/hero-quest/content/shop'
 import {
     BASE_CHAMPION_SLOTS,
+    BASE_LOADOUT_SLOTS,
+    LOADOUT_SLOT_BASE_COST_GEMS,
     MAX_CHAMPION_SLOTS,
+    MAX_LOADOUT_SLOTS,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
@@ -19,12 +22,62 @@ import {
 import { offlineCapHours, offlineEfficiency } from '#shared/utils/hero-quest/settle'
 
 describe('hero-quest prestige shop', () => {
-    it('exposes only the tracks with locked formulas — the two offline pair, plus Champion slots', () => {
-        // Champion slots joined in Phase 2 because the system it unlocks now exists. The
-        // remaining §4 sinks (Skill/Artifact slots, Raid Keys, global stat multipliers) still
-        // have no formula, level count or magnitude in any doc — see `content/shop.ts`.
-        expect(SHOP_TRACKS.map(track => track.id).sort())
-            .toEqual(['championSlots', 'offlineCap', 'offlineEfficiency'])
+    it('exposes only the tracks with locked formulas — the offline pair plus four slot tracks', () => {
+        // Each slot track joins the shop when the system it unlocks exists: Champions in Phase 2,
+        // Skills / Artifacts / Loadouts in Phase 3. The remaining §4 sinks (Raid Keys,
+        // kill-count reduction, boss-timer extension) still have no formula, level count or
+        // magnitude in any doc, and the global stat multiplier was cut outright — see
+        // `content/shop.ts` and `open-items.md` #11.4.
+        expect(SHOP_TRACKS.map(track => track.id).sort()).toEqual([
+            'artifactSlots', 'championSlots', 'loadoutSlots',
+            'offlineCap', 'offlineEfficiency', 'skillSlots'
+        ])
+    })
+
+    it('has no Gear slot track — the deliberate exception among the four gachas', () => {
+        // All six Forge slots are available from account start (`gear-equipment.md` §1), because
+        // they map onto Hero stats that exist on day one rather than a party size that grows.
+        expect(SHOP_TRACKS.some(track => track.id.startsWith('gear'))).toBe(false)
+    })
+
+    it('prices Loadout slots in Gems and everything else in Void Shards', () => {
+        // The first non-Void-Shard track in the game. Loadout slots add zero combat power on
+        // their own — pure convenience — which is why they take the convenience currency
+        // (`loadouts.md` §3).
+        for (const track of SHOP_TRACKS) {
+            expect(track.currency, track.id).toBe(track.id === 'loadoutSlots' ? 'gems' : 'voidShards')
+        }
+    })
+
+    it('rounds every Gems price to an integer, since debitGems rejects a fraction', () => {
+        for (const track of SHOP_TRACKS.filter(entry => entry.currency === 'gems')) {
+            for (let level = 0; level < track.maxLevel; level++) {
+                const cost = shopTrackCost(track.id, level)
+                expect(Number.isInteger(cost), `${track.id} @ ${level}`).toBe(true)
+            }
+        }
+    })
+
+    it('runs the three 2→5 slot tracks on identical shapes', () => {
+        // Skills and Artifacts both say "mirroring the Champion party-slot progression exactly"
+        // (`skills-gacha.md` §6, `artifacts-dig-site-gacha.md` §7). Three entries rather than one
+        // parameterised track only because `upgradeId` has to differ per system — so if the
+        // shapes ever diverge it should be a decision, not a drift.
+        const tracks = ['championSlots', 'skillSlots', 'artifactSlots'] as const
+        for (const id of tracks) {
+            expect(maxLevelFor(id), id).toBe(3)
+            expect(shopTrackCost(id, 0), id).toBe(shopTrackCost('championSlots', 0))
+        }
+    })
+
+    it('doubles the Loadout track across 8 levels, reaching 128× the base', () => {
+        // `loadouts.md` §3 flags this as a genuine balance unknown: the first time the doubling
+        // short-track shape has been stretched past 5 levels, and the first time it is paired
+        // with Gems. Pinned so a retune of either end is visible.
+        expect(maxLevelFor('loadoutSlots')).toBe(MAX_LOADOUT_SLOTS - BASE_LOADOUT_SLOTS)
+        expect(shopTrackCost('loadoutSlots', 0)).toBe(LOADOUT_SLOT_BASE_COST_GEMS)
+        expect(shopTrackCost('loadoutSlots', 7)).toBe(LOADOUT_SLOT_BASE_COST_GEMS * 128)
+        expect(shopTrackCost('loadoutSlots', 8)).toBeNull()
     })
 
     it('matches each track\'s level count to the constant that caps its effect', () => {
@@ -44,7 +97,9 @@ describe('hero-quest prestige shop', () => {
     it('recognises its own track IDs and nothing else', () => {
         expect(isShopTrackId('offlineCap')).toBe(true)
         expect(isShopTrackId('championSlots')).toBe(true)
-        expect(isShopTrackId('skillSlots')).toBe(false)
+        expect(isShopTrackId('skillSlots')).toBe(true)
+        expect(isShopTrackId('loadoutSlots')).toBe(true)
+        expect(isShopTrackId('gearSlots')).toBe(false)
         expect(isShopTrackId('__proto__')).toBe(false)
     })
 

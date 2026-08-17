@@ -36,8 +36,10 @@ import {
     STATUS_MAX_STACKS,
     STATUS_TICK_SECONDS
 } from './constants'
-import { cooldownFor, expectedCritFactor, partyMitigation } from './combat'
-import { kitFor } from './content/classes'
+import { cooldownFor, expectedCritFactor, partyMitigation, wealthFactorFor } from './combat'
+import { heroKit } from './content/skills'
+import { heroModifierTotals, partyModifierTotals } from './stats'
+import { mergeTotals } from './modifiers'
 import { D, ONE, ZERO, decMax } from './numbers'
 import type { Decimal, DecimalSource } from './numbers'
 import { SINGLE_TARGET } from './effects'
@@ -53,12 +55,15 @@ interface ArmedUnit {
 /**
  * The party's kits, in the order `partyUnitStats` builds them — Hero first, then Champions.
  *
- * Deliberately mirrors `fight.ts`: the same two sources, the same order. If these ever
- * disagreed, the projection and the fight would be describing different parties.
+ * Deliberately mirrors `fight.ts`: the same two sources, the same order, and since Phase 3 the
+ * *same function* for the Hero's half (`heroKit`, which appends equipped Training Grounds Actives
+ * to the class tree's accumulated kit). If these ever disagreed, the projection and the fight
+ * would be describing different parties — which is precisely the bug that made `rateAt` a shared
+ * helper in the first place.
  */
 export function armedParty(hero: HeroSnapshot, units: readonly UnitStats[]): ArmedUnit[] {
     const kits: readonly (readonly ClassSkill[])[] = [
-        kitFor(hero.classId),
+        heroKit(hero),
         ...(hero.champions ?? []).map(champion => champion.abilities)
     ]
     return units.map((stats, index) => ({ stats, kit: kits[index] ?? [] }))
@@ -130,12 +135,40 @@ export interface AbilityModifiers {
      * — the one ability magnitude any doc states — is worth anything here at all.
      */
     spdFactor: number
-    /** Multiplier on enemy DEF from armour-shred uptime. Below 1 means shredded. */
+    /**
+     * Multiplier on enemy DEF, from armour-shred uptime **and** from passive shred lines
+     * (Artifacts' Shattering Blow and Defense Penetration). Below 1 means shredded.
+     *
+     * The two sources multiply rather than adding, deliberately: §4's additive rule governs
+     * Artifacts stacking *with each other* — which `sumModifiers` already does — not an always-on
+     * passive composing with a timed debuff's uptime. Those are independent mechanisms.
+     */
     enemyDefFactor: number
     /** Multiplier on incoming damage from enemy PWR debuffs and hard control. */
     incomingFactor: number
+    /**
+     * Multiplier on the damage the party actually takes, from passive `damageTaken` lines.
+     *
+     * Kept apart from `incomingFactor` on purpose. `incomingFactor` scales the enemy's *PWR*, so
+     * it interacts with mitigation non-linearly — halving enemy PWR more than halves damage taken
+     * once mitigation is factored in. A damage-reduction passive is a flat cut to the finished
+     * number, so it is applied at the one place damage taken is derived (`secondsToDie`) rather
+     * than pushed back into the enemy's stat line where it would be worth more than it says.
+     */
+    damageTakenFactor: number
     /** Healing per second the party sustains itself for, as a Decimal. */
     healingPerSecond: Decimal
+    /**
+     * Multiplier on Gold income from ability-driven Gold bursts (Coin Toss and family).
+     *
+     * Separate from the passive Gold% that `stats.economyBonuses` sums, because the two have
+     * genuinely different sources: a passive is a rate by definition, while a burst is a lump
+     * denominated in minutes of income (`gold-economy.md` §6) that only becomes a rate once
+     * divided by the cooldown it waits through.
+     */
+    goldFactor: number
+    /** The same, for XP — King's Ransom's third line. */
+    xpFactor: number
 }
 
 export const NO_ABILITIES: AbilityModifiers = {
@@ -143,7 +176,10 @@ export const NO_ABILITIES: AbilityModifiers = {
     spdFactor: 1,
     enemyDefFactor: 1,
     incomingFactor: 1,
-    healingPerSecond: ZERO
+    damageTakenFactor: 1,
+    healingPerSecond: ZERO,
+    goldFactor: 1,
+    xpFactor: 1
 }
 
 /**
@@ -160,19 +196,38 @@ export function projectAbilities(
     packSize: number
 ): AbilityModifiers {
     const party = armedParty(hero, units)
-    if (party.every(unit => unit.kit.length === 0)) return NO_ABILITIES
+    // Passive lines that land outside the stat block. `stats.ts` already folded the stat and crit
+    // lines into `units`; these two are the ones that describe the *pack* and the *incoming
+    // stream* rather than a party member, so they belong here.
+    const passives = mergeTotals(heroModifierTotals(hero), partyModifierTotals(hero))
+    if (party.every(unit => unit.kit.length === 0)) {
+        return {
+            ...NO_ABILITIES,
+            enemyDefFactor: passives.enemyDefFactor,
+            damageTakenFactor: passives.damageTakenFactor
+        }
+    }
 
     let pwrFactor = 1
     let spdFactor = 1
-    let enemyDefFactor = 1
+    let enemyDefFactor = passives.enemyDefFactor
     let incomingFactor = 1
     let healingPerSecond = ZERO
+    let goldFactor = 1
+    let xpFactor = 1
 
     for (const { stats, kit } of party) {
         for (const entry of kit) {
             const effect = entry.effect ?? SINGLE_TARGET
-            const cooldown = cooldownFor(entry.cooldownSeconds, stats.spd)
+            const cooldown = cooldownFor(entry.cooldownSeconds, stats.spd, stats.cooldownFactor)
             if (cooldown <= 0) continue
+
+            // A burst worth M minutes of income, every `cooldown` seconds, is a rate increase of
+            // `M × 60 / cooldown`. That conversion is the whole reason §6 insists bursts be
+            // denominated in income rather than a flat amount: expressed this way the effect is
+            // correctly sized at every point on the Gold curve with no per-stage retuning ever.
+            if (effect.goldBurstMinutes) goldFactor += (effect.goldBurstMinutes * 60) / cooldown
+            if (effect.xpBurstMinutes) xpFactor += (effect.xpBurstMinutes * 60) / cooldown
 
             const applyStatusSpec = (spec: StatusSpec | undefined, coverage: number) => {
                 if (!spec) return
@@ -240,7 +295,10 @@ export function projectAbilities(
         spdFactor,
         enemyDefFactor: Math.max(0, enemyDefFactor),
         incomingFactor: Math.max(0, incomingFactor),
-        healingPerSecond
+        damageTakenFactor: passives.damageTakenFactor,
+        healingPerSecond,
+        goldFactor,
+        xpFactor
     }
 }
 
@@ -270,6 +328,7 @@ export function partyAbilityDps(
     if (units.length === 0) return ZERO
     const party = armedParty(hero, units)
     const penetration = ONE.sub(partyMitigation(units, defenderDef))
+    const wealth = wealthFactorFor(hero.wealthHours)
 
     return party.reduce((total, { stats, kit }) => {
         if (stats.pwr.lte(0)) return total
@@ -278,14 +337,15 @@ export function partyAbilityDps(
         return kit.reduce((unitTotal, entry) => {
             if (entry.abilityMultiplier <= 0) return unitTotal
             const effect = entry.effect ?? SINGLE_TARGET
-            const cooldown = cooldownFor(entry.cooldownSeconds, stats.spd)
+            const cooldown = cooldownFor(entry.cooldownSeconds, stats.spd, stats.cooldownFactor)
             if (cooldown <= 0) return unitTotal
 
             // The floor applies to the **finished** hit, multiplier included — exactly as
             // `rawHitDamage` and `fight.rollDamage` do it. Flooring the base and then
             // multiplying would pay `MIN_DAMAGE × multiplier` for a fully-mitigated ability,
             // inflating every kit whose damage sits near the floor.
-            const perHit = decMax(MIN_DAMAGE, stats.pwr.mul(penetration).mul(entry.abilityMultiplier))
+            const multiplier = entry.abilityMultiplier * (effect.wealthScaled ? wealth : 1)
+            const perHit = decMax(MIN_DAMAGE, stats.pwr.mul(penetration).mul(multiplier))
 
             // Bodies struck per cast. An AoE that reaches the whole pack does `packSize` times
             // the work of a single-target hit of the same multiplier — which is exactly why

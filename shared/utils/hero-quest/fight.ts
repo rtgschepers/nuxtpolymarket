@@ -54,10 +54,17 @@ import {
     MIN_DAMAGE,
     SKILL_STATUS_DURATION_SECONDS
 } from './constants'
-import { attackIntervalFor, cooldownFor, partyMitigation, rawHitDamage, targetingOrder } from './combat'
+import {
+    attackIntervalFor,
+    cooldownFor,
+    partyMitigation,
+    rawHitDamage,
+    targetingOrder,
+    wealthFactorFor
+} from './combat'
 import { columnOf, enemyPackAt, rowOf } from './settle'
 import { partyUnitStats } from './stats'
-import { kitFor } from './content/classes'
+import { heroKit } from './content/skills'
 import {
     SINGLE_TARGET,
     executeMultiplier,
@@ -74,6 +81,7 @@ import {
     cleanse,
     extendHostile,
     hasStatus,
+    reflectFraction,
     tickStatuses
 } from './status'
 import type { StatusInstance } from './status'
@@ -85,6 +93,11 @@ export type FightOutcome = 'win' | 'timeout' | 'wipe'
 
 export type FightEventKind =
     | 'attack' | 'skill' | 'enemy_attack' | 'unit_down' | 'enemy_down'
+    /**
+     * Damage bounced back at an attacker. Its own kind rather than an `attack`, because nobody
+     * cast anything and the client should not draw a swing for it.
+     */
+    | 'reflect'
     // Status-engine events. Nothing emits these until Stage 3 authors effects onto the
     // engine, but the replay contract is fixed here so the client is never handed a kind it
     // silently drops.
@@ -210,24 +223,37 @@ export function runFight(input: FightInput): FightResult {
      * branch below.
      */
     const kits: readonly (readonly ClassSkill[])[] = [
-        kitFor(input.hero.classId),
+        heroKit(input.hero),
         ...(input.hero.champions ?? []).map(champion => champion.abilities)
     ]
+
+    /**
+     * The Gambler's Strike family's bounded modulation, resolved once for the whole fight.
+     *
+     * Once, not per cast, because banked Gold does not move during a 30-second boss fight — the
+     * player is not farming while the gate resolves.
+     */
+    const wealth = wealthFactorFor(input.hero.wealthHours)
 
     const party: Combatant[] = units.map((stats, index) => ({
         stats,
         hp: stats.maxHp,
         attackTimer: 0,
         statuses: [],
-        // Every unit fires its own kit. Cooldowns are shortened by that unit's own SPD, so a
-        // Control Champion cycles its abilities faster than a Tank standing next to it.
-        skills: (kits[index] ?? []).map(entry => ({
-            id: entry.id,
-            interval: cooldownFor(entry.cooldownSeconds, stats.spd),
-            timer: cooldownFor(entry.cooldownSeconds, stats.spd),
-            multiplier: entry.abilityMultiplier,
-            effect: entry.effect ?? SINGLE_TARGET
-        }))
+        // Every unit fires its own kit. Cooldowns are shortened by that unit's own SPD — so a
+        // Control Champion cycles its abilities faster than a Tank standing next to it — and by
+        // its `cooldownFactor`, which carries Artifacts' Tempo lines.
+        skills: (kits[index] ?? []).map((entry) => {
+            const interval = cooldownFor(entry.cooldownSeconds, stats.spd, stats.cooldownFactor)
+            const effect = entry.effect ?? SINGLE_TARGET
+            return {
+                id: entry.id,
+                interval,
+                timer: interval,
+                multiplier: entry.abilityMultiplier * (effect.wealthScaled ? wealth : 1),
+                effect
+            }
+        })
     }))
 
     /**
@@ -616,6 +642,36 @@ export function runFight(input: FightInput): FightResult {
                 damage: throughput.toString(),
                 remainingHp: decMaxZero(target.hp).toString()
             })
+
+            /**
+             * Reflect — the fraction a defender bounces back at whoever hit it.
+             *
+             * Two sources, summed: the timed `reflect` status (Guardian's Reflect, which had been
+             * applied but never resolved anywhere until now) and the passive `reflectFraction` on
+             * the unit's stat block (Immortal Vanguard). Computed off `throughput` — what actually
+             * landed — so a hit a shield ate reflects nothing, which is the right reading of
+             * "reflect a portion of incoming damage".
+             */
+            const reflected = reflectFraction(target.statuses)
+                .add(target.stats.reflectFraction)
+                .mul(throughput)
+            if (reflected.gt(0)) {
+                foe.hp = foe.hp.sub(reflected)
+                events.push({
+                    at: elapsed,
+                    kind: 'reflect',
+                    unitIndex: targetIndex,
+                    enemyIndex: enemies.indexOf(foe),
+                    damage: reflected.toString(),
+                    remainingHp: decMaxZero(foe.hp).toString()
+                })
+                if (foe.hp.lte(0)) {
+                    events.push({
+                        at: elapsed, kind: 'enemy_down',
+                        enemyIndex: enemies.indexOf(foe), remainingHp: '0'
+                    })
+                }
+            }
             for (const shield of broken) {
                 events.push({
                     at: elapsed,

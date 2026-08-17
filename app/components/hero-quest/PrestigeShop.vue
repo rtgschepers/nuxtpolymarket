@@ -1,4 +1,12 @@
 <script setup lang="ts">
+/**
+ * The prestige shop.
+ *
+ * **Two currencies, since Loadouts.** Every track was Void Shards until `loadouts.md` §3 priced
+ * Loadout slots in Gems — deliberately, because every other slot track gates real party power
+ * while a Loadout slot gates only taps. So affordability is checked against whichever balance the
+ * track names, and the icon says which one is being spent.
+ */
 defineProps<{
     tracks: {
         id: string
@@ -7,6 +15,7 @@ defineProps<{
         level: number
         maxLevel: number
         nextCost: number | null
+        currency: 'voidShards' | 'gems'
         effect: { current: string; next: string | null }
     }[]
     voidShards: string
@@ -15,9 +24,12 @@ defineProps<{
 
 const emit = defineEmits<{ buy: [upgradeId: string] }>()
 
-function affordable(cost: number | null, shards: string) {
+const { user } = useAuth()
+const gems = computed(() => user.value?.gems ?? 0)
+
+function affordable(cost: number | null, currency: 'voidShards' | 'gems', shards: string) {
     if (cost === null) return false
-    return Number(shards) >= cost
+    return currency === 'gems' ? gems.value >= cost : Number(shards) >= cost
 }
 </script>
 
@@ -57,13 +69,21 @@ function affordable(cost: number | null, shards: string) {
 
         <div class="shrink-0 text-right">
           <UButton
-            :disabled="!affordable(track.nextCost, voidShards) || busy"
-            :icon="track.nextCost === null ? 'i-lucide-check' : 'i-lucide-gem'"
+            :disabled="!affordable(track.nextCost, track.currency, voidShards) || busy"
+            :icon="track.nextCost === null
+              ? 'i-lucide-check'
+              : track.currency === 'gems' ? 'i-lucide-gem' : 'i-lucide-sparkles'"
             size="sm"
             @click="emit('buy', track.id)"
           >
             {{ track.nextCost === null ? 'Maxed' : formatNumber(track.nextCost) }}
           </UButton>
+          <p
+            v-if="track.nextCost !== null"
+            class="text-xs text-muted mt-1"
+          >
+            {{ track.currency === 'gems' ? 'Gems' : 'Void Shards' }}
+          </p>
         </div>
       </div>
     </div>

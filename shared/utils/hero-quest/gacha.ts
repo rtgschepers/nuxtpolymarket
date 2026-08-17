@@ -22,6 +22,8 @@ import {
     MAX_GACHA_LEVEL,
     MAX_STAR,
     PULLS_TO_LEVEL_UP,
+    RARITY_EPITHETS,
+    RARITY_STAT_MULTIPLIERS,
     SEAL_LADDER_BASE_GOLD,
     SEAL_LADDER_GROWTH,
     SINGLE_PULL_COST,
@@ -34,13 +36,58 @@ import type { Rarity } from './types'
  * The shared 6-tier rarity ladder, in ascending order (`gacha-shared-system.md` §1).
  *
  * Lives here rather than in `content/champions.ts` because it belongs to all four gachas, not
- * to Champions — and because the reverse would make the dependency circular: this module
- * needs the ladder to index the drop table, while the content module needs this module to
- * fold unshipped rarities. Content depends on mechanics, never the other way round.
+ * to Champions. Content depends on mechanics, never the other way round.
  */
 export const RARITIES: readonly Rarity[] = [
     'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'
 ]
+
+/**
+ * Flat power multiplier by rarity — Common 1.0 → Mythic 2.5.
+ *
+ * First written for Champions (`champions-guild-gacha.md` §2) and then reused *verbatim* by
+ * Gear (`gear-equipment.md` §2) and Artifacts, which is what moved it here from
+ * `content/champions.ts`: three systems reading one table means the table is not Champion
+ * content. Keyed off the ordered ladder above so the constants file holds a plain array and the
+ * rarity→value mapping exists in exactly one place.
+ *
+ * ⚠ **Adjacent tiers must stay under a 6× ratio.** That is Gear's Rarity Progression Guarantee
+ * (`gear-equipment.md` §2): it is what makes a maxed current-tier piece beat a freshly-levelled
+ * next-tier one, so a player is never punished for having invested. The current table's worst
+ * adjacent ratio is 1.25×, so there is wide headroom — but a retune has to respect the ceiling,
+ * and `test/hero-quest/content.spec.ts` asserts it rather than trusting this comment.
+ */
+export const RARITY_STAT_MULTIPLIER: Readonly<Record<Rarity, number>> = Object.fromEntries(
+    RARITIES.map((rarity, index) => [rarity, RARITY_STAT_MULTIPLIERS[index]!])
+) as Record<Rarity, number>
+
+/**
+ * The rarity epithet ladder from `champions-guild-gacha.md` §5.
+ *
+ * Also moved out of Champion content, and for a sharper reason than the multiplier: Gear's
+ * entire 36-piece roster is *named* by it (`gear-equipment.md` §1 — "`<Rarity Epithet> <Slot
+ * Name>`"), so the ladder is now load-bearing for two rosters rather than flavour for one.
+ */
+export const RARITY_EPITHET: Readonly<Record<Rarity, string>> = Object.fromEntries(
+    RARITIES.map((rarity, index) => [rarity, RARITY_EPITHETS[index]!])
+) as Record<Rarity, string>
+
+/**
+ * Effect lines by rarity — 1 / 1 / 1 / 2 / 2 / 3.
+ *
+ * Three systems state this same table independently: Champions as *ability count* (§2), Skills
+ * as *effect-line count* (`skills-gacha.md` §3), Artifacts as *effect-line count*
+ * (`artifacts-dig-site-gacha.md` §3). One table, three readings. Gear is the deliberate
+ * exception — single-stat-only, always, so rarity scales magnitude and never adds a line.
+ */
+export const RARITY_EFFECT_LINES: Readonly<Record<Rarity, number>> = {
+    common: 1,
+    uncommon: 1,
+    rare: 1,
+    epic: 2,
+    legendary: 2,
+    mythic: 3
+}
 
 /** The `system` enum over `hqCollection.contentId`. */
 export type GachaSystem = 'gear' | 'champion' | 'skill' | 'artifact'
@@ -126,59 +173,28 @@ export function rarityFromRoll(level: number, roll: number): Rarity {
 }
 
 /**
- * Fold a rolled rarity down to the nearest rarity that actually has content.
+ * ## `foldToAvailableRarity` — deleted, and the reason is recorded rather than lost
  *
- * ## Why this exists
+ * A helper used to live here that folded a rolled rarity *down* to the nearest rarity a partial
+ * roster actually populated, because the §3 drop table weights all six and assumes all six
+ * exist. Phase 2's Champions covered Common / Rare / Mythic only, so better than half of all
+ * rolls at gacha level 7+ named a rarity with nothing in it.
  *
- * The §3 drop table weights all six rarities and assumes all six are populated — true of a
- * finished 48-entry roster, false of every partial roster the phased build ships. Phase 2's
- * Champions cover Common / Rare / Mythic only, so better than half of all rolls at gacha
- * level 7+ name a rarity with nothing in it.
+ * **All four rosters now populate all six rarities** — Champions 48, Gear 36, Skills 36,
+ * Artifacts 48 — which made the fold the identity function everywhere, the exact condition its
+ * own docstring named for removal (`implementation-plan.md`, Phase 3: "deleted outright the day
+ * every roster is complete"). `content.spec.ts` asserts the population per system, so the claim
+ * "no fold is needed" is tested rather than commented.
  *
- * **Rounding down is deliberately the conservative repair.** The obvious alternative — pick
- * uniformly from whatever exists — inverts the curve: with 4 of 12 Champions Mythic, every
- * such roll became 33% Mythic, pushing the effective Mythic rate at level 10 from a designed
- * 3.0% to 28.7%, and handing out Mythics at level 2 where the table says they are impossible.
- * Folding downward can never pay out better than the roll earned, so the ladder stays
- * monotonic and a partial roster is strictly stingier than the finished one, never richer.
+ * Worth keeping the *reasoning* even though the code is gone, because it is the answer to a
+ * question a future partial roster will ask again: rounding **down** was the conservative
+ * repair. Picking uniformly from whatever exists inverts the curve — with 4 of 12 Champions
+ * Mythic, every unshipped roll became 33% Mythic and pushed the effective level-10 Mythic rate
+ * from a designed 3.0% to 28.7%. Folding downward can never pay better than the roll earned.
  *
- * Walks up only if nothing exists below, which cannot happen while Common is populated but
- * keeps the function total rather than throwing on an empty roster.
- *
- * **Delete this the day a roster is complete.** It is scaffolding for partial content, and
- * `hasContent` returning true for all six makes it the identity function.
+ * `effectiveDropRates` went with it: the effective table and the designed table are now the
+ * same table, so serving one through a fold would only hide that fact.
  */
-export function foldToAvailableRarity(rarity: Rarity, hasContent: (rarity: Rarity) => boolean): Rarity {
-    const rolled = rarityIndex(rarity)
-    for (let index = rolled; index >= 0; index--) {
-        const candidate = RARITIES[index]!
-        if (hasContent(candidate)) return candidate
-    }
-    for (let index = rolled + 1; index < RARITIES.length; index++) {
-        const candidate = RARITIES[index]!
-        if (hasContent(candidate)) return candidate
-    }
-    throw new Error('No rarity in this gacha has any content')
-}
-
-/**
- * The drop table as the player will actually experience it, after unshipped rarities fold
- * down into their nearest shipped neighbour.
- *
- * Served to the client instead of the raw table so the odds on screen are the odds being
- * rolled. Showing a designed 60% Epic while every Epic silently resolves to a Rare would be
- * a lie the UI has no way to detect.
- */
-export function effectiveDropRates(level: number, hasContent: (rarity: Rarity) => boolean): number[] {
-    const raw = dropRatesFor(level)
-    const folded = new Array<number>(RARITIES.length).fill(0)
-    for (const [index, rate] of raw.entries()) {
-        if (rate <= 0) continue
-        const target = rarityIndex(foldToAvailableRarity(RARITIES[index]!, hasContent))
-        folded[target] = (folded[target] ?? 0) + rate
-    }
-    return folded
-}
 
 // ── Pull cost ──────────────────────────────────────────  §4
 

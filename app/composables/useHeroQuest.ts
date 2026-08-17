@@ -29,6 +29,10 @@ export const useHeroQuest = () => {
     const refreshIntervalMs = computed(() => state.value?.refreshIntervalMs ?? 60_000)
 
     const guild = computed(() => state.value?.guild ?? null)
+    const forge = computed(() => state.value?.forge ?? null)
+    const training = computed(() => state.value?.training ?? null)
+    const digSite = computed(() => state.value?.digSite ?? null)
+    const loadouts = computed(() => state.value?.loadouts ?? null)
     const atBossGate = computed(() => run.value?.atBossGate ?? false)
     const walled = computed(() => run.value?.walled ?? false)
     const canPrestige = computed(() => state.value?.run?.runCleared ?? false)
@@ -102,7 +106,7 @@ export const useHeroQuest = () => {
     }
 
     interface PullRecord {
-        championId: string
+        contentId: string
         name: string
         rarity: string
         isNew: boolean
@@ -112,24 +116,25 @@ export const useHeroQuest = () => {
     }
 
     /**
-     * Pull from the Guild. Toast is suppressed — the result reel is the feedback, and a
-     * 10-pull would otherwise stack ten toasts.
+     * The four gachas share one set of actions, taking `system`, exactly as the server routes do.
+     *
+     * Four copies of each of these is what the shared-gacha design exists to avoid — the rarity
+     * ladder, levelling curve, drop table and dupe formula are identical across all four, so the
+     * only per-tab difference is which word goes in the body.
      */
-    async function pullChampions(count: 1 | 10) {
+    type GachaSystem = 'gear' | 'champion' | 'skill' | 'artifact'
+
+    /** Toast is suppressed — the result reel is the feedback, and a 10-pull would stack ten. */
+    async function pull(system: GachaSystem, count: 1 | 10) {
         return call<{ pulls: PullRecord[]; essenceGained: number; gachaLevel: number }>(
-            '/api/hero-quest/guild/pull', { count }, ''
+            '/api/hero-quest/gacha/pull', { system, count }, ''
         )
     }
 
-    /** Party and formation save together — a formation is only valid against a given party. */
-    async function saveParty(championIds: string[], formation: Record<string, 'front' | 'back'>) {
-        return call('/api/hero-quest/guild/party', { championIds, formation }, 'Party updated')
-    }
-
-    /** Spend Champion Essence on a specific Champion — the full RNG bypass. */
-    async function craftChampion(championId: string) {
+    /** Spend a gacha's Essence on a specific item — the full RNG bypass. */
+    async function craft(system: GachaSystem, contentId: string) {
         return call<{ name: string; isNew: boolean }>(
-            '/api/hero-quest/guild/craft', { championId }, ''
+            '/api/hero-quest/gacha/craft', { system, contentId }, ''
         ).then((res) => {
             if (res) {
                 toast.add({
@@ -141,14 +146,14 @@ export const useHeroQuest = () => {
         })
     }
 
-    /** Buy Guild Seals with Gold on the daily escalating ladder. */
-    async function buySeals(count: number) {
+    /** Buy Seals with Gold on that gacha's own daily escalating ladder. */
+    async function buySeals(system: GachaSystem, count = 1) {
         const res = await call<{ sealsBought: number; goldSpent: number }>(
-            '/api/hero-quest/guild/buy-seals', { count }, ''
+            '/api/hero-quest/gacha/buy-seals', { system, count }, ''
         )
         if (res) {
             toast.add({
-                title: `+${res.sealsBought} Guild Seals`,
+                title: `+${res.sealsBought} Seals`,
                 description: `${formatNumber(res.goldSpent)} Gold`,
                 color: 'success'
             })
@@ -156,6 +161,35 @@ export const useHeroQuest = () => {
         // Gold left the shared balance — the header has to follow it.
         await fetchSession()
         return res
+    }
+
+    /**
+     * Set any part of the live loadout. Every field is optional — the Forge page sends only
+     * `gear`, the Guild page only `championIds` and `formation`.
+     *
+     * Party and formation still travel together when either changes, because a formation is only
+     * valid against a specific party and the server validates row capacity across both.
+     */
+    interface LiveLoadout {
+        championIds?: string[]
+        formation?: Record<string, 'front' | 'back'>
+        skillIds?: string[]
+        artifactIds?: string[]
+        gear?: Record<string, string>
+    }
+
+    async function setLoadout(change: LiveLoadout, successMsg = 'Loadout updated') {
+        return call('/api/hero-quest/loadout/set', change as Record<string, unknown>, successMsg)
+    }
+
+    /** Snapshot the whole live state into a slot (`loadouts.md` §2). */
+    async function saveLoadout(slotIndex: number, name?: string) {
+        return call('/api/hero-quest/loadout/save', { slotIndex, name }, 'Loadout saved')
+    }
+
+    /** Apply a saved slot as the new live state — all five components at once. */
+    async function applyLoadout(slotIndex: number) {
+        return call('/api/hero-quest/loadout/apply', { slotIndex }, 'Loadout applied')
     }
 
     // Gold accrues into the shared balance on every settle, so the header has to follow it.
@@ -179,6 +213,10 @@ export const useHeroQuest = () => {
         hero,
         shop,
         guild,
+        forge,
+        training,
+        digSite,
+        loadouts,
         classTree,
         voidShards,
         nextPrestigeReward,
@@ -192,9 +230,11 @@ export const useHeroQuest = () => {
         prestige,
         pickClass,
         buyUpgrade,
-        pullChampions,
-        saveParty,
-        craftChampion,
-        buySeals
+        pull,
+        craft,
+        buySeals,
+        setLoadout,
+        saveLoadout,
+        applyLoadout
     }
 }

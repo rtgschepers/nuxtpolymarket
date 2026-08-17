@@ -47,7 +47,7 @@ import {
 } from '../constants'
 import { SINGLE_TARGET } from '../effects'
 import type { AbilityEffect } from '../effects'
-import { RARITIES } from '../gacha'
+import { RARITIES, RARITY_EFFECT_LINES, RARITY_EPITHET, RARITY_STAT_MULTIPLIER } from '../gacha'
 import type {
     AutoTarget,
     ChampionArchetype,
@@ -61,40 +61,21 @@ import type {
 // ── Rarity ─────────────────────────────────────────────  gacha-shared-system.md §1, §2
 
 /**
- * Re-exported from `gacha.ts`, which owns the ladder because all four gachas share it. Kept
- * available here so Champion-facing callers have one import for everything rarity-related.
+ * Re-exported from `gacha.ts`, which owns all three because **all four gachas share them** —
+ * the multiplier is reused verbatim by Gear and Artifacts, and the epithet ladder now names
+ * Gear's entire 36-piece roster. They lived here while Champions were the only caller; Phase 3
+ * made that accidental. Kept re-exported so Champion-facing callers still have one import for
+ * everything rarity-related.
  */
-export { RARITIES }
+export { RARITIES, RARITY_EPITHET, RARITY_STAT_MULTIPLIER }
 
-/** Flat, level-independent baseline on top of the investment scalar (§2). Doc-specified. */
-export const RARITY_STAT_MULTIPLIER: Readonly<Record<Rarity, number>> = {
-    common: 1.0,
-    uncommon: 1.15,
-    rare: 1.35,
-    epic: 1.6,
-    legendary: 2.0,
-    mythic: 2.5
-}
-
-/** Ability slots by rarity (§2). Common–Rare 1, Epic/Legendary 2, Mythic 3. */
-export const RARITY_ABILITY_COUNT: Readonly<Record<Rarity, number>> = {
-    common: 1,
-    uncommon: 1,
-    rare: 1,
-    epic: 2,
-    legendary: 2,
-    mythic: 3
-}
-
-/** The epithet ladder from the §5 naming template. */
-export const RARITY_EPITHET: Readonly<Record<Rarity, string>> = {
-    common: 'Novice',
-    uncommon: 'Adept',
-    rare: 'Veteran',
-    epic: 'Vanguard',
-    legendary: 'Exalted',
-    mythic: 'Ascendant'
-}
+/**
+ * Ability slots by rarity (§2). Common–Rare 1, Epic/Legendary 2, Mythic 3.
+ *
+ * The *same* 1/1/1/2/2/3 table Skills and Artifacts state as an effect-line count — an alias,
+ * not a copy, so the three cannot drift apart under a retune.
+ */
+export const RARITY_ABILITY_COUNT = RARITY_EFFECT_LINES
 
 // ── Archetypes ─────────────────────────────────────────  champions-guild-gacha.md §1, §7, §8
 
@@ -340,9 +321,21 @@ export const CHAMPION_ABILITY_EFFECTS: Readonly<Record<string, AbilityEffect>> =
     }
 }
 
-/** Stable ID from an ability's display name — `Guardian's Reflect` → `champ_ability_guardians_reflect`. */
+/**
+ * Stable ID from an ability's display name — `Guardian's Reflect` →
+ * `champ_ability_guardians_reflect`.
+ *
+ * Apostrophes are dropped rather than turned into a separator, matching `skillIdFor`. The
+ * docstring said this before the code did: the previous slug produced `guardian_s_reflect`.
+ * Harmless to correct — unlike a Skill or Gear id, an ability id is never persisted; it appears
+ * only in a `FightEvent`, which lives as long as one replay.
+ */
 export function abilityId(name: string): string {
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    const slug = name
+        .toLowerCase()
+        .replace(/['’]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
     return `champ_ability_${slug}`
 }
 
@@ -586,8 +579,9 @@ export function championsOfRarity(rarity: Rarity): ChampionDefinition[] {
  * Which rarities this roster populates — **all six**, since the roster completed.
  *
  * Kept as a function rather than deleted because it is what `content.spec.ts` asserts against:
- * the claim "the fold is unnecessary" is only true while this returns true for every rarity,
- * and that deserves a test rather than a comment.
+ * the claim "no fold is needed" is only true while this returns true for every rarity, and that
+ * deserves a test rather than a comment. All four systems now expose the same predicate for the
+ * same reason.
  */
 export function championRarityHasContent(rarity: Rarity): boolean {
     return CHAMPIONS.some(entry => entry.rarity === rarity)
@@ -596,14 +590,9 @@ export function championRarityHasContent(rarity: Rarity): boolean {
 /**
  * Resolve a rolled rarity to a Champion.
  *
- * **No longer folds.** `foldToAvailableRarity` existed because Phase 2 shipped Common, Rare
- * and Mythic only, so better than half of all rolls at gacha level 7+ named a rarity with
- * nothing in it. All six are populated now, which makes the fold the identity function — the
- * exact condition its own docstring named for removal — so this stops calling it rather than
- * passing a predicate that is always true.
- *
- * The helper itself stays in `gacha.ts` for Gear, Skills and Artifacts, whose rosters are
- * still partial. It is deleted outright the day the last of those completes.
+ * **No fold.** The rarity-folding scaffolding that partial rosters needed is gone from
+ * `gacha.ts` entirely now that all four rosters populate all six rarities — see the note there
+ * for why rounding down was the right repair while it was needed.
  *
  * `roll` is supplied by the caller because `shared/` must stay pure — the entropy is the
  * server's.

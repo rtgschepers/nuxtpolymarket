@@ -106,6 +106,33 @@ export interface AbilityEffect {
     revive?: number
     /** Strip hostile statuses from every target — Purify and the cleanse family. */
     cleanse?: boolean
+    /**
+     * A Gold burst on cast, **denominated in minutes of the player's current income**.
+     *
+     * `gold-economy.md` §6 is explicit that every flat-Gold effect must be a duration of income
+     * rather than a fixed amount — Coin Toss, Prospector's Instinct, Treasure Hunter's Gambit and
+     * King's Ransom on the Skills side, Lucky Dig and Windfall on the Artifacts side. That is what
+     * keeps a burst correctly sized at prestige 0 and at prestige 20 with no per-stage retuning
+     * ever, and what makes it inherit Gold's own bounded curve for free.
+     *
+     * **Resolved in the idle rate only** (`projection.ts` folds it into a Gold% factor), not in
+     * `fight.ts`. Boss fights grant no Gold at all, so there is nothing for a burst to add there —
+     * which is why this is a rate contribution rather than a fight event.
+     */
+    goldBurstMinutes?: number
+    /** The same, for XP — King's Ransom's third line. */
+    xpBurstMinutes?: number
+    /**
+     * Damage is modulated by how many hours of income the player has banked in Gold — the
+     * Gambler's Strike family (`skills-gacha.md` §4¹, `gold-economy.md` §8).
+     *
+     * A flag rather than a magnitude: the factor is bounded by `WEALTH_FACTOR_MIN/MAX` for every
+     * skill that carries it, so the four of them differ only in their base multiplier. Scaling off
+     * PWR with a *bounded* wealth modulation is what makes the family work at every prestige —
+     * the original "% of current Gold" reading would have decayed toward irrelevance as Gold
+     * plateaued and enemy stats kept compounding.
+     */
+    wealthScaled?: boolean
     /** Extend every hostile status already on the target — Unraveling Curse, exactly. */
     extendDebuffs?: number
     /**
@@ -216,4 +243,72 @@ export function executeMultiplier(effect: AbilityEffect, hpFraction: number): nu
     if (!effect.executeBonus) return 1
     const missing = Math.min(1, Math.max(0, 1 - hpFraction))
     return 1 + effect.executeBonus * missing
+}
+
+/**
+ * Scale an effect's **magnitudes** by a potency multiplier, leaving its shape alone.
+ *
+ * Used to make a levelled Skill copy genuinely stronger than a freshly-pulled one
+ * (`SKILL_POTENCY_PER_POINT`). Written here rather than in `content/skills.ts` because it is a
+ * statement about what an `AbilityEffect`'s fields *mean*, and that belongs with the type.
+ *
+ * ## What scales, and what deliberately does not
+ *
+ * **Scales** — every field that answers "how much": `heal`, `shield`, `executeBonus`, the two
+ * burst durations-of-income, `critDamageMultiplier`, and the `magnitude` of both status specs
+ * (including an escalation's).
+ *
+ * **Does not scale**, and each for its own reason:
+ *
+ * - `duration` — a longer buff is a different effect from a stronger one, and §4 describes
+ *   durations as fixed ("a short duration", "brief"). Scaling both would double-count levelling,
+ *   since the idle projection already multiplies magnitude by `duration / cooldown` uptime.
+ * - `stacks` and `escalation.atStacks` — counts and thresholds, not amounts. Scaling the threshold
+ *   would make a levelled Frostbind *slower* to freeze, which is backwards.
+ * - `hits` — Focused Barrage's split exists to add crit rolls at constant total damage; scaling it
+ *   would change the shape of the ability rather than its strength.
+ * - `revive` — a fraction of max HP, so it is scaled but **clamped at 1**: reviving an ally above
+ *   full HP is not a stronger revive, it is a bug.
+ * - `target`, `cleanse`, `alwaysCrits`, `extendDebuffs` — a pattern, two booleans and a duration.
+ *
+ * Returns the input unchanged at potency 1, object identity included, so an unlevelled copy costs
+ * nothing and every pre-existing spec's numbers stay put.
+ */
+export function scaleEffect(effect: AbilityEffect, potency: number): AbilityEffect {
+    if (potency === 1 || !Number.isFinite(potency)) return effect
+
+    const scaleStatus = (spec: StatusSpec | undefined): StatusSpec | undefined =>
+        spec === undefined || spec.magnitude === undefined
+            ? spec
+            : { ...spec, magnitude: spec.magnitude * potency }
+
+    return {
+        ...effect,
+        ...(effect.heal === undefined ? {} : { heal: effect.heal * potency }),
+        ...(effect.shield === undefined ? {} : { shield: effect.shield * potency }),
+        ...(effect.executeBonus === undefined ? {} : { executeBonus: effect.executeBonus * potency }),
+        ...(effect.critDamageMultiplier === undefined
+            ? {}
+            : { critDamageMultiplier: effect.critDamageMultiplier * potency }),
+        ...(effect.goldBurstMinutes === undefined
+            ? {}
+            : { goldBurstMinutes: effect.goldBurstMinutes * potency }),
+        ...(effect.xpBurstMinutes === undefined
+            ? {}
+            : { xpBurstMinutes: effect.xpBurstMinutes * potency }),
+        ...(effect.revive === undefined
+            ? {}
+            : { revive: Math.min(1, effect.revive * potency) }),
+        ...(effect.status === undefined ? {} : { status: scaleStatus(effect.status)! }),
+        ...(effect.selfStatus === undefined ? {} : { selfStatus: scaleStatus(effect.selfStatus)! }),
+        ...(effect.escalation === undefined
+            ? {}
+            : {
+                escalation: {
+                    // The threshold is a count — only what lands past it gets stronger.
+                    atStacks: effect.escalation.atStacks,
+                    status: scaleStatus(effect.escalation.status)!
+                }
+            })
+    }
 }

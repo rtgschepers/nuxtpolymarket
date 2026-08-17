@@ -2,8 +2,9 @@ import { eq } from 'drizzle-orm'
 import { db } from '#server/database'
 import { hqFights, hqState } from '#server/database/schema'
 import { requireUserId } from '#server/utils/auth'
+import { getBalance } from '#server/utils/balance'
 import {
-    getCollection,
+    getCollections,
     getShopLevels,
     heroSnapshotOf,
     isBossStage,
@@ -40,6 +41,12 @@ export default defineEventHandler(async (event) => {
     // player may have accrued levels since their last read.
     await settleHq(userId)
 
+    // Read outside the transaction, before any lock is taken — `credit` locks this user's balance
+    // row from inside, and a read on a second pool connection while that lock is held is exactly
+    // the deadlock shape the platform guidance warns about. Only the Gambler's Strike family
+    // reads it, and its factor is clamped, so a slightly stale value cannot move the fight much.
+    const bankedGold = await getBalance(userId)
+
     return db.transaction(async (tx) => {
         const [state] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
         if (!state) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run to play' })
@@ -50,10 +57,11 @@ export default defineEventHandler(async (event) => {
         }
 
         const shopLevels = await getShopLevels(userId, tx)
-        // Both read inside the lock — the boss is a DPS check against the *fielded party*,
-        // and a stale collection would resolve it with the wrong Champions.
-        const collection = await getCollection(userId, 'champion', tx)
-        const hero = heroSnapshotOf(state, shopLevels, collection)
+        // Both read inside the lock — the boss is a DPS check against the *fielded party*, and a
+        // stale collection would resolve it with the wrong Champions, the wrong Gear, the wrong
+        // equipped Skills or the wrong Artifacts. All four move the outcome now.
+        const collections = await getCollections(userId, tx)
+        const hero = heroSnapshotOf(state, shopLevels, collections, parseFloat(bankedGold) || 0)
 
         // CSPRNG for the seed; everything downstream is deterministic from it, which is what
         // lets the client replay the exact fight without being trusted with the outcome.

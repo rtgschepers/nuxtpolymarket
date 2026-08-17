@@ -17,7 +17,12 @@ import {
 } from './constants'
 import { classPath, getClass } from './content/classes'
 import { getArchetype } from './content/champions'
+import { gearModifiers } from './content/gear'
+import { skillModifiers } from './content/skills'
+import { artifactModifiers } from './content/artifacts'
 import { attacksPerSecondFor, critChanceFor, critMultiplierFor, maxHpFor } from './combat'
+import { mergeTotals, noModifiers, sumModifiers } from './modifiers'
+import type { ModifierTotals } from './modifiers'
 import { D, ZERO, decMax, decPow } from './numbers'
 import type { Decimal, DecimalSource } from './numbers'
 import type {
@@ -125,14 +130,74 @@ export function collectionPassiveMultipliers(
 export function heroStatBlock(
     classId: HeroSnapshot['classId'],
     heroLevel: number,
-    passive?: Record<HqStatKey, number>
+    passive?: Record<HqStatKey, number>,
+    /** Gear + Skill passives + Artifacts, already merged. */
+    modifiers?: Record<HqStatKey, number>
 ): HqStatBlock {
     const base = baseSpreadFor(getClass(classId))
     const block = {} as HqStatBlock
     for (const key of STAT_KEYS) {
-        block[key] = statAtLevel(base[key], heroLevel).mul(passive?.[key] ?? 1)
+        block[key] = statAtLevel(base[key], heroLevel)
+            .mul(passive?.[key] ?? 1)
+            .mul(Math.max(0, modifiers?.[key] ?? 1))
     }
     return block
+}
+
+// ── Passive modifier scopes ────────────────────────────
+//
+// Three systems produce always-on modifier lines, and they differ only in *who* they reach. That
+// distinction is the whole content of the two functions below; the summing itself is
+// `modifiers.ts`.
+
+/**
+ * Hero-only lines: Gear (`gear-equipment.md` §1) and equipped Skill passives
+ * (`skills-gacha.md` §1). Neither system touches a Champion, by design — Champions carry their
+ * own kits and their own progression.
+ */
+export function heroModifierTotals(hero: HeroSnapshot): ModifierTotals {
+    const gear = hero.ownedGear ?? []
+    const skills = hero.equippedSkills ?? []
+    if (gear.length === 0 && skills.length === 0) return noModifiers()
+    return sumModifiers([
+        ...gearModifiers(gear, hero.equippedGear ?? {}),
+        ...skillModifiers(skills)
+    ])
+}
+
+/**
+ * Party-wide lines: equipped Artifacts (`artifacts-dig-site-gacha.md` §1) — "every equipped
+ * Artifact's effect applies to the whole fielded party (Hero + all active Champions), not just
+ * the Hero".
+ */
+export function partyModifierTotals(hero: HeroSnapshot): ModifierTotals {
+    const artifacts = hero.equippedArtifacts ?? []
+    if (artifacts.length === 0) return noModifiers()
+    return sumModifiers(artifactModifiers(artifacts))
+}
+
+/**
+ * The economy rates every source feeds, as additive fractions.
+ *
+ * Additive rather than multiplicative across sources, per `gold-economy.md` §5 — no hard cap, with
+ * magnitudes tuned so a maximal dedicated stack lands around ×3. Skills' Gold lines, Artifacts'
+ * Fortune category and `hero.goldBonusPct` all land in the same sum.
+ *
+ * `offlineEfficiencyPct` is handed to `settle.offlineEfficiency` as an extra source, so it stacks
+ * with the prestige-shop track *and* respects that track's 100% ceiling — Tycoon's Vault cannot
+ * push a maxed player past 100%, which would be free income out of nothing.
+ */
+export function economyBonuses(hero: HeroSnapshot): {
+    goldPct: number
+    xpPct: number
+    offlineEfficiencyPct: number
+} {
+    const totals = mergeTotals(heroModifierTotals(hero), partyModifierTotals(hero))
+    return {
+        goldPct: totals.goldPct + hero.goldBonusPct,
+        xpPct: totals.xpPct,
+        offlineEfficiencyPct: totals.offlineEfficiencyPct
+    }
 }
 
 /**
@@ -150,11 +215,20 @@ export function heroStatBlock(
  * magnitudes nor per-archetype spreads). This function owns the *shape* only: whatever those
  * turn out to be, they multiply a Hero-level-driven baseline rather than replacing it.
  */
-export function championStatBlock(base: HqStatBlock, champion: ChampionSnapshot, heroLevel: number): HqStatBlock {
+export function championStatBlock(
+    base: HqStatBlock,
+    champion: ChampionSnapshot,
+    heroLevel: number,
+    /** Party-wide Artifact lines only. Gear and Skills are Hero-only and never reach here. */
+    modifiers?: Record<HqStatKey, number>
+): HqStatBlock {
     const scale = champion.rarityMultiplier * championInvestmentMultiplier(champion.investment)
     const block = {} as HqStatBlock
     for (const key of STAT_KEYS) {
-        block[key] = decMax(MIN_STAT_VALUE, statAtLevel(base[key], heroLevel).mul(scale))
+        block[key] = decMax(
+            MIN_STAT_VALUE,
+            statAtLevel(base[key], heroLevel).mul(scale).mul(Math.max(0, modifiers?.[key] ?? 1))
+        )
     }
     return block
 }
@@ -181,42 +255,70 @@ export function championInvestmentMultiplier(investment: number): number {
 export function deriveUnitStats(
     block: HqStatBlock,
     kit: { strikesPerAttack: number; row: FormationRow; threat?: number },
-    eva = 0
+    eva = 0,
+    /**
+     * Modifier lines that do **not** go through the stat block — crit, max HP, cooldowns,
+     * reflect. Passed separately because each lands on a derived value rather than a stat: a
+     * crit-chance bonus is not a LCK bonus, and a max-HP bonus is not a VIT bonus.
+     */
+    mods: ModifierTotals = noModifiers()
 ): UnitStats {
+    const crit = critChanceFor(block.lck)
     return {
         pwr: block.pwr,
         def: block.def,
-        maxHp: maxHpFor(block.vit),
+        maxHp: maxHpFor(block.vit).mul(Math.max(0, mods.maxHpFactor)),
         attacksPerSecond: attacksPerSecondFor(block.spd),
         spd: block.spd,
         strikesPerAttack: kit.strikesPerAttack,
         row: kit.row,
         threat: kit.threat ?? BASE_THREAT,
-        critChance: critChanceFor(block.lck).critChance,
-        critMultiplier: critMultiplierFor(block.lck, block.imp),
-        eva
+        // Still clamped to a probability: a stacked Precision Edge can reach 100% but not past it,
+        // and LCK's own overflow-to-crit-damage valve is unaffected.
+        critChance: Math.min(1, Math.max(0, crit.critChance + mods.critChanceBonus)),
+        critMultiplier: critMultiplierFor(block.lck, block.imp).add(mods.critDamageBonus),
+        eva,
+        cooldownFactor: mods.cooldownFactor,
+        reflectFraction: mods.reflectFraction
     }
 }
 
 /**
- * The fielded party, Hero first. Champions are absent through Phase 1, so this is still a
- * one-element array in practice — but nothing downstream assumes that any more.
+ * The fielded party, Hero first.
+ *
+ * Three modifier scopes meet here, and the split is what the docs actually say rather than a
+ * convenience: **Artifacts reach everyone** (party-wide, §1 there), **Gear and Skills reach only
+ * the Hero** (both Hero-only by their own §1s), and the **Champion collection passive reaches only
+ * the Hero** too (`champions-guild-gacha.md` §7). So the Hero receives the merge of both scopes
+ * and each Champion receives the party-wide one.
  */
 export function partyUnitStats(hero: HeroSnapshot): UnitStats[] {
     const node = getClass(hero.classId)
     // The passive reads the whole collection; only the Hero receives it (§7).
     const passive = collectionPassiveMultipliers(hero.ownedChampions ?? [])
-    const units = [deriveUnitStats(heroStatBlock(hero.classId, hero.heroLevel, passive), {
-        strikesPerAttack: node.strikesPerAttack,
-        // The player's saved placement wins; the class node's suggestion is the fallback.
-        row: hero.heroRow ?? node.defaultRow,
-        threat: threatFor(hero.classId)
-    })]
+    const partyWide = partyModifierTotals(hero)
+    const heroTotals = mergeTotals(heroModifierTotals(hero), partyWide)
+
+    const units = [deriveUnitStats(
+        heroStatBlock(hero.classId, hero.heroLevel, passive, heroTotals.stats),
+        {
+            strikesPerAttack: node.strikesPerAttack,
+            // The player's saved placement wins; the class node's suggestion is the fallback.
+            row: hero.heroRow ?? node.defaultRow,
+            threat: threatFor(hero.classId)
+        },
+        0,
+        heroTotals
+    )]
 
     for (const champion of hero.champions ?? []) {
         units.push(deriveUnitStats(
-            championStatBlock(archetypeSpread(champion.archetype), champion, hero.heroLevel),
-            { ...champion, threat: archetypeThreat(champion.archetype) }
+            championStatBlock(
+                archetypeSpread(champion.archetype), champion, hero.heroLevel, partyWide.stats
+            ),
+            { ...champion, threat: archetypeThreat(champion.archetype) },
+            0,
+            partyWide
         ))
     }
     return units

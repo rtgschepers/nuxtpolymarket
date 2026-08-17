@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CLASS_BY_ID, CLASS_IDS, CLASS_NODES, ROOT_CLASS_ID, childrenOf, classPath, isDescendantOf, kitFor } from '#shared/utils/hero-quest/content/classes'
 import { baseSpreadFor } from '#shared/utils/hero-quest/stats'
-import { MIN_STAT_VALUE } from '#shared/utils/hero-quest/constants'
+import { MIN_STAT_VALUE, RARITY_ADJACENT_RATIO_CEILING } from '#shared/utils/hero-quest/constants'
 import {
     ARCHETYPES,
     CHAMPIONS,
@@ -16,6 +16,29 @@ import {
     getArchetype,
     getChampion
 } from '#shared/utils/hero-quest/content/champions'
+import {
+    GEAR,
+    GEAR_SLOTS,
+    GEAR_SLOT_NAME,
+    GEAR_SLOT_STAT,
+    autoEquipFirstPieces,
+    equippedBonus,
+    passiveBonus,
+    upgradeAvailable
+} from '#shared/utils/hero-quest/content/gear'
+import {
+    SKILLS,
+    heroKit,
+    trainingGroundsArt
+} from '#shared/utils/hero-quest/content/skills'
+import {
+    ARTIFACTS,
+    ARTIFACT_CATEGORIES,
+    ARTIFACT_EFFECT_POOL,
+    artifactLineMagnitude
+} from '#shared/utils/hero-quest/content/artifacts'
+import { RARITY_EFFECT_LINES, RARITY_EPITHET } from '#shared/utils/hero-quest/gacha'
+import { ZERO } from '#shared/utils/hero-quest/numbers'
 import type { Rarity } from '#shared/utils/hero-quest/types'
 
 describe('hero-quest class content', () => {
@@ -307,6 +330,353 @@ describe('champion roster', () => {
         const multipliers = RARITIES.map(rarity => RARITY_STAT_MULTIPLIER[rarity])
         for (let index = 1; index < multipliers.length; index++) {
             expect(multipliers[index]!).toBeGreaterThan(multipliers[index - 1]!)
+        }
+    })
+})
+
+/**
+ * Gear (`gear-equipment.md`).
+ *
+ * The simplest roster in the project — a complete 6×6 cross product with nothing authored — so
+ * these mostly pin the *structural* claims the doc makes rather than catching transcription
+ * slips: the exhaustive cross product, the slot→stat bijection, and the Rarity Progression
+ * Guarantee, which is a standing constraint on a table this roster does not even own.
+ */
+describe('hero-quest gear content', () => {
+    it('ships exactly one item per slot per rarity — 36 in total', () => {
+        expect(GEAR).toHaveLength(GEAR_SLOTS.length * RARITIES.length)
+        for (const slot of GEAR_SLOTS) {
+            for (const rarity of RARITIES) {
+                const matching = GEAR.filter(entry => entry.slot === slot && entry.rarity === rarity)
+                expect(matching, `${slot}/${rarity}`).toHaveLength(1)
+            }
+        }
+    })
+
+    it('maps the six slots onto the six stats one-to-one and onto', () => {
+        // §1's table. A collision would silently give one stat two slots and another none.
+        const stats = GEAR_SLOTS.map(slot => GEAR_SLOT_STAT[slot])
+        expect(stats.slice().sort()).toEqual(['def', 'imp', 'lck', 'pwr', 'spd', 'vit'])
+    })
+
+    it('names every piece from the rarity epithet ladder alone', () => {
+        // §1: "every item's name is simply <Rarity Epithet> <Slot Name>" — which is why this
+        // roster needed no authoring pass at all.
+        for (const entry of GEAR) {
+            expect(entry.name, entry.id).toBe(`${RARITY_EPITHET[entry.rarity]} ${GEAR_SLOT_NAME[entry.slot]}`)
+        }
+        expect(GEAR.find(entry => entry.id === 'gear_weapon_mythic')!.name).toBe('Ascendant Weapon')
+    })
+
+    it('keeps every adjacent rarity multiplier under the 6x progression ceiling', () => {
+        /**
+         * §2's Rarity Progression Guarantee, as a standing constraint rather than a one-time
+         * check. Both promises the doc makes — a scalar-50 current-tier piece beats a scalar-1
+         * next-tier one, and a maxed scalar-60 piece beats a scalar-10 next-tier one — reduce to
+         * this, of which the second is binding. Break it and investment stops being safe.
+         */
+        for (let index = 1; index < RARITIES.length; index++) {
+            const ratio = RARITY_STAT_MULTIPLIER[RARITIES[index]!] / RARITY_STAT_MULTIPLIER[RARITIES[index - 1]!]
+            expect(ratio, `${RARITIES[index - 1]} to ${RARITIES[index]}`)
+                .toBeLessThan(RARITY_ADJACENT_RATIO_CEILING)
+        }
+    })
+
+    it('honours both catch-up guarantees at the current multipliers', () => {
+        // The guarantees stated directly, not through their algebraic reduction — so a future
+        // change to the *formula* is caught too, not only a change to the table.
+        for (let index = 1; index < RARITIES.length; index++) {
+            const current = RARITIES[index - 1]!
+            const next = RARITIES[index]!
+            // A current-tier piece at scalar 50 (4★ Lv10) beats a freshly-pulled next-tier one.
+            expect(equippedBonus('weapon', current, 4, 10), `${current} vs ${next} fresh`)
+                .toBeGreaterThan(equippedBonus('weapon', next, 0, 1))
+            // A maxed current-tier piece beats a next-tier one at scalar 10.
+            expect(equippedBonus('weapon', current, 5, 10), `${current} maxed vs ${next} 0-star Lv10`)
+                .toBeGreaterThan(equippedBonus('weapon', next, 0, 10))
+        }
+    })
+
+    it('pays an unequipped piece strictly less than the same piece equipped', () => {
+        // §3's whole point: collecting has value, equipping well has more. If these ever crossed,
+        // the upgrade indicator would be advising players to make themselves weaker.
+        for (const entry of GEAR) {
+            expect(passiveBonus(entry.rarity, 5, 10), entry.id)
+                .toBeLessThan(equippedBonus(entry.slot, entry.rarity, 5, 10))
+        }
+    })
+
+    it('auto-equips the first piece owned for a slot, and never overrides a later choice', () => {
+        const common = { contentId: 'gear_weapon_common', star: 0, level: 1 }
+        const mythic = { contentId: 'gear_weapon_mythic', star: 5, level: 10 }
+
+        // Nothing equipped, one piece owned: it equips (§3).
+        expect(autoEquipFirstPieces([common], {})).toEqual({ weapon: 'gear_weapon_common' })
+
+        // A stronger piece arrives, but a choice already exists: untouched. The indicator
+        // prompts; it never swaps. That is what makes manual equip meaningful.
+        expect(autoEquipFirstPieces([common, mythic], { weapon: 'gear_weapon_common' })).toBeNull()
+    })
+
+    it('raises the upgrade indicator exactly when an owned piece would out-perform the equipped one', () => {
+        const weak = { contentId: 'gear_weapon_common', star: 0, level: 1 }
+        const strong = { contentId: 'gear_weapon_mythic', star: 5, level: 10 }
+
+        expect(upgradeAvailable('weapon', [weak, strong], 'gear_weapon_common')).toBe(true)
+        expect(upgradeAvailable('weapon', [weak, strong], 'gear_weapon_mythic')).toBe(false)
+        // Owning something with nothing equipped is itself worth prompting.
+        expect(upgradeAvailable('weapon', [weak], undefined)).toBe(true)
+        // Nothing owned for the slot — nothing to suggest.
+        expect(upgradeAvailable('boots', [weak, strong], undefined)).toBe(false)
+    })
+})
+
+/**
+ * Skills (`skills-gacha.md`).
+ *
+ * Unlike the Champion roster this one is fully authored in §4, so these are genuinely
+ * transcription checks: the 18/18 split, the per-rarity effect-line counts, and §3's universality
+ * rule — the one that says no skill may reference anything class-specific, since any Hero can
+ * equip any skill.
+ */
+describe('hero-quest skill content', () => {
+    it('ships 36 skills, 6 per rarity, split exactly 3 Active / 3 Passive', () => {
+        expect(SKILLS).toHaveLength(36)
+        for (const rarity of RARITIES) {
+            const atRarity = SKILLS.filter(entry => entry.rarity === rarity)
+            expect(atRarity, rarity).toHaveLength(6)
+            expect(atRarity.filter(entry => entry.type === 'active'), `${rarity} actives`).toHaveLength(3)
+            expect(atRarity.filter(entry => entry.type === 'passive'), `${rarity} passives`).toHaveLength(3)
+        }
+        expect(SKILLS.filter(entry => entry.type === 'active')).toHaveLength(18)
+        expect(SKILLS.filter(entry => entry.type === 'passive')).toHaveLength(18)
+    })
+
+    it('gives every skill the effect-line count its rarity dictates', () => {
+        // §3's table, the same 1/1/1/2/2/3 shape Champions state as an ability count.
+        for (const entry of SKILLS) {
+            expect(entry.lines, entry.id).toHaveLength(RARITY_EFFECT_LINES[entry.rarity])
+        }
+    })
+
+    it('gives every Passive one modifier per effect line, and every Active an effect', () => {
+        for (const entry of SKILLS) {
+            if (entry.type === 'passive') {
+                expect(entry.modifiers, entry.id).toHaveLength(entry.lines.length)
+                expect(entry.effect, entry.id).toBeUndefined()
+            } else {
+                expect(entry.effect, entry.id).toBeDefined()
+                expect(entry.cooldownSeconds, entry.id).toBeGreaterThan(0)
+            }
+        }
+    })
+
+    it('keeps every skill universal — no effect names anything class-specific', () => {
+        /**
+         * §3's core rule. Every line must land on a stat every class has, or on an external
+         * resource (Gold, XP, offline efficiency) that has nothing to do with class at all. The
+         * rule is nearly self-enforcing since the STR/DEX/INT to PWR merge left no path-specific
+         * stat to reference by accident — but it outlives the merge that made it easy.
+         */
+        const universal = new Set<string>(['pwr', 'spd', 'lck', 'imp', 'vit', 'def'])
+        for (const entry of SKILLS) {
+            for (const line of entry.modifiers ?? []) {
+                if (line.kind === 'stat') {
+                    expect(line.stat, entry.id).toBeDefined()
+                    expect(universal.has(line.stat!), `${entry.id}/${line.stat}`).toBe(true)
+                }
+            }
+        }
+    })
+
+    it('gives every Active a payload — damage, a heal, a burst, or something applied', () => {
+        // An Active with no damage and no effect would be a slot spent on nothing.
+        for (const entry of SKILLS.filter(candidate => candidate.type === 'active')) {
+            const effect = entry.effect!
+            const hasPayload = (entry.abilityMultiplier ?? 0) > 0
+                || effect.heal !== undefined
+                || effect.shield !== undefined
+                || effect.status !== undefined
+                || effect.selfStatus !== undefined
+                || effect.cleanse === true
+                || effect.goldBurstMinutes !== undefined
+                || effect.xpBurstMinutes !== undefined
+            expect(hasPayload, entry.id).toBe(true)
+        }
+    })
+
+    it('keeps every id and name unique', () => {
+        expect(new Set(SKILLS.map(entry => entry.id)).size).toBe(SKILLS.length)
+        expect(new Set(SKILLS.map(entry => entry.name)).size).toBe(SKILLS.length)
+    })
+
+    it('scales passive magnitude monotonically with rarity', () => {
+        // §4 describes the ladder qualitatively — "small" through "large" — and this is that
+        // ordering as an assertion, since the words map to `SKILL_PASSIVE_MAGNITUDE` by index.
+        const magnitudeOf = (rarity: Rarity) => SKILLS
+            .find(entry => entry.rarity === rarity && entry.type === 'passive' && entry.modifiers?.[0]?.kind === 'stat')!
+            .modifiers![0]!.magnitude
+        for (let index = 1; index < RARITIES.length; index++) {
+            expect(magnitudeOf(RARITIES[index]!), RARITIES[index])
+                .toBeGreaterThan(magnitudeOf(RARITIES[index - 1]!))
+        }
+    })
+
+    it('holds economy lines below stat lines of the same rarity', () => {
+        // "Keep Gold-granting bonuses small" (`gold-economy.md` §5) given teeth: Gold is the
+        // platform's persistent currency and compounds forever, where a stat bonus is re-earned
+        // each run. `SKILL_ECONOMY_COEFFICIENT` is the throttle.
+        for (const rarity of RARITIES) {
+            const stat = SKILLS.find(entry => entry.rarity === rarity && entry.modifiers?.[0]?.kind === 'stat')
+            const economy = SKILLS.find(entry => entry.rarity === rarity && entry.modifiers?.[0]?.kind === 'gold')
+            if (!stat || !economy) continue
+            expect(economy.modifiers![0]!.magnitude, rarity)
+                .toBeLessThan(stat.modifiers![0]!.magnitude)
+        }
+    })
+
+    it('ties the Training Grounds art to the Hero class path, defaulting to Barracks', () => {
+        // §1's table. Resolved from the class path rather than an ID list, so a node added under
+        // Mage would inherit the Wizard Tower instead of falling through to the default.
+        expect(trainingGroundsArt('class_beginner')).toBe('barracks')
+        expect(trainingGroundsArt('class_paladin')).toBe('barracks')
+        expect(trainingGroundsArt('class_beast_master')).toBe('archery_range')
+        expect(trainingGroundsArt('class_witch_doctor')).toBe('wizard_tower')
+    })
+
+    it('builds the Hero kit from the class tree plus every equipped Active, and nothing else', () => {
+        const bare = {
+            classId: 'class_beginner' as const, heroLevel: 1, heroXp: ZERO,
+            goldBonusPct: 0, offlineEfficiencyLevel: 0, offlineCapLevel: 0
+        }
+        const classOnly = heroKit(bare)
+        const withSkills = heroKit({
+            ...bare,
+            equippedSkills: [
+                { contentId: 'skill_quick_strike', star: 0, level: 1 },
+                // A Passive occupies a slot but brings no firing entry — it is a stat modifier.
+                { contentId: 'skill_marching_drill', star: 0, level: 1 }
+            ]
+        })
+        expect(withSkills).toHaveLength(classOnly.length + 1)
+        expect(withSkills.some(entry => entry.id === 'skill_quick_strike')).toBe(true)
+        expect(withSkills.some(entry => entry.id === 'skill_marching_drill')).toBe(false)
+    })
+})
+
+/**
+ * Artifacts (`artifacts-dig-site-gacha.md`).
+ *
+ * The 48-entry roster and the 33-effect pool. Names here are **placeholders** by design, so
+ * nothing below asserts a name — what is pinned is the structure: the cross product, the pool
+ * sizes §3 states outright, the reuse ceiling, and the effect-line counts.
+ */
+describe('hero-quest artifact content', () => {
+    it('ships 48 Artifacts — 2 per category per rarity', () => {
+        expect(ARTIFACTS).toHaveLength(48)
+        for (const category of ARTIFACT_CATEGORIES) {
+            for (const rarity of RARITIES) {
+                const matching = ARTIFACTS.filter(entry => entry.category === category && entry.rarity === rarity)
+                expect(matching, `${category}/${rarity}`).toHaveLength(2)
+            }
+        }
+    })
+
+    it('holds the 33-effect pool at the sizes §3 states — 9 / 8 / 9 / 7', () => {
+        const sizes = { offense: 9, defense: 8, tempo: 9, fortune: 7 } as const
+        let total = 0
+        for (const category of ARTIFACT_CATEGORIES) {
+            expect(ARTIFACT_EFFECT_POOL[category], category).toHaveLength(sizes[category])
+            total += ARTIFACT_EFFECT_POOL[category].length
+        }
+        expect(total).toBe(33)
+    })
+
+    it('gives every Artifact the effect-line count its rarity dictates', () => {
+        for (const entry of ARTIFACTS) {
+            expect(entry.effects, entry.id).toHaveLength(RARITY_EFFECT_LINES[entry.rarity])
+        }
+    })
+
+    it('never reuses an effect on more than three Artifacts in its category', () => {
+        // §3's ceiling — corrected there from an earlier "exactly 3 each", which is
+        // arithmetically impossible against pools of 8 and 9 with a 20-fill budget.
+        for (const category of ARTIFACT_CATEGORIES) {
+            const counts = new Map<string, number>()
+            for (const entry of ARTIFACTS.filter(candidate => candidate.category === category)) {
+                for (const effect of entry.effects) {
+                    counts.set(effect.id, (counts.get(effect.id) ?? 0) + 1)
+                }
+            }
+            for (const [id, count] of counts) {
+                expect(count, `${category}/${id}`).toBeLessThanOrEqual(3)
+            }
+        }
+    })
+
+    it('draws every effect from its own category pool', () => {
+        for (const entry of ARTIFACTS) {
+            const pool = ARTIFACT_EFFECT_POOL[entry.category].map(effect => effect.id)
+            for (const effect of entry.effects) {
+                expect(pool, `${entry.id}/${effect.id}`).toContain(effect.id)
+            }
+        }
+    })
+
+    it('never repeats an effect within a single Artifact', () => {
+        for (const entry of ARTIFACTS) {
+            const ids = entry.effects.map(effect => effect.id)
+            expect(new Set(ids).size, entry.id).toBe(ids.length)
+        }
+    })
+
+    it('never gives two Artifacts of the same category and rarity the same effect set', () => {
+        for (const category of ARTIFACT_CATEGORIES) {
+            for (const rarity of RARITIES) {
+                const pair = ARTIFACTS.filter(entry => entry.category === category && entry.rarity === rarity)
+                const sets = pair.map(entry => entry.effects.map(effect => effect.id).sort().join('|'))
+                expect(new Set(sets).size, `${category}/${rarity}`).toBe(pair.length)
+            }
+        }
+    })
+
+    it('debuts each category newest effect at Epic or above', () => {
+        // §3's flavour device: Shattering Blow, Unbroken, Chain Reaction and Windfall never
+        // appear at a solo rarity. Optional per the doc, kept deliberately.
+        const debutants = ['Shattering Blow', 'Unbroken', 'Chain Reaction', 'Windfall']
+        const solo: Rarity[] = ['common', 'uncommon', 'rare']
+        for (const entry of ARTIFACTS.filter(candidate => solo.includes(candidate.rarity))) {
+            for (const effect of entry.effects) {
+                expect(debutants, `${entry.id}/${effect.name}`).not.toContain(effect.name)
+            }
+        }
+    })
+
+    it('keeps every effect id and name unique across the whole pool', () => {
+        const all = ARTIFACT_CATEGORIES.flatMap(category => ARTIFACT_EFFECT_POOL[category])
+        expect(new Set(all.map(effect => effect.id)).size).toBe(all.length)
+        expect(new Set(all.map(effect => effect.name)).size).toBe(all.length)
+    })
+
+    it('keeps every Artifact id unique', () => {
+        expect(new Set(ARTIFACTS.map(entry => entry.id)).size).toBe(ARTIFACTS.length)
+    })
+
+    it('scales an effect line with rarity and with the copy own investment', () => {
+        // §6: magnitudes ride the same `(star × 10 + level)` scalar as Gear and the Champion
+        // passive. Both axes, since only one of them is stated in the shared doc.
+        expect(artifactLineMagnitude('stat', 'mythic', 0, 1))
+            .toBeGreaterThan(artifactLineMagnitude('stat', 'common', 0, 1))
+        expect(artifactLineMagnitude('stat', 'common', 5, 10))
+            .toBeGreaterThan(artifactLineMagnitude('stat', 'common', 0, 1))
+    })
+
+    it('throttles economy lines below combat lines of the same rarity and investment', () => {
+        // The same "keep Gold-granting bonuses small" principle Skills applies, and §3 says it
+        // applies project-wide rather than to Artifacts alone.
+        for (const rarity of RARITIES) {
+            expect(artifactLineMagnitude('gold', rarity, 3, 5), rarity)
+                .toBeLessThan(artifactLineMagnitude('stat', rarity, 3, 5))
         }
     })
 })

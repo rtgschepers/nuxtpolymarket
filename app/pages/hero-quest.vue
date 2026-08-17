@@ -1,11 +1,16 @@
 <script setup lang="ts">
 const route = useRoute()
 
-// Guild is the first of the four gacha tabs (Phase 2). The Forge, Training Grounds and
-// Dig-site tabs are Phase 3; raid, trait, arena and encyclopedia belong to Phase 4.
+// All four gacha tabs, in `gear-equipment.md` §6's order — the Forge sits first overall, ahead of
+// the Guild, revised from an earlier second-place placement. Raid, trait, arena and encyclopedia
+// belong to Phase 4.
 const tabs = [
   { label: 'Battle', to: '/hero-quest', icon: 'i-lucide-swords' },
+  { label: 'Forge', to: '/hero-quest/forge', icon: 'i-lucide-hammer' },
   { label: 'Guild', to: '/hero-quest/guild', icon: 'i-lucide-users' },
+  { label: 'Training', to: '/hero-quest/training', icon: 'i-lucide-dumbbell' },
+  { label: 'Dig-site', to: '/hero-quest/dig-site', icon: 'i-lucide-pickaxe' },
+  { label: 'Loadouts', to: '/hero-quest/loadouts', icon: 'i-lucide-layout-grid' },
   { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' }
 ]
 

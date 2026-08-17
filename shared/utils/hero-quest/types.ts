@@ -76,6 +76,25 @@ export type ChampionArchetype = 'damage' | 'tank' | 'support' | 'control'
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic'
 
 /**
+ * One owned copy of anything from any of the four gachas, as the math layer needs it.
+ *
+ * Exactly the three columns that decide a copy's power: what it is, and how far it has been
+ * levelled. `star` and `level` collapse to the `(star × 10 + level)` investment scalar that Gear,
+ * Artifacts and the Champion passive all read (`gacha-shared-system.md` §6), so one shape serves
+ * all four systems — the same reason `hqCollection` is one table.
+ *
+ * Deliberately *not* the DB row: `hqCollection` also carries `userId`, `system`, `dupeProgress`
+ * and `acquiredAt`, none of which any formula reads.
+ */
+export interface OwnedCopy {
+    contentId: string
+    /** 0–5. */
+    star: number
+    /** 1–10 within the current star. */
+    level: number
+}
+
+/**
  * A class node's named ability.
  *
  * **Single-target damage only, deliberately.** `classes-and-combat.md` §7 sketches
@@ -152,6 +171,15 @@ export interface UnitStats {
     /** Decimal: IMP is unbounded, so the crit multiplier it drives is too. */
     critMultiplier: Decimal
     eva: number
+    /**
+     * Multiplier on every one of this unit's skill cooldowns, from Artifacts' Tempo category.
+     *
+     * Kept off SPD deliberately: SPD also drives the autoattack interval, so folding a
+     * cooldown-only bonus into it would silently speed up basic attacks too. 1 means untouched.
+     */
+    cooldownFactor: number
+    /** Fraction of incoming damage this unit reflects, from passive modifiers. */
+    reflectFraction: number
 }
 
 /**
@@ -241,10 +269,51 @@ export interface HeroSnapshot {
     heroLevel: number
     /** Progress toward the next level. Decimal — it rides the same curve as enemy scaling. */
     heroXp: Decimal
-    /** Additive Gold% from Skills/Artifacts/shop. Phase 0: always 0. */
+    /**
+     * Additive Gold% from sources outside the modifier pipeline.
+     *
+     * Skills and Artifacts no longer come through here — they declare `gold` modifier lines and
+     * `stats.economyBonuses` sums them, so this channel is for anything that has no content entry
+     * to hang a modifier on (a future prestige-shop Gold% track, an event bonus). Stays additive
+     * with the modifier total, per `gold-economy.md` §5.
+     */
     goldBonusPct: number
     offlineEfficiencyLevel: number
     offlineCapLevel: number
+
+    /**
+     * **Every owned Gear piece**, equipped or not — an unequipped piece still pays a smaller
+     * passive (`gear-equipment.md` §3), so unlike Skills and Artifacts the whole collection is
+     * the input here.
+     */
+    ownedGear?: readonly OwnedCopy[]
+    /**
+     * Gear slot → contentId. The player's **manual** choice (§3, revised from auto-equip), which
+     * is why it has to be persisted rather than derived: the strongest owned piece and the
+     * equipped one are allowed to differ, and closing that gap is the player's job.
+     */
+    equippedGear?: Readonly<Record<string, string>>
+    /**
+     * Equipped Skills only, up to the purchased slot count. Actives join the Hero's firing kit;
+     * Passives fold into the stat pipeline. An unequipped Skill contributes nothing
+     * (`skills-gacha.md` §5 — the slots are the whole mechanic).
+     */
+    equippedSkills?: readonly OwnedCopy[]
+    /**
+     * Equipped Artifacts only. **Party-wide** — every one applies to the Hero and every fielded
+     * Champion alike (`artifacts-dig-site-gacha.md` §1), which is what separates them from Gear.
+     */
+    equippedArtifacts?: readonly OwnedCopy[]
+    /**
+     * Hours of the player's *current* Gold income sitting banked — the Gambler's Strike family's
+     * only input (`skills-gacha.md` §4¹).
+     *
+     * Resolved by the caller and passed in rather than computed here, because the party's own rate
+     * is what denominates it: banked Gold ÷ Gold-per-hour is self-referential once a wealth-scaled
+     * ability affects DPS. The server resolves it against the wealth-neutral rate — one iteration,
+     * stated rather than pretended away. Absent means exactly 1.0, the neutral factor.
+     */
+    wealthHours?: number
     /** Fielded party, up to the purchased slot count. */
     champions?: readonly ChampionSnapshot[]
     /**

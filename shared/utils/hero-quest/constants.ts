@@ -696,6 +696,39 @@ export const DROP_RATE_TABLE: readonly (readonly number[])[] = [
     [10.0, 10.0, 10.0, 42.0, 25.0, 3.0]
 ]
 
+/**
+ * Flat power multiplier per rarity, in ladder order (Common → Mythic).
+ *
+ * Doc-specified (`champions-guild-gacha.md` §2) and reused verbatim by Gear (`gear-equipment.md`
+ * §2) and Artifacts. `gacha.ts` keys it onto the rarity ladder; nothing indexes this array
+ * directly.
+ *
+ * ⚠ Every adjacent ratio must stay under `RARITY_ADJACENT_RATIO_CEILING`.
+ */
+export const RARITY_STAT_MULTIPLIERS: readonly number[] = [1.0, 1.15, 1.35, 1.6, 2.0, 2.5]
+
+/**
+ * The ceiling Gear's Rarity Progression Guarantee imposes on adjacent rarity multipliers
+ * (`gear-equipment.md` §2).
+ *
+ * Both promises the doc makes — a scalar-50 current-tier piece beats a scalar-1 next-tier one,
+ * and a maxed scalar-60 piece beats a scalar-10 next-tier one — reduce to this single
+ * constraint, of which the second is the binding one. Locked as a tuning constraint rather than
+ * a one-time check, because whoever retunes `RARITY_STAT_MULTIPLIERS` later has to respect it or
+ * silently break the promise that investment is never wasted.
+ */
+export const RARITY_ADJACENT_RATIO_CEILING = 6
+
+/**
+ * Rarity epithets, in ladder order (`champions-guild-gacha.md` §5).
+ *
+ * Load-bearing for two rosters: it supplies the middle word of every Champion's display name,
+ * and it *is* the entire naming scheme for all 36 Gear pieces (`<Epithet> <Slot>`).
+ */
+export const RARITY_EPITHETS: readonly string[] = [
+    'Novice', 'Adept', 'Veteran', 'Vanguard', 'Exalted', 'Ascendant'
+]
+
 /** 1 Seal per pull; a 10-pull is 9 Seals but still counts as 10 toward gacha leveling. */
 export const SINGLE_PULL_COST = 1
 export const TEN_PULL_SIZE = 10
@@ -770,6 +803,229 @@ export const SEAL_GRANT_BANK_CAP_DAYS = 7 // UNTUNED ╧
 export const SEAL_GRANT_PER_BOSS = 1 // UNTUNED ╧
 export const SEAL_GRANT_PER_WORLD_CLEAR = 3 // UNTUNED ╧
 export const SEAL_GRANT_PER_PRESTIGE = 10 // UNTUNED ╧
+
+// ── Gear / The Forge ───────────────────────────────  gear-equipment.md §1–3
+
+/**
+ * Per-slot magnitude of an **equipped** piece, per point of the `(star × 10 + level)` scalar:
+ *
+ *     equippedBonus(slot, rarity, star, level)
+ *         = SLOT_BASE_BONUS[slot] × RARITY_STAT_MULTIPLIER[rarity] × (star × 10 + level)
+ *
+ * Six independent dials on purpose (`gear-equipment.md` §2): PWR, SPD, LCK, IMP, VIT and DEF
+ * plug into fundamentally different downstream formulas — a cooldown fraction, a mitigation
+ * ratio, a crit probability, flat HP — with no shared natural scale, so one shared coefficient
+ * would mean six different things.
+ *
+ * Expressed as a **fraction of the stat**, matching how Skill passives and Artifact effects
+ * express stat bonuses (§2 there). At 0.01 a maxed Mythic piece (scalar 60 × ×2.5) is +150% to
+ * its stat, and a freshly-pulled Common is +1%.
+ *
+ * Deliberately identical across all six for now: no doc ranks the stats against each other, and
+ * six invented values would read three phases later as a decided spread. The `SLOT` keys exist
+ * so differentiating them is a one-line edit here.
+ */
+export const SLOT_BASE_BONUS: Readonly<Record<string, number>> = { // UNTUNED ╧
+    weapon: 0.01,
+    boots: 0.01,
+    gauntlets: 0.01,
+    charm: 0.01,
+    armor: 0.01,
+    helmet: 0.01
+}
+
+/**
+ * What an **owned but unequipped** piece contributes, per point of the same scalar
+ * (`gear-equipment.md` §3):
+ *
+ *     passiveBonus = GEAR_PASSIVE_COEFFICIENT × RARITY_STAT_MULTIPLIER[rarity] × (star×10+level)
+ *
+ * Mirrors the Champion collection passive exactly (`champions-guild-gacha.md` §7) — collecting
+ * has value independent of what is actively equipped. Deliberately an order of magnitude under
+ * `SLOT_BASE_BONUS`, or manual equip would stop mattering: the whole point of §3's upgrade
+ * indicator is that a player who ignores it is leaving real power on the table.
+ */
+export const GEAR_PASSIVE_COEFFICIENT = 0.001 // UNTUNED ╧
+
+// ── Skills / Training Grounds ──────────────────────  skills-gacha.md §3–6
+
+/**
+ * Hero-only Skill slots, bought with Void Shards. Starts at 2, caps at 5 — 3 purchase levels,
+ * mirroring the Champion party-slot progression exactly (`skills-gacha.md` §6).
+ */
+export const BASE_SKILL_SLOTS = 2
+export const MAX_SKILL_SLOTS = 5
+export const SKILL_SLOT_BASE_COST = 400 // UNTUNED ╧
+export const SKILL_SLOT_COST_GROWTH = 3 // UNTUNED ╧
+
+/**
+ * Magnitude of a Skill passive's stat line, by rarity band.
+ *
+ * `skills-gacha.md` §4 authors all 36 in prose — "small", "small–medium", "medium",
+ * "medium–large", "large" — and assigns no number to any of them. These are that ladder, as one
+ * named set: the *relative ordering* is the design content and is deliberate, so retune the set
+ * rather than individual entries.
+ *
+ * Indexed by rarity, since the doc's qualifier tracks rarity one-for-one.
+ */
+export const SKILL_PASSIVE_MAGNITUDE: readonly number[] = [ // UNTUNED ╧
+    0.05, 0.08, 0.12, 0.16, 0.22, 0.30
+]
+
+/**
+ * Economy lines are held to a fraction of a stat line's magnitude.
+ *
+ * This is `gold-economy.md` §5's "keep Gold-granting bonuses small" given a number. Gold is the
+ * platform's persistent, global currency: it is not run-scoped and it survives every prestige,
+ * so it compounds forever where a stat bonus is re-earned each run. §5 sets the calibration
+ * target — a maximal dedicated stack should land around ×3, ×5 worst case — and this coefficient
+ * is the lever that keeps the Skills half of that stack inside it.
+ */
+export const SKILL_ECONOMY_COEFFICIENT = 0.4 // UNTUNED ╧
+
+/**
+ * What one point of a Skill copy's `(star × 10 + level)` scalar adds to its **effect potency**.
+ *
+ *     potency(star, level) = 1 + (star × 10 + level − 1) × SKILL_POTENCY_PER_POINT
+ *
+ * ## Why this exists, and why it is not the Artifact shape
+ *
+ * `gacha-shared-system.md` §6 makes the `(star × 10 + level)` scalar the universal "how strong is
+ * this specific copy" number, and Gear, Artifacts and the Champion passive all read it. **Skills
+ * did not**, because `skills-gacha.md` never says they do — which left a levelled Skill copy worth
+ * literally nothing beyond having consumed the duplicates. That is not a design anyone chose; it
+ * is a gap between two docs, and this closes it on the terms the rest of the project already uses.
+ *
+ * The *shape* is `championInvestmentMultiplier`'s, not `artifactLineMagnitude`'s, and the
+ * difference matters. Artifact magnitudes are **proportional** to the scalar (a fresh copy is
+ * 1/60th of a maxed one), which works there because §6 states that scaling and the per-point base
+ * is tiny to match. Skills are authored as complete qualitative bands in §4 — "small", "medium",
+ * "large" — so a proportional curve would make a freshly-pulled Mythic 1/60th of its own described
+ * strength and silently rewrite the doc's ladder. **Identity at minimum** instead: a 0★/Lv1 copy
+ * is exactly the authored magnitude, and levelling multiplies up from there.
+ *
+ * At 0.02 a maxed copy (scalar 60) is **×2.18** — each level is worth +2% of the base, which is
+ * the "slight increase per level" this is meant to be rather than a second rarity ladder. Its own
+ * constant rather than reusing `CHAMPION_INVESTMENT_PER_POINT` (0.05, ×3.95 at max) because a
+ * Champion's scalar is that Champion's *only* growth axis, while a Skill's magnitude already
+ * carries a rarity band; the two should be tunable apart.
+ *
+ * Applies to magnitudes only — damage multipliers, heals, shields, status strengths, bursts. **Not**
+ * to durations, cooldowns, hit counts or stack thresholds: see `scaleEffect`.
+ */
+export const SKILL_POTENCY_PER_POINT = 0.02 // UNTUNED ╧
+
+/**
+ * Gold burst size, in **minutes of current income**, by rarity band.
+ *
+ * `gold-economy.md` §6 is explicit that flat-Gold effects must be denominated as a duration of
+ * income rather than a fixed amount — that is what keeps Coin Toss correctly sized at prestige 0
+ * and at prestige 20 with no per-stage retuning, ever. The doc's own worked example is
+ * "Coin Toss ≈ 0.5–2 minutes' worth", which anchors the bottom of this ladder.
+ */
+export const GOLD_BURST_MINUTES: readonly number[] = [ // UNTUNED ╧
+    0.5, 1, 2, 3, 5, 8
+]
+
+/**
+ * Cooldown of the pure-economy Actives — Coin Toss and Prospector's Instinct.
+ *
+ * **Deliberately its own constant, and not the shared `SKILL_BASE_COOLDOWN_SECONDS`.** A burst
+ * denominated in minutes of income is only meaningful against a cadence: at the shared 8-second
+ * base, Coin Toss's 0.5 minutes of income would repay **+375% Gold income** continuously, which
+ * is two orders of magnitude past `gold-economy.md` §5's calibration target of a maximal
+ * dedicated stack landing around ×3. §4 describes these two as "deals no damage", so they trade
+ * combat contribution for economy and a long cadence is the price of that trade.
+ *
+ * This is a *decision*, not a transcription — no doc assigns a cooldown to any skill, and the
+ * §5 stack target is the only quantitative anchor either doc offers. It is the dial to move if
+ * the Gold-burst family reads as too weak or too strong.
+ */
+export const GOLD_BURST_COOLDOWN_SECONDS = 120 // UNTUNED ╧
+
+/**
+ * How much shorter a "chance to refund / reset / re-trigger" Active's cooldown is rendered as.
+ *
+ * Three of the 36 carry such a clause — Executioner's Edge, Ragnarok Strike, Fortune's Gambit —
+ * and none is expressible: there is no on-kill trigger, no cooldown-mutation channel and no
+ * scheduled-event queue. All three become a permanently shorter cooldown, which is what all three
+ * clauses actually buy. One constant for all three, because the same approximation should retune
+ * in one place.
+ */
+export const SKILL_COOLDOWN_REFUND_FRACTION = 0.25 // UNTUNED ╧
+
+/**
+ * The Gambler's Strike family's bounded wealth factor (`skills-gacha.md` §4¹,
+ * `gold-economy.md` §8).
+ *
+ *     damage = PWR × abilityMultiplier × wealthFactor(bankedGold / goldPerHour)
+ *
+ * Clamped at both ends, which is the whole reason the redesign works: the base stat keeps pace
+ * with the enemy curve at every prestige, and the modulation can neither trivialise combat nor
+ * decay to irrelevance. §4¹ suggests ×0.5–×2.0 explicitly and calls it "not locked".
+ *
+ * `WEALTH_NEUTRAL_HOURS` is where the factor passes through exactly 1.0 — the amount of banked
+ * income that counts as neither hoarding nor spent down.
+ */
+export const WEALTH_FACTOR_MIN = 0.5 // UNTUNED ╧
+export const WEALTH_FACTOR_MAX = 2.0 // UNTUNED ╧
+export const WEALTH_NEUTRAL_HOURS = 4 // UNTUNED ╧
+
+// ── Artifacts / Dig-site ───────────────────────────  artifacts-dig-site-gacha.md §3, §7
+
+/** Party-wide Artifact slots, Void Shards, 2 → 5 over 3 levels (§7). Same shape as the others. */
+export const BASE_ARTIFACT_SLOTS = 2
+export const MAX_ARTIFACT_SLOTS = 5
+export const ARTIFACT_SLOT_BASE_COST = 400 // UNTUNED ╧
+export const ARTIFACT_SLOT_COST_GROWTH = 3 // UNTUNED ╧
+
+/**
+ * Magnitude of one Artifact effect line, per point of the `(star × 10 + level)` scalar (§6).
+ *
+ * Per *point*, unlike `SKILL_PASSIVE_MAGNITUDE` which is a flat fraction — and the asymmetry is
+ * doc-mandated, not an oversight. §6 states outright that an Artifact's effect-line magnitudes
+ * "scale with the same `(star × 10 + level)` scalar", the same way Gear and the Champion passive
+ * do. `skills-gacha.md` never says that about Skills, so Skills are authored flat and levelled
+ * copies are worth nothing extra — a gap worth flagging at the tuning pass rather than papering
+ * over here, since inventing a Skill investment curve would be inventing design.
+ *
+ * Rarity multiplies on top, so a maxed Mythic Offense Artifact (60 × ×2.5 × 0.004) is +60% party
+ * PWR per line, three lines deep.
+ */
+export const ARTIFACT_EFFECT_PER_POINT = 0.004 // UNTUNED ╧
+
+/**
+ * The same "keep Gold small" throttle as Skills', applied to the Fortune category.
+ *
+ * Separate constant rather than shared, because the two systems have different slot counts and
+ * different stacking rules (§4 allows five Offense Artifacts at once) and therefore contribute
+ * differently to §5's ×3 stack target.
+ */
+export const ARTIFACT_ECONOMY_COEFFICIENT = 0.3 // UNTUNED ╧
+
+// ── Loadouts ───────────────────────────────────────  loadouts.md §3
+
+/**
+ * Saved Loadout slots. Starts at 2, caps at 10 — **8 purchase levels, priced in Gems**.
+ *
+ *     cost(level) = LOADOUT_SLOT_BASE_COST_GEMS × 2^(level-1)
+ *
+ * The first slot track in the game not priced in Void Shards, and deliberately so: every other
+ * slot track gates real party power, while a Loadout slot gates only taps — a player with 2
+ * slots can manually re-equip everything a 10-slot player can. Pure convenience, so it takes the
+ * convenience currency.
+ *
+ * ⚠ **Two firsts at once, and the doc flags it as a genuine unknown.** This is the first time
+ * the doubling short-track shape has been stretched past 5 levels (8 levels tops out at 128× the
+ * base) and the first time it is paired with Gems. Worth the balance script's specific attention.
+ */
+export const BASE_LOADOUT_SLOTS = 2
+export const MAX_LOADOUT_SLOTS = 10
+export const LOADOUT_SLOT_BASE_COST_GEMS = 250 // UNTUNED ╧
+export const LOADOUT_SLOT_COST_GROWTH = 2
+
+/** Bounds the persisted name so a save cannot write an unbounded string into jsonb. */
+export const LOADOUT_NAME_MAX_LENGTH = 32
 
 /**
  * The daily escalating Gold ladder for extra Seals (`gold-economy.md` §7). Per-gacha

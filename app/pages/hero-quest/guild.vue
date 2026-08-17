@@ -8,7 +8,7 @@
  * saved.
  */
 
-const { initialized, guild, pullChampions, saveParty, craftChampion, buySeals } = useHeroQuest()
+const { initialized, guild, pull, craft, buySeals, setLoadout } = useHeroQuest()
 const { user } = useAuth()
 
 const goldBalance = computed(() => parseFloat(user.value?.balance ?? '0'))
@@ -40,15 +40,6 @@ const rowCounts = computed(() => {
     }
 })
 
-const RARITY_CLASS: Record<string, string> = {
-    common: 'text-muted',
-    uncommon: 'text-success',
-    rare: 'text-info',
-    epic: 'text-primary',
-    legendary: 'text-warning',
-    mythic: 'text-error'
-}
-
 function toggleField(id: string) {
     const current = [...party.value]
     const index = current.indexOf(id)
@@ -79,26 +70,29 @@ async function withBusy(action: () => Promise<unknown>) {
     }
 }
 
-async function pull(count: 1 | 10) {
+async function pullChampions(count: 1 | 10) {
     await withBusy(async () => {
-        const result = await pullChampions(count)
+        const result = await pull('champion', count)
         lastPulls.value = result?.pulls ?? []
     })
 }
 
 async function commitParty() {
     await withBusy(async () => {
-        await saveParty(party.value, formation.value)
+        await setLoadout(
+            { championIds: party.value, formation: formation.value },
+            'Party updated'
+        )
         resetDraft()
     })
 }
 
-async function craft(championId: string) {
-    await withBusy(() => craftChampion(championId))
+async function craftChampion(championId: string) {
+    await withBusy(() => craft('champion', championId))
 }
 
 async function buy() {
-    await withBusy(() => buySeals(1))
+    await withBusy(() => buySeals('champion', 1))
 }
 </script>
 
@@ -152,7 +146,7 @@ async function buy() {
             <UButton
               :disabled="busy || guild.seals < guild.singleCost"
               icon="i-lucide-dices"
-              @click="pull(1)"
+              @click="pullChampions(1)"
             >
               Pull · {{ guild.singleCost }}
             </UButton>
@@ -160,7 +154,7 @@ async function buy() {
               :disabled="busy || guild.seals < guild.tenPullCost"
               color="primary"
               icon="i-lucide-layers"
-              @click="pull(10)"
+              @click="pullChampions(10)"
             >
               10-pull · {{ guild.tenPullCost }}
             </UButton>
@@ -200,8 +194,8 @@ async function buy() {
             :key="index"
           >
             <template v-if="rate > 0">
-              <span :class="RARITY_CLASS[['common','uncommon','rare','epic','legendary','mythic'][index] ?? 'common']">
-                {{ ['Common','Uncommon','Rare','Epic','Legendary','Mythic'][index] }} {{ rate }}%
+              <span :class="hqRarityClass(HQ_RARITY_ORDER[index] ?? 'common')">
+                {{ HQ_RARITY_LABEL[index] }} {{ rate }}%
               </span>
               <span class="text-muted">&nbsp;</span>
             </template>
@@ -223,7 +217,7 @@ async function buy() {
             :key="index"
             class="rounded border border-default bg-background px-3 py-2 text-sm"
           >
-            <span :class="RARITY_CLASS[record.rarity]">{{ record.name }}</span>
+            <span :class="hqRarityClass(record.rarity)">{{ record.name }}</span>
             <span
               v-if="record.isNew"
               class="ml-2 text-xs text-success"
@@ -350,7 +344,7 @@ async function buy() {
               <div class="min-w-0">
                 <p
                   class="text-sm font-medium truncate"
-                  :class="RARITY_CLASS[entry.rarity]"
+                  :class="hqRarityClass(entry.rarity)"
                 >
                   {{ entry.owned ? entry.name : '???' }}
                 </p>
@@ -401,7 +395,7 @@ async function buy() {
               block
               icon="i-lucide-hammer"
               :disabled="busy || guild.essence < entry.craftCost"
-              @click="craft(entry.id)"
+              @click="craftChampion(entry.id)"
             >
               Craft · {{ formatNumber(entry.craftCost, false) }} essence
             </UButton>
