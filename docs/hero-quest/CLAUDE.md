@@ -58,6 +58,8 @@ These are load-bearing and easy to violate by accident.
 
 **One `hqCollection` table** for all four gachas, with a `system` enum over `contentId`. `applyDupe()`, `levelUp()`, and `craft()` are each written once and take `system` as an argument. Do not write per-gacha duplicates.
 
+**This extends to the routes, as of Phase 3.** `gacha/pull.post.ts`, `gacha/craft.post.ts` and `gacha/buy-seals.post.ts` are each **one file** taking `system` in the body, per `tech-architecture.md` §5 — the Phase 2 `guild/*` copies were retired rather than triplicated. Two lookup tables are what make that possible: `content/registry.ts` maps `system` → content module (pure, so the client shares it), and `SEAL_COLUMN` / `ESSENCE_COLUMN` in `server/utils/hero-quest.ts` map `system` → Drizzle column, which is the one piece that cannot live in `shared/`. Likewise `loadout/set.post.ts` is the single live-equip route for all five loadout components; there is no per-system equip endpoint.
+
 ---
 
 ## 4. Untuned constants — the trap
@@ -86,18 +88,20 @@ The most common failure here: Champions are central to the game's identity, so i
 
 Rosters are deliberately partial:
 
-| System | Full roster | Build now |
+| System | Full roster | Status |
 |---|---|---|
-| Class nodes | 16 | All 16 — small, and fully specified |
-| Skills | 36 | All 36 — full draft already written |
-| Gear | 36 | All 36 — fully named by the epithet table |
+| Class nodes | 16 | **All 16 — done.** |
+| Skills | 36 | **All 36 — done.** Phase 3; the §4 draft transcribed verbatim |
+| Gear | 36 | **All 36 — done.** Phase 3; fully named by the epithet table alone |
 | Champions | 48 | **All 48 — done.** Filled during the ability-effects pass |
-| Artifacts | 48 | Effects pool first; names deferred |
+| Artifacts | 48 | **All 48 exist**, with the full 33-effect pool. Names are **placeholders** |
 | Worlds | 10 | **Placeholder names and enemies.** World design has not happened. |
 
-**Champions are complete.** The roster was filled deliberately during the ability-effects pass, overriding the earlier guidance below — the deciding argument was that a complete roster is what lets `foldToAvailableRarity` be retired, and that the rarity-overlap goal is served by the *small* 7-ability pool rather than by more content. All 48 exist, assembled from two tables (`ROSTER`, `ABILITY_SLOTS`) so the structural rules are properties of one distribution.
+**Every roster is now structurally complete, and that is what retired `foldToAvailableRarity`.** The helper folded a rolled rarity down to the nearest rarity a partial roster populated; with all four systems covering all six rarities it was the identity function everywhere, so it is **deleted** (`implementation-plan.md`, Phase 3). `content.spec.ts` asserts the coverage per system, so "no fold is needed" is a tested claim rather than a comment. If a future roster ships partial, the reasoning for reintroducing it — and why rounding *down* was the right repair — is preserved in a comment where it used to live in `gacha.ts`.
 
-**Artifact names remain deferred** *by design*, not by oversight — pure content, addable later with zero code change. Do not generate 48 names to "fill in the gaps" there.
+**Champions are complete.** The roster was filled deliberately during the ability-effects pass — the deciding argument was that a complete roster is what lets the fold be retired, and that the rarity-overlap goal is served by the *small* 7-ability pool rather than by more content. All 48 exist, assembled from two tables (`ROSTER`, `ABILITY_SLOTS`) so the structural rules are properties of one distribution.
+
+**Artifact names are placeholders, and the naming pass is still owed.** This guidance previously said not to generate 48 names, and that stood while nothing needed to roll them. Phase 3 needed content for the Dig-site to produce, so all 48 ship assembled from two tables (`ARTIFACT_TITLES`, `ARTIFACT_EFFECT_SLOTS`) with names derived from a placeholder title pool plus the rarity epithet — the same treatment the World roster already gets, and marked as such in the module header. **Replacing `ARTIFACT_TITLES` is the entire naming pass; no code moves.** The per-Artifact *effect assignment* is likewise a distribution rather than an authored choice, and is a legitimate thing for a later pass to re-cut.
 
 **World 10 must be named The Void**, or Void Shards needs renaming.
 

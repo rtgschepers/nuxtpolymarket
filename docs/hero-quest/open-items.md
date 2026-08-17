@@ -235,6 +235,34 @@ All 48 exist: two per archetype per rarity across all six rarities, the complete
 
 ---
 
+### 18. Phase 3 — the remaining three gachas and Loadouts — **landed**
+
+Gear (Forge), Skills (Training Grounds), Artifacts (Dig-site) and Loadouts §1–3 are built. Seven things it decided that were not written down anywhere, listed because each is a judgement call rather than a transcription.
+
+**1. `foldToAvailableRarity` is deleted, not merely unused.** All four rosters now populate all six rarities — Champions 48, Gear 36, Skills 36, Artifacts 48 — which made it the identity function everywhere. `content.spec.ts` asserts the coverage per system, so the claim is tested rather than commented, and the *reasoning* (why rounding down was the right repair for a partial roster) is preserved as a comment where the helper used to live.
+
+**2. The Artifact roster ships with placeholder names, overriding the earlier "do not generate 48 names" guidance.** The Dig-site needs content to roll, and shipping partial would have kept every other gacha paying for content this one had not authored. Names come from a placeholder title pool plus the rarity epithet, the same treatment Worlds already get; `ARTIFACT_TITLES` is the naming pass's one edit. The per-Artifact effect assignment is a shared distribution table, not 48 authored choices, so it is equally re-cuttable.
+
+**3. Three routes replaced twelve.** `gacha/pull`, `gacha/craft` and `gacha/buy-seals` each take `system` in the body per `tech-architecture.md` §5, and the Phase 2 `guild/*` copies were retired. `guild/party.post.ts` became `loadout/set.post.ts`, which sets any of the five loadout components — party, formation, Skills, Artifacts, Gear — because a formation is only valid against a specific party, and once a route has to take two together it may as well take the set a Loadout is *defined* as. `loadout/apply` then runs a saved preset through the identical validator, which is what keeps §1's "never goes stale" promise honest instead of assumed.
+
+**4. Passive modifiers are one vocabulary for three systems.** Gear bonuses, Skill passives and Artifact effects all do the same job — always-on adjustments with no cooldown — so `modifiers.ts` defines one `HqModifier` kind set and each content module declares against it. What differs is **scope**, and only scope: Gear and Skills reach the Hero, Artifacts reach the whole fielded party. Stacking is additive throughout, per `artifacts-dig-site-gacha.md` §4 and `gold-economy.md` §5.
+
+**5. Six effects are approximations, stated rather than hidden** — the same convention #15 established. Ramping-over-a-fight buffs (Momentum, Steady Ground, Flow State, Compound Interest) are rendered flat, because the idle rate is one frozen average per window and has no "later in the fight". On-kill and once-per-fight procs (Lucky Dig, Windfall, Unbroken, Bulwark's Legacy) become rates, since the model counts kills per hour. Three Skill clauses that refund or reset a cooldown become a permanently shorter one. Each carries a comment naming what was dropped.
+
+**6. Two things are declared and inert, honestly.** `controlResist` (Artifacts' Unshaken, Skills' Unbreakable Will and Immortal Vanguard) has nothing to resist: `EnemyStats` is HP/PWR/DEF and enemies have no abilities, so nothing applies control to the party. It goes live the day enemy kits do, and was left pointing at what it *means* rather than re-pointed at a stat that happens to be wired up. Separately, `reflect` was the reverse case — **it turned out `fight.ts` had never resolved the reflect status at all**, so Guardian's Reflect had been inert since the effects pass. Wiring the passive line closed that gap for both.
+
+**7. Skill copies now scale with investment — the one gap this phase found and then closed.** Artifact magnitudes scale with the `(star × 10 + level)` scalar because §6 says so; Skills did not, because `skills-gacha.md` never says they do. That left a levelled Skill copy worth **literally nothing** beyond the duplicates it consumed — not a design anyone chose, just a gap between two docs. `SKILL_POTENCY_PER_POINT` closes it on the terms the rest of the project already uses.
+
+The shape is `championInvestmentMultiplier`'s — **identity at minimum** — not `artifactLineMagnitude`'s proportional curve, and the difference is the whole decision. Artifact magnitudes are proportional to the scalar (a fresh copy is 1/60th of a maxed one), which works there because §6 states that scaling and the per-point base is sized to match. Skills are authored as *complete* qualitative bands in §4 — "small", "medium", "large" — so a proportional curve would make a freshly-pulled Mythic 1/60th of its own described strength and silently rewrite the doc's ladder. At 0★/Lv1 potency is exactly 1.0, so §4 stays the reference point and levelling multiplies up from there: ×2.18 at 5★/Lv10 on the placeholder.
+
+What scales is **magnitudes only** — the damage multiplier, heals, shields, status strengths, Gold/XP bursts — via `scaleEffect`, which is explicit about the exclusions and why. Durations, cooldowns, hit counts and stack thresholds do not: a longer buff is a different effect from a stronger one, the idle projection already prices a status at `duration / cooldown` uptime so scaling both would double-count, and scaling Frostbind's freeze threshold would make a levelled copy *slower* to freeze. Cadence stays SPD's job and Tempo's.
+
+New placeholders, all `// UNTUNED ╧`: `SLOT_BASE_BONUS` (×6), `GEAR_PASSIVE_COEFFICIENT`, `SKILL_PASSIVE_MAGNITUDE[]`, `SKILL_ECONOMY_COEFFICIENT`, `GOLD_BURST_MINUTES[]`, `GOLD_BURST_COOLDOWN_SECONDS`, `SKILL_COOLDOWN_REFUND_FRACTION`, `WEALTH_FACTOR_MIN/MAX`, `WEALTH_NEUTRAL_HOURS`, `SKILL_POTENCY_PER_POINT`, `ARTIFACT_EFFECT_PER_POINT`, `ARTIFACT_ECONOMY_COEFFICIENT`, `SKILL_SLOT_BASE_COST`/`_GROWTH`, `ARTIFACT_SLOT_BASE_COST`/`_GROWTH`, `LOADOUT_SLOT_BASE_COST_GEMS`.
+
+**Deferred out of the phase, deliberately:** `global-power-number.md` (Phase 3 only makes it *computable*; Phase 4's Traits is where its EVA term goes live) and `loadouts.md` §4's per-raid auto-apply, which has no caller until `raid/engage` exists and whose one real guarantee — the swap completing before Trait Raid's unconditional Key debit — can only be tested against a real raid route.
+
+---
+
 ## ⚪ Standing numeric tuning — **all of it deferred to playtest**
 
 Almost all of these are named constants with a formula shape already locked, just waiting on a value. Consolidated so the tuning pass has one list instead of hunting through 20 docs. `SEAL_LADDER_GROWTH[gear]` is no longer here since it's set (`gold-economy.md` section 7).
@@ -251,9 +279,16 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `K_ATTACK`, `K_DEFEND`, `MEDAL_BASE_WIN`, `MEDAL_BASE_LOSS`, `MEDAL_UPSET_BONUS`, `ARENA_MATCH_BAND_PCT`, `ARENA_SHOP_GEM_PRICE` | `arena.md` | `ARENA_MATCH_BAND_PCT` also a design question, see #2. `ARENA_SHOP_GEM_PRICE` has an explicit calibration target (under 1 Battle Speed block per day's Medals) |
 | `EHP_DEF_CONSTANT` | `global-power-number.md` §2 | |
 | `RAID_BASE_STATS`, `RAID_LEVEL_GROWTH`, `RAID_REWARD_BASE/GROWTH`, `RAID_ENRAGE_SECONDS`, `RAID_RAMPAGE_DMG/POWER_BASE/GROWTH` | `raid-system.md` | Per-raid |
-| `SLOT_BASE_BONUS` ×6, `GEAR_PASSIVE_COEFFICIENT` | `gear-equipment.md` §2 | |
+| `SLOT_BASE_BONUS` ×6, `GEAR_PASSIVE_COEFFICIENT` | `gear-equipment.md` §2 | Built. The six slot coefficients are deliberately *identical* — no doc ranks the stats against each other, so six different values would encode a spread nobody decided. `GEAR_PASSIVE_COEFFICIENT` must stay well under them or manual equip stops mattering |
+| `SKILL_PASSIVE_MAGNITUDE[]`, `SKILL_ECONOMY_COEFFICIENT` | `skills-gacha.md` §4 | The whole 36-skill magnitude ladder, indexed by rarity. §4 authors it as "small" → "large" and assigns no number anywhere; the *relative ordering* is design content, so retune the set rather than entries |
+| `SKILL_POTENCY_PER_POINT` | none — see #18 | What one point of a Skill copy's `(star × 10 + level)` scalar adds to its effect potency. **Identity at minimum**, so §4's authored bands stay the reference and only levelling multiplies up — ×2.18 at 5★/Lv10 on the placeholder. Its own constant rather than reusing `CHAMPION_INVESTMENT_PER_POINT` (×3.95 at max) because a Champion's scalar is its *only* growth axis while a Skill already carries a rarity band |
+| `GOLD_BURST_MINUTES[]`, `GOLD_BURST_COOLDOWN_SECONDS` | `gold-economy.md` §6 | Burst size in minutes of income, and the cadence it repays over. The cooldown is a **decision, not a transcription** — at the shared 8s skill base, a 0.5-minute burst repays +375% Gold, two orders past §5's ×3 stack target |
+| `SKILL_COOLDOWN_REFUND_FRACTION` | none — see #18 | How much shorter a "chance to refund / reset / re-trigger" Active's cooldown is rendered as. One constant for all three such Skills, so the approximation retunes in one place |
+| `WEALTH_FACTOR_MIN/MAX`, `WEALTH_NEUTRAL_HOURS` | `skills-gacha.md` §4¹ | The Gambler's Strike family's bounded modulation. §4¹ suggests ×0.5–×2.0 explicitly and calls it not locked; the neutral point is where the factor passes through 1.0 |
+| `ARTIFACT_EFFECT_PER_POINT`, `ARTIFACT_ECONOMY_COEFFICIENT` | `artifacts-dig-site-gacha.md` §6 | Per *point* of the investment scalar, unlike Skills' flat magnitude — §6 states the scaling for Artifacts and no doc states it for Skills. See #18's closing note |
+| `SKILL_SLOT_BASE_COST`/`_GROWTH`, `ARTIFACT_SLOT_BASE_COST`/`_GROWTH` | `skills-gacha.md` §6, `artifacts-dig-site-gacha.md` §7 | Both mirror the Champion slot track exactly, so all three want deriving together — and all three compete with the two offline tracks for the same Void Shards |
 | `GOLD_PRESTIGE_CAP`, `prestigeGoldFactor[]`, `MIN_SECONDS_PER_KILL` | `gold-economy.md` §3–4 | Balance-script outputs — need re-derivation post level-persistence (see #10) and post world-design (#6) |
-| Loadout `BASE_COST_GEMS` (8-level doubling) | `loadouts.md` §3 | Now checkable against real Gem income (Trait/Arena sinks exist) |
+| `LOADOUT_SLOT_BASE_COST_GEMS` (8-level doubling) | `loadouts.md` §3 | Built. Two firsts at once, which §3 flags as a genuine unknown: the first time the doubling short-track shape stretches past 5 levels (128× the base at the top), and the first time it is paired with Gems. Now checkable against real Gem income (Trait/Arena sinks exist) |
 | `ONLINE_THRESHOLD_MS`, refresh interval | `tech-architecture.md` §9 | |
 | `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness |
 | `K` (mitigation ratio) | `classes-and-combat.md` §7 | |
@@ -283,10 +318,10 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 
 ## Suggested order
 
-1. **Phase 3 — the remaining three gachas** (`implementation-plan.md`). Nothing above blocks it: the standing constants are deferred to playtest, and `foldToAvailableRarity` — the partial-roster scaffolding — is picked up *inside* Phase 3, since each new gacha needs its own `hasContent` predicate anyway and Gear ships fully populated (making the fold the identity there, and letting the helper be deleted for Gear specifically).
+1. ~~**Phase 3 — the remaining three gachas**~~ **Done — see #18.** The fold is deleted rather than narrowed, and the ability-effects pass that used to sit at step 3 was absorbed: the 18 Training Grounds Actives were authored against the *existing* `AbilityEffect` descriptor, which is what the effects pass was for.
 2. **World & Enemy Design (#6)** — the largest remaining greenfield design item. Resolves #5 (world naming) and settles the enemy-curve values parked in #10.
-3. **The ability-effects pass** (#12) — pulled forward out of Phase 5, run after Phase 3 so it shares one set of magnitude/cooldown/targeting decisions with the 18 Training Grounds Actives.
-4. **The four remaining quick calls (#1-4)** — all answerable in one short pass, none depend on anything else.
+3. **The four remaining quick calls (#1-4)** — all answerable in one short pass, none depend on anything else.
+4. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus the two things Phase 3 deliberately left: `global-power-number.md` and `loadouts.md` §4's per-raid auto-apply.
 5. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 6. **Playtest, then tune.** The full constant list is settled here and nowhere earlier — see the standing-tuning section. The balance script and campaign sim stay in use throughout for sanity checks, not for picking values.
 
