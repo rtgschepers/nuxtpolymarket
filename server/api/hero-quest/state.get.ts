@@ -59,10 +59,23 @@ export default defineEventHandler(async (event) => {
         }
     }
 
-    const { state, result, online, previousLevel } = await settleHq(userId)
+    const settleOutcome = await settleHq(userId)
+    const { state, result, online, previousLevel } = settleOutcome
+
+    /**
+     * The settle already read the shop levels and the collection rows, inside its lock — reuse
+     * them rather than issuing the same two queries again. `?? getShopLevels(...)` covers the
+     * no-op path, where the settle returns before reading anything.
+     *
+     * `getBalance` deliberately is *not* deduplicated the same way. The settle reads the balance
+     * **before** its transaction opens, because that is the Gold the window was fought with; this
+     * one runs after and therefore includes the Gold the settle just paid out. They are two
+     * different numbers with two different jobs, and collapsing them would show the player a
+     * balance missing everything they just earned.
+     */
     const [shopLevels, collections, loadoutRows, balance] = await Promise.all([
-        getShopLevels(userId),
-        getCollections(userId),
+        settleOutcome.shopLevels ?? getShopLevels(userId),
+        settleOutcome.collections ?? getCollections(userId),
         getLoadouts(userId),
         getBalance(userId)
     ])

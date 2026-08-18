@@ -412,6 +412,25 @@ export interface SettleOutcome {
     /** Hero level before the window, so callers can report levels gained. */
     previousLevel: number
     elapsedSeconds: number
+    /**
+     * The shop levels and collection rows this settle read **inside its lock**, handed back so a
+     * caller that needs them does not query for them a second time.
+     *
+     * `state.get.ts` needs exactly this pair to serialize its response, and used to re-fetch both
+     * immediately after the transaction committed — two extra round trips, one of them the
+     * heaviest query in the request (every owned row across all four gachas).
+     *
+     * Reusing them is also *more* consistent, not less. The returned `state` comes from inside the
+     * transaction, so pairing it with rows read after the commit could show a payload where a
+     * concurrent pull's new item is present but the gacha level that pull advanced is not. Both
+     * halves now come from the same snapshot.
+     *
+     * **Optional because the no-op path returns before reading them.** When `elapsedMs <= 0` there
+     * is nothing to settle and the function returns early, so a caller that wants these must be
+     * prepared to fetch them itself — see `state.get.ts`.
+     */
+    shopLevels?: Record<string, number>
+    collections?: HqCollections
 }
 
 /**
@@ -495,7 +514,16 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
             await credit(userId, result.goldEarned.toFixed(4), 'hero-quest', tx)
         }
 
-        return { state: updated ?? state, result, online, previousLevel: state.heroLevel, elapsedSeconds }
+        return {
+            state: updated ?? state,
+            result,
+            online,
+            previousLevel: state.heroLevel,
+            elapsedSeconds,
+            // Read inside the lock above; handed back so `state.get.ts` does not re-query them.
+            shopLevels,
+            collections
+        }
     })
 }
 
