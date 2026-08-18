@@ -19,6 +19,24 @@ async function onEngage() {
 }
 
 /**
+ * The four headline stats, paired with the glossary entry that explains each.
+ *
+ * The screen shows *derived* values — Health rather than Vitality, Crit rather than Luck — so the
+ * pairing is explicit rather than a key lookup: a player reading "Health" wants to be told about
+ * the stat that produces it.
+ */
+const statTiles = computed(() => {
+    const stats = hero.value?.stats
+    if (!stats) return []
+    return [
+        { label: 'Power', value: formatHq(stats.pwr), doc: HQ_STAT_DOC_BY_KEY.pwr! },
+        { label: 'Defence', value: formatHq(stats.def), doc: HQ_STAT_DOC_BY_KEY.def! },
+        { label: 'Health', value: formatHq(stats.maxHp), doc: HQ_STAT_DOC_BY_KEY.vit! },
+        { label: 'Crit', value: `${Math.round(stats.critChance * 100)}%`, doc: HQ_STAT_DOC_BY_KEY.lck! }
+    ]
+})
+
+/**
  * Only worth showing when the player was actually away — an online settle covers ~60s and
  * banking three kills is not news.
  */
@@ -114,44 +132,41 @@ const awayReport = computed(() => {
           />
         </div>
 
+        <!--
+          Each tile carries its own explanation (session-1 playtest, finding 6). The text comes
+          from `HQ_STAT_DOCS`, the same table the wiki renders, so the tooltip and the wiki page
+          can never describe a stat differently.
+        -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div>
-            <div class="text-xs text-muted">
-              Power
+          <div
+            v-for="tile in statTiles"
+            :key="tile.label"
+          >
+            <div class="text-xs text-muted flex items-center gap-0.5">
+              {{ tile.label }}
+              <HeroQuestInfoTip
+                :title="tile.doc.name"
+                :body="tile.doc.short"
+                :formula="tile.doc.formula"
+                to="/hero-quest/wiki/combat"
+              />
             </div>
             <div class="font-medium text-highlighted">
-              {{ formatHq(hero.stats.pwr) }}
-            </div>
-          </div>
-          <div>
-            <div class="text-xs text-muted">
-              Defence
-            </div>
-            <div class="font-medium text-highlighted">
-              {{ formatHq(hero.stats.def) }}
-            </div>
-          </div>
-          <div>
-            <div class="text-xs text-muted">
-              Health
-            </div>
-            <div class="font-medium text-highlighted">
-              {{ formatHq(hero.stats.maxHp) }}
-            </div>
-          </div>
-          <div>
-            <div class="text-xs text-muted">
-              Crit
-            </div>
-            <div class="font-medium text-highlighted">
-              {{ Math.round(hero.stats.critChance * 100) }}%
+              {{ tile.value }}
             </div>
           </div>
         </div>
 
         <div class="mt-4 pt-3 border-t border-default">
-          <p class="text-xs text-muted mb-1.5">
+          <p class="text-xs text-muted mb-1.5 flex items-center gap-0.5">
             Skills — every one fires the moment its cooldown ends
+            <HeroQuestInfoTip
+              title="Auto-cast"
+              body="There is no cast button anywhere in the game. Every skill on every unit fires
+                the instant its cooldown ends, so equipping one is a build decision rather than an
+                input you have to keep making."
+              to="/hero-quest/wiki"
+            />
           </p>
           <div class="flex flex-wrap gap-1.5">
             <UBadge

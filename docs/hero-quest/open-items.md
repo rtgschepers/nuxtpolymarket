@@ -299,6 +299,23 @@ The one piece of authored content that did not survive the move: `trainingGround
 
 ---
 
+### 21. The in-game wiki — **landed, and it is generated**
+
+Session-1 playtest, finding 6. `/hero-quest/wiki`, five pages: Basics, Combat, Economy, Gacha, Content. Plus `InfoTip.vue` on the battle screen's stat tiles.
+
+**Why this belongs in an open-items list at all:** the wiki is the first thing in the project that *reads* the tuning constants for a player-facing purpose, which makes it the first thing that can be made wrong by the tuning pass itself. Two mechanisms stop that, and both are worth knowing before anyone edits either half:
+
+- **Explainer pages interpolate every number from `constants.ts`.** Prose describes shape; magnitudes are never typed. `test/hero-quest/wiki.spec.ts` asserts each formula string contains its constant's rendered value, so swapping an interpolation for a literal fails. The expected substrings carry context (`never below 1`, not `1`) because `MIN_DAMAGE` is `1` and a bare-digit assertion would be vacuous — a detail worth preserving if those cases are ever extended.
+- **The Content page is a `v-for` over the content modules.** Classes, Champions, Skills, Gear, Artifacts, the effect pool and Worlds all render from the arrays the gacha rolls against.
+
+**The gap, stated plainly:** nothing can render *which* constants are still untuned, because `// UNTUNED ╧` is a comment rather than a value. Basics carries one banner saying so. If the tuning pass ever wants a real list, the marker has to move from comment into data — that is the change to make, and it is not made yet.
+
+**The Economy page marks Trait Gems, Raid Keys and Arena Medals as not in this build.** When Phase 4 ships those systems, flipping `live: true` in `HQ_CURRENCY_DOCS` is the whole edit.
+
+One consequence for the naming passes still owed: Artifact and World names are placeholders, and the Content page now **displays them to players**, with a banner saying so. That raises the priority of `ARTIFACT_TITLES` from "tidy-up" to "visible", though it changes no code — replacing the table is still the entire pass.
+
+---
+
 ## ⚪ Standing numeric tuning — **all of it deferred to playtest**
 
 Almost all of these are named constants with a formula shape already locked, just waiting on a value. Consolidated so the tuning pass has one list instead of hunting through 20 docs. `SEAL_LADDER_GROWTH[gear]` is no longer here since it's set (`gold-economy.md` section 7).

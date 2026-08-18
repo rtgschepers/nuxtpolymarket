@@ -2,7 +2,7 @@
 const route = useRoute()
 
 /**
- * Six tabs, down from nine.
+ * Seven tabs, down from nine.
  *
  * The four gacha tabs (Forge / Guild / Training / Dig-site) collapsed into **Gacha** and
  * **Collections** in the session-1 playtest (findings 4 and 5). The split is by action rather
@@ -10,7 +10,8 @@ const route = useRoute()
  * four names survive as the cards on one and the submenu on the other — this is a navigation
  * change, not a content one.
  *
- * Raid, trait, arena and encyclopedia belong to Phase 4.
+ * Wiki is the session-1 playtest's finding 6 — a new player had no way to learn what a stat
+ * meant without reading the source. Raid, trait and arena belong to Phase 4.
  */
 const tabs = [
   { label: 'Battle', to: '/hero-quest', icon: 'i-lucide-swords' },
@@ -18,6 +19,7 @@ const tabs = [
   { label: 'Collections', to: '/hero-quest/collections', icon: 'i-lucide-library' },
   { label: 'Loadouts', to: '/hero-quest/loadouts', icon: 'i-lucide-layout-grid' },
   { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' },
+  { label: 'Wiki', to: '/hero-quest/wiki', icon: 'i-lucide-book-open' },
   // The playtest harness. Dev builds only — the routes behind it 404 in production regardless,
   // so this is the convenience half of a guard whose real half lives on the server.
   ...(import.meta.dev

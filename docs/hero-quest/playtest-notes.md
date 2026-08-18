@@ -179,4 +179,21 @@ Four intervals became one: `useHqClock` is a single shared ticker for all four f
 
 *Verified:* typecheck clean, 967 tests (9 new), lint clean, build succeeds, and the compiled route table contains exactly the six intended tabs with the four old ones gone. **Not verified: how any of it looks with live data** — the pages sit behind a global auth middleware, so rendering is what the next session checks.
 
-**6 — Wiki.** Static explainer (stats, damage/mitigation/crit, currencies, gacha/dupe/star, prestige) *plus* a reference section generated from the content modules, so it cannot go stale while ~99 constants are still moving. **Still owed** — deliberately last, per the agreed order.
+**6 — Wiki. ✅ Applied.** `/hero-quest/wiki`, five pages: Basics, Combat, Economy, Gacha, Content.
+
+**The staleness problem was the whole design constraint.** Roughly a hundred constants still carry `// UNTUNED ╧` and six rosters are still being authored, so a hand-written wiki would be wrong within a week. Two mechanisms:
+
+- **Every number is interpolated from `constants.ts`**, never typed. Prose describes *shape* — "a clamped ratio, not a curve" — and magnitudes come from the source of truth or are not stated.
+- **The Content page is a `v-for` over the content modules.** All 16 classes, 48 Champions, 36 Skills, 36 Gear, 48 Artifacts, the 33-effect pool and 10 Worlds render from the same arrays the gacha rolls against. A roster edit updates the wiki; there is no second copy to forget.
+
+**That claim is enforced, not just intended.** `test/hero-quest/wiki.spec.ts` asserts each formula string actually contains its constant's rendered value, so replacing an interpolation with a literal fails the build. Verified by mutation — hard-coding `HP = 100 + VIT × 200` (the pre-retune values) failed two specs. The expected substrings deliberately carry context (`never below 1`, not `1`), because `MIN_DAMAGE` is currently `1` and every formula already contains a `1` somewhere; asserting on the bare digit would have passed no matter what.
+
+**What generation cannot do is read an `// UNTUNED` marker** — it lives in a comment, not a value, so no page can list which constants are provisional. Rather than fake it, Basics carries one banner saying every figure is live but most are still being tuned.
+
+**Info icons, the other half of the finding.** `InfoTip.vue` on the battle screen's four stat tiles and on the auto-cast line, reading from `HQ_STAT_DOCS` — the same table the wiki renders, so a tooltip and a wiki entry can never describe a stat differently. **Tap to open, not hover:** `UPopover`'s `mode="hover"` is a Radix HoverCard, which is desktop-only and does nothing on touch — the exact failure a `title` attribute has, and the one the icons exist to avoid.
+
+The Economy page lists Trait Gems, Raid Keys and Arena Medals and **marks them as not in this build**. Listing them as working would send players hunting for a currency they cannot earn; omitting them leaves anyone who has read a design doc confused instead.
+
+*Verified:* typecheck clean, 982 tests (15 new), lint clean on changed files, build succeeds, and all five wiki routes are in the compiled route table. Rendering with live data is still unverified for the same reason as the UI restructure — the global auth middleware.
+
+Consistent with precedent, incidentally: `app/pages/hack/wiki.vue` already took the same import-the-config-and-render approach, so this is the house pattern rather than a new one.
