@@ -63,7 +63,7 @@ import type { ClassId } from '#shared/utils/hero-quest/types'
  * Harness safety rails, not game tuning — which is why they live here rather than in
  * `shared/utils/hero-quest/constants.ts`.
  *
- * `docs/hero-quest/CLAUDE.md` §3 puts every constant in that file so the balance script and
+ * `docs/games/hero-quest/CLAUDE.md` §3 puts every constant in that file so the balance script and
  * playtest tuning stay a one-file edit. These are neither: nothing about game balance changes
  * if `MAX_SKIP_HOURS` moves, and the balance script has no opinion about them. `settle.ts`
  * already sets this precedent by keeping its float tolerance local, on the same reasoning —

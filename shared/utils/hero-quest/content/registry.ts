@@ -4,7 +4,7 @@
  * ## Why this exists
  *
  * `gacha.ts` is already written once and parameterised by `system` — one rarity ladder, one
- * levelling curve, one drop table, one dupe formula (`docs/hero-quest/CLAUDE.md` §3). What it
+ * levelling curve, one drop table, one dupe formula (`docs/games/hero-quest/CLAUDE.md` §3). What it
  * could not be parameterised over was **content**: rolling a pull still needed to know that
  * `'champion'` means `championFromRoll` and `'gear'` means `gearFromRoll`. Phase 2 hard-coded
  * that in the Guild routes, which was fine while there was one gacha and would have meant four

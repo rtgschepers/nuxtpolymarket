@@ -315,7 +315,7 @@ export interface ArtifactDefinition {
  * Placeholder titles, twelve per category, in `ROSTER_RARITIES` order.
  *
  * **Not authored names.** `artifacts-dig-site-gacha.md` §3 defers Artifact naming to a content
- * pass that has not happened, and `docs/hero-quest/CLAUDE.md` §6 is explicit that 48 bespoke
+ * pass that has not happened, and `docs/games/hero-quest/CLAUDE.md` §6 is explicit that 48 bespoke
  * names must not be invented to fill the gap. These are stand-ins in the register the game
  * already uses — the same treatment the World roster ships with — chosen so the collection grid
  * reads as something rather than as `artifact_offense_mythic_1`.

@@ -70,7 +70,7 @@ async function claimWithSeals(tx: Tx, userId: string, system: GachaSystem, seals
  *
  * **One route, not four.** `gacha-shared-system.md` makes the four deliberately parallel — one
  * rarity ladder, one levelling curve, one drop table, one dupe formula — and
- * `docs/hero-quest/CLAUDE.md` §3 requires that machinery be written once and take `system` as an
+ * `docs/games/hero-quest/CLAUDE.md` §3 requires that machinery be written once and take `system` as an
  * argument. Only two things genuinely differ per system: which content module resolves a roll,
  * and which two columns hold the balances. `content/registry.ts` covers the first and
  * `SEAL_COLUMN` / `ESSENCE_COLUMN` in the domain layer cover the second, so everything below is
