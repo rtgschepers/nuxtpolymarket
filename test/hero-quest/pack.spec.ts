@@ -173,7 +173,14 @@ describe('enemy packs', () => {
             for (const size of [1, 2, 3, 5, 8]) {
                 const pack = { members: Array.from({ length: size }, () => member) }
                 // N× the HP fought through, N× the bodies it buys. Exactly a wash.
-                expect(secondsPerKill(units, pack), `size ${size}`).toBe(baseline)
+                //
+                // Compared to 9 decimal places rather than bit-exactly: the claim is that the
+                // pack size cancels, and `packHp / dps / size` divides and re-multiplies, so the
+                // last ULP is not guaranteed to survive the round trip. It failed at size 8 on a
+                // one-ULP difference after an unrelated retune — a stronger assertion than the
+                // property being tested. The sibling spec below already measures this family
+                // with `toBeCloseTo` for the same reason.
+                expect(secondsPerKill(units, pack), `size ${size}`).toBeCloseTo(baseline, 9)
             }
         })
 

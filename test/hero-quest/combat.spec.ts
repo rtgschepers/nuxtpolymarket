@@ -16,6 +16,7 @@ import {
 } from '#shared/utils/hero-quest/combat'
 import {
     BASE_ATTACK_INTERVAL_SECONDS,
+    MIN_ATTACK_INTERVAL_SECONDS,
     BASE_HP,
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
@@ -111,9 +112,12 @@ describe('hero-quest combat math', () => {
     })
 
     describe('attack rate', () => {
-        it('starts at one attack per 3 seconds', () => {
+        it('starts at the base interval when SPD is zero', () => {
+            // Both halves read the constant rather than restating it. These used to hard-code
+            // `1 / 3`, which quietly encoded a tuning value in a spec about a *shape* — and duly
+            // failed the moment the base interval was retuned, for no reason a reader could see.
             expect(attackIntervalFor(0)).toBe(BASE_ATTACK_INTERVAL_SECONDS)
-            expect(attacksPerSecondFor(0)).toBeCloseTo(1 / 3, 10)
+            expect(attacksPerSecondFor(0)).toBeCloseTo(1 / BASE_ATTACK_INTERVAL_SECONDS, 10)
         })
 
         it('speeds up monotonically with SPD', () => {
@@ -125,11 +129,13 @@ describe('hero-quest combat math', () => {
             }
         })
 
-        it('is hard-capped at 3 attacks per second', () => {
+        it('is hard-capped by the floor interval, however high SPD climbs', () => {
+            // The property is "SPD cannot buy an unbounded rate", not "the cap is 3/sec".
+            const cap = 1 / MIN_ATTACK_INTERVAL_SECONDS
             for (const spd of [400, 4_000, 1e9]) {
-                expect(attacksPerSecondFor(spd)).toBeLessThanOrEqual(3)
+                expect(attacksPerSecondFor(spd)).toBeLessThanOrEqual(cap)
             }
-            expect(attacksPerSecondFor(1e9)).toBeCloseTo(3, 10)
+            expect(attacksPerSecondFor(1e9)).toBeCloseTo(cap, 10)
         })
 
         it('never slows below the base interval for a zero or negative SPD', () => {

@@ -311,13 +311,39 @@ export const HP_PER_VIT = 10 // UNTUNED ╧
 
 // ── Attack rate ────────────────────────────────────  basic attacks only
 
-/** Every unit — Hero, Champion, enemy, boss — attacks once per 3s at SPD 0. */
-export const BASE_ATTACK_INTERVAL_SECONDS = 3
+/**
+ * Every unit — Hero, Champion, enemy, boss — attacks once per this many seconds at SPD 0.
+ *
+ * Cut 3 → 2.4 in the session-1 playtest, which puts the beginner (SPD 10) at exactly 2.0s
+ * between swings instead of 2.5s. This was chosen over raising `SPD_ATTACK_RATE_PER_POINT`
+ * deliberately: SPD should need real investment before it reaches the cap, and inflating the
+ * per-point rate would have handed that away at level 1.
+ *
+ * ⚠ **This lever moves both sides of the fight.** Enemies resolve at SPD 0, so their rate is
+ * `1 / BASE_ATTACK_INTERVAL_SECONDS` exactly — cutting the base speeds them up by the same 25%
+ * it speeds up the party. It shortens fights rather than tilting them; see the playtest notes
+ * for the measured effect on survivability.
+ */
+export const BASE_ATTACK_INTERVAL_SECONDS = 2.4 // UNTUNED ╧
 
-/** Hard ceiling of 3 attacks per second, however high SPD climbs. */
-export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 3
+/**
+ * Hard ceiling of **5 attacks per second**, however high SPD climbs.
+ *
+ * Raised from 3/sec in the session-1 playtest, alongside `SPD_ATTACK_RATE_PER_POINT`. The two
+ * move together on purpose: quadrupling the rate-per-point without lifting the ceiling would
+ * just make every build reach the same wall four times sooner, turning SPD into a stat that
+ * stops mattering early instead of one that scales.
+ */
+export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 5 // UNTUNED ╧
 
-/** Reaches the 3/sec ceiling at SPD 400. */
+/**
+ * Reaches the 5/sec ceiling at SPD 550.
+ *
+ * **Deliberately left low.** The session-1 playtest wanted a faster opening and briefly raised
+ * this to 0.05; it was put back because SPD should have to be *invested in* to approach the cap,
+ * and a fat per-point rate hands that progression away at level 1. The opening speed came from
+ * `BASE_ATTACK_INTERVAL_SECONDS` instead, which is the flat term rather than the scaling one.
+ */
 export const SPD_ATTACK_RATE_PER_POINT = 0.02 // UNTUNED ╧
 
 // ── Skill cooldowns ────────────────────────────────  classes-and-combat.md §3
@@ -346,7 +372,21 @@ export const MIN_COOLDOWN_SECONDS = 0.5 // UNTUNED ╧
  * makes the absence obvious, and `ClassSkill` still carries the fields per node, so
  * differentiating them later is a content edit and nothing else.
  */
-export const SKILL_BASE_COOLDOWN_SECONDS = 8 // UNTUNED ╧
+/**
+ * Cut 8 → 6.4 in the session-1 playtest — **the same 0.8× applied to
+ * `BASE_ATTACK_INTERVAL_SECONDS`, not an independent judgement.**
+ *
+ * Shortening the autoattack interval alone would have been a stealth rebalance rather than a
+ * speed-up: autoattacks would land 25% more often while every skill kept its old cadence, so the
+ * game would quietly tilt away from kits and toward basic attacks. Two specs caught exactly that
+ * — a Hero that used to survive to its first volley began dying before casting anything, and the
+ * idle projection's over-promise band widened as fights shortened against a fixed cooldown.
+ *
+ * Scaling both by the same factor restores the ratio the design assumes, and is what let those
+ * two specs pass again untouched. **If one of these moves, the other moves with it** — that
+ * invariant matters more than either value.
+ */
+export const SKILL_BASE_COOLDOWN_SECONDS = 6.4 // UNTUNED ╧
 export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // UNTUNED ╧
 
 // ── Ability effect magnitudes ──────────────────────  classes-and-combat.md §7, §3
