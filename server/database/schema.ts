@@ -5,6 +5,7 @@ import type {
   PathwardenMapPlan
 } from '#shared/types/pathwarden-save'
 import type { FirewallRunSave } from '#shared/utils/gamelogic/firewall'
+import type { CallOfXenoRunSave } from '#shared/utils/gamelogic/call-of-xeno-save'
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -17,6 +18,11 @@ export const user = pgTable('user', {
   rake: numeric('rake', { precision: 19, scale: 4 }).notNull().default('0'),
   rakebackUnlocked: boolean('rakeback_unlocked').notNull().default(false),
   gems: integer('gems').notNull().default(0),
+  // Account-wide reset tier, 0-4. Raised only by server/utils/prestige.ts,
+  // which wipes every game table in the same transaction.
+  prestige: integer('prestige').notNull().default(0),
+  // Paid out on each ascent (5/10/15/20) and spent in the prestige shop.
+  prestigeTokens: integer('prestige_tokens').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
     .defaultNow()
@@ -343,6 +349,44 @@ export const firewallRuns = pgTable('firewall_runs', {
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull()
 })
 
+// ─── CALL OF XENO ────────────────────────────────────────────────────────
+
+// Permanent, coin-bought upgrades plus the per-difficulty records that gate
+// the harder tiers. The game itself is fully client-side; the server's job is
+// owning the levels, stamping a run snapshot at deploy and settling the
+// payout against a wall-clock ceiling at finish.
+export const callOfXenoState = pgTable('call_of_xeno_state', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  warChestLevel: integer('war_chest_level').notNull().default(0),
+  bodyArmorLevel: integer('body_armor_level').notNull().default(0),
+  adrenalineLevel: integer('adrenaline_level').notNull().default(0),
+  scavengerLevel: integer('scavenger_level').notNull().default(0),
+  contractLevel: integer('contract_level').notNull().default(0),
+  sidearmLevel: integer('sidearm_level').notNull().default(0),
+  runsPlayed: integer('runs_played').notNull().default(0),
+  totalEarned: numeric('total_earned', { precision: 19, scale: 4 }).notNull().default('0'),
+  bestEarned: integer('best_earned').notNull().default(0),
+  // Best round reached per difficulty tier — Veteran reads Recruit's, etc.
+  bestRoundRecruit: integer('best_round_recruit').notNull().default(0),
+  bestRoundVeteran: integer('best_round_veteran').notNull().default(0),
+  bestRoundSurvivor: integer('best_round_survivor').notNull().default(0),
+  bestRoundNightmare: integer('best_round_nightmare').notNull().default(0),
+  // Active-run lock + the payout-relevant snapshot taken at deploy.
+  runStartedAt: timestamp('run_started_at'),
+  runDifficultySnapshot: text('run_difficulty_snapshot'),
+  runPayoutMultSnapshot: numeric('run_payout_mult_snapshot', { precision: 10, scale: 4 }),
+  // Round-boundary checkpoint of the active run, restored on resume.
+  runSave: jsonb('run_save').$type<CallOfXenoRunSave>(),
+  // Optimistic-concurrency token for runSave writes; reset at deploy.
+  runSaveRevision: integer('run_save_revision').notNull().default(0),
+  lastRunFinishedAt: timestamp('last_run_finished_at'),
+  // The player's single best run — what the leaderboard shows.
+  bestRunRounds: integer('best_run_rounds').notNull().default(0),
+  bestRunDurationSeconds: integer('best_run_duration_seconds').notNull().default(0),
+  bestRunDifficulty: text('best_run_difficulty')
+})
+
 export const gemOrders = pgTable('gem_orders', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -381,7 +425,15 @@ export const bankState = pgTable('bank_state', {
   principal: numeric('principal', { precision: 19, scale: 4 }).notNull().default('0'),
   maxPrincipal: numeric('max_principal', { precision: 19, scale: 4 }).notNull().default('0'),
   loanPrincipal: numeric('loan_principal', { precision: 19, scale: 4 }).notNull().default('0'),
-  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull()
+  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull(),
+  // Bail-out ledger. The debt is lifted off `balance` and parked here: the 40%
+  // levy pays it down into `bailoutRepaid`, and the penalty ends at whichever
+  // comes first — `bailoutUntil` lapsing or the two meeting. `bailoutUntil` is
+  // nulled the moment it is settled, which is also the flag for "no penalty".
+  bailoutAt: timestamp('bailout_at'),
+  bailoutUntil: timestamp('bailout_until'),
+  bailoutDebt: numeric('bailout_debt', { precision: 19, scale: 4 }).notNull().default('0'),
+  bailoutRepaid: numeric('bailout_repaid', { precision: 19, scale: 4 }).notNull().default('0')
 })
 
 /** Snapshot only at bank actions; the UI projects the latest point in real time. */
@@ -413,6 +465,27 @@ export const liveBlackjackWagers = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull()
   },
   table => [index('live_blackjack_wagers_settled_createdAt_idx').on(table.settled, table.createdAt)]
+)
+
+/**
+ * Escrow for every table game built on the shared LiveTable base — roulette,
+ * baccarat, three card poker, casino hold'em. Same contract as the blackjack
+ * table above, with a `game` column instead of a table per game, so one
+ * recovery sweep covers all of them.
+ */
+export const tableWagers = pgTable(
+  'table_wagers',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    game: text('game').notNull(),
+    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    roundId: integer('round_id').notNull(),
+    amount: numeric('amount', { precision: 19, scale: 4 }).notNull(),
+    kind: text('kind').notNull(),
+    settled: boolean('settled').notNull().default(false),
+    createdAt: timestamp('created_at').defaultNow().notNull()
+  },
+  table => [index('table_wagers_settled_createdAt_idx').on(table.settled, table.createdAt)]
 )
 
 // ─── Xeno ──────────────────────────────────────────────────────────────────
@@ -525,11 +598,30 @@ export const colonyState = pgTable('colony_state', {
    * nutrition <= nutritionMax).
    */
   gemNutrition: integer('gem_nutrition').notNull().default(0),
-  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull(),
-  /** The single builder's current job, if any — cleared on collect. */
-  builderTrackId: text('builder_track_id'),
-  builderStartedAt: timestamp('builder_started_at')
+  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull()
 })
+
+/**
+ * One row = one builder currently working. A colony has BASE_BUILDER_COUNT
+ * builders plus whatever the prestige shop's Labour Contract granted, so the
+ * number of concurrent rows is capped by the caller, not the schema.
+ *
+ * The unique (user, track) constraint is the real guard, not a convenience:
+ * two builders on the same track would each collect "level N+1" and the
+ * player would pay once for a level they got twice. HABITAT_BUILDER_JOB_ID
+ * occupies the same namespace, so the habitat can also only ever have one
+ * builder on it.
+ */
+export const colonyBuilderJobs = pgTable('colony_builder_jobs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  /** An UpgradeTrackId, or HABITAT_BUILDER_JOB_ID for a habitat level-up. */
+  trackId: text('track_id').notNull(),
+  startedAt: timestamp('started_at').defaultNow().notNull()
+}, t => [
+  index('colony_builder_jobs_userId_idx').on(t.userId),
+  unique('colony_builder_jobs_unique').on(t.userId, t.trackId)
+])
 
 /**
  * One row = one bug instance. Buying a bug puts it in the player's inventory
@@ -593,11 +685,12 @@ export const colonyUpgrades = pgTable('colony_upgrades', {
 ])
 
 /**
- * Per-species research level (0-4) — sacrificing a growing number of a
- * species' own bugs on the Research page raises the roll range every FUTURE
- * purchase of that species uses (see RESEARCH_SPEED_MIN/MAX and
- * RESEARCH_YIELD_MIN/MAX in shared/utils/colony.ts). One row per species
- * the player has ever researched; missing = level 0 (base roll).
+ * Per-species research level (0-4) — paying coins on the Research page widens
+ * the SPEED roll range every future purchase of that species uses, and
+ * multiplies everything that species forages by up to 2x for bugs already
+ * owned (see RESEARCH_SPEED_MIN/MAX and RESEARCH_RESOURCE_MULTIPLIERS in
+ * shared/utils/colony.ts). One row per species the player has ever
+ * researched; missing = level 0.
  */
 export const colonyBugResearch = pgTable('colony_bug_research', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -607,6 +700,31 @@ export const colonyBugResearch = pgTable('colony_bug_research', {
 }, t => [
   index('colony_bug_research_userId_idx').on(t.userId),
   unique('colony_bug_research_unique').on(t.typeId, t.userId)
+])
+
+// ─── Prestige shop ────────────────────────────────────────────────────────────
+
+/**
+ * How many times this run has bought each prestige shop item. One row per
+ * (user, item); missing means zero owned.
+ *
+ * This carries a `user_id` and is deliberately NOT on the prestige preserve
+ * list, so ascending wipes it along with everything else the tokens bought.
+ * That is what makes the token refund honest: the perks die in the same
+ * transaction that hands the allowance back (see server/utils/prestige.ts).
+ *
+ * Some items apply their effect once, at purchase (plants, bugs, agents,
+ * levels); others are read live from this count (the miner level ceilings,
+ * see minerRigMaxLevel). Both kinds vanish here.
+ */
+export const prestigePurchases = pgTable('prestige_purchases', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),
+  count: integer('count').notNull().default(0)
+}, t => [
+  index('prestige_purchases_userId_idx').on(t.userId),
+  unique('prestige_purchases_unique').on(t.userId, t.itemId)
 ])
 
 // ─── Hack Ops ─────────────────────────────────────────────────────────────────
@@ -1036,6 +1154,10 @@ export const firewallStateRelations = relations(firewallState, ({ one }) => ({
 
 export const firewallRunsRelations = relations(firewallRuns, ({ one }) => ({
   user: one(user, { fields: [firewallRuns.userId], references: [user.id] })
+}))
+
+export const callOfXenoStateRelations = relations(callOfXenoState, ({ one }) => ({
+  user: one(user, { fields: [callOfXenoState.userId], references: [user.id] })
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({

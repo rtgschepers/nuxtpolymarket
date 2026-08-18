@@ -12,29 +12,64 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1786096055908,
-      "tag": "0001_great_deathstrike",
+      "when": 1785868770269,
+      "tag": "0001_strong_zarek",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1786467364195,
-      "tag": "0002_gray_stark_industries",
+      "when": 1785921801378,
+      "tag": "0002_zippy_randall",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "7",
-      "when": 1786959838555,
-      "tag": "0003_oval_plazm",
+      "when": 1785957464813,
+      "tag": "0003_burly_wolfsbane",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "7",
-      "when": 1786997623046,
-      "tag": "0004_fantastic_khan",
+      "when": 1785993995286,
+      "tag": "0004_table_wagers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785999600000,
+      "tag": "0005_hack_gem_yield",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786871104469,
+      "tag": "0006_free_ikaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786897299764,
+      "tag": "0007_tidy_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787036987695,
+      "tag": "0008_shocking_red_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787076056155,
+      "tag": "0009_rapid_ozymandias",
       "breakpoints": true
     }
   ]
