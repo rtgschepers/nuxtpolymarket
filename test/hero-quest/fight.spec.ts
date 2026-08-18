@@ -91,9 +91,10 @@ describe('hero-quest seeded fights', () => {
         it('times out at exactly the boss timer, never past it', () => {
             // Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s —
             // and now also enough HP to still be standing at 30s, which is the narrow part.
-            // The window is genuinely narrow after the session-1 HP cut: level 50 wipes at 24s,
-            // level 120 wins in 5s. Level 80 is the band where neither side resolves it.
-            const result = runFight({ hero: hero(80), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+            // The window is genuinely narrow, and the session-2 enemy cut narrowed it further
+            // and moved it down: at W3S10 the band is levels 56–60 exactly, 80 now wins. 58 is
+            // its middle. If this ever goes red, re-find the band rather than nudging the level.
+            const result = runFight({ hero: hero(58), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
             expect(result.outcome).toBe('timeout')
             expect(result.secondsElapsed).toBe(BOSS_TIMER_SECONDS)
             expect(D(result.enemyHpRemaining).gt(0)).toBe(true)
@@ -150,8 +151,8 @@ describe('hero-quest seeded fights', () => {
     describe('the boss escort', () => {
         // A boss now stands with `BOSS_MINION_COUNT` trash minions, and the 30s timer covers
         // the whole encounter — so the escort is time taken off the boss, not free damage.
-        const escorted = (level: number) =>
-            runFight({ hero: hero(level, 'class_berserker'), position: at(1, BOSS_STAGE), seed: 7 })
+        const escorted = (level: number, world = 1) =>
+            runFight({ hero: hero(level, 'class_berserker'), position: at(world, BOSS_STAGE), seed: 7 })
 
         it('resolves every body in the encounter, escort first', () => {
             const result = escorted(200)
@@ -174,8 +175,11 @@ describe('hero-quest seeded fights', () => {
         })
 
         it('lets the escort swing too, so incoming damage is the whole encounter', () => {
-            // A losing fight, so the escort survives long enough to be counted.
-            const incoming = escorted(1).events.filter(event => event.kind === 'enemy_attack')
+            // A losing fight, so the escort survives long enough to be counted. World 4, not
+            // World 1: after the session-2 enemy cut a level-1 Hero *wins* the World 1 boss
+            // and fells the whole escort before it takes a swing, which would make this spec
+            // pass or fail on the opening's difficulty rather than on who is allowed to attack.
+            const incoming = escorted(1, 4).events.filter(event => event.kind === 'enemy_attack')
             expect(incoming.length).toBeGreaterThan(0)
             // More than one distinct attacker — the boss is not the only stream any more.
             expect(new Set(incoming.map(event => event.enemyIndex)).size).toBeGreaterThan(1)
@@ -193,11 +197,21 @@ describe('hero-quest seeded fights', () => {
         // `runFight` is now reachable through the real path, because abilities apply statuses.
         /**
          * Deep enough that the fight runs long rather than ending in the first second.
-         * Abilities sit on an 8s cooldown, so a fixture the party one-shots proves nothing
+         * Abilities sit on a shared cooldown, so a fixture the party one-shots proves nothing
          * about effects — no kit ever gets to fire.
+         *
+         * W4/60 → W3/15 with the session-2 enemy cut. Two things moved at once: at the old
+         * fixture the pack no longer survived to the first cast (Meteor Shower never landed a
+         * burn), and a level-60 Hero's cooldowns are short enough that the whole kit fires in
+         * one 2.4s volley, which is not "a real fight" in any sense this block cares about.
+         * W3/15 restores a ~5s fight with all three bodies standing when the first AoE lands.
+         *
+         * The band that satisfies every spec below is **W3, levels 10–19** — 15 is its middle.
+         * Levels 20+ let the Hero fell a minion before Arrow Rain resolves, and below 10 the
+         * Frostbind stacks never reach their threshold. Re-find the band rather than nudging.
          */
-        const fight = (classId: ClassId, level = 60) =>
-            runFight({ hero: hero(level, classId), position: at(4, SUPER_BOSS_STAGE), seed: 7 })
+        const fight = (classId: ClassId, level = 15) =>
+            runFight({ hero: hero(level, classId), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
 
         it('lands an AoE on every living body at once', () => {
             // Marksman's Arrow Rain hits every spot; a boss encounter holds three.
@@ -342,10 +356,15 @@ describe('hero-quest seeded fights', () => {
          * the boss mid-volley and a three-ability Mythic reads as a two-ability one, which
          * would be a property of the fixture rather than of the kit. At this depth the Hero's
          * four skills and a Mythic's three all come off cooldown at least once.
+         *
+         * W6/80 → W4/18 with the session-2 enemy cut: at the old depth the party now wipes on
+         * the boss's first swing at 2.4s, before the Hero's later skills come round. The band
+         * where every Berserker skill and every Kaira and Rask ability fires is **W4, levels
+         * 10–25**; 18 is its middle and the fight runs ~7.6s.
          */
         const deepFight = (champions: ChampionSnapshot[]) => runFight({
-            hero: withParty(hero(80, 'class_berserker'), champions),
-            position: at(6, SUPER_BOSS_STAGE),
+            hero: withParty(hero(18, 'class_berserker'), champions),
+            position: at(4, SUPER_BOSS_STAGE),
             seed: 7
         })
 

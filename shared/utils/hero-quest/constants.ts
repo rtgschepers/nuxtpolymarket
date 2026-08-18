@@ -143,9 +143,29 @@ export const ENEMY_CURVE_T = Math.pow(ENEMY_STEP_BASE, PRESTIGE_INDEX_STEPS)
  */
 export const ENEMY_PRESTIGE_STEP_MULT = 1
 
-export const BASE_ENEMY_HP = 30 // UNTUNED ╧
-export const BASE_ENEMY_PWR = 10 // UNTUNED ╧
-export const BASE_ENEMY_DEF = 5 // UNTUNED ╧
+/**
+ * The World 1 Stage 1 enemy, before the `b^n` ramp touches it. Cut hard in the session-2
+ * playtest — HP 30 → 10, PWR 10 → 3, DEF 5 → 2 — because the opening was measurably slow:
+ * 6.5s to kill one trash mob, 3m 16s to clear a single wave stage, and a solo Hero blocked
+ * outright at the World 1 Stage 5 boss (`--report=world --level=1`). It now reads 1.8s per
+ * kill, 54s per stage, and World 1 clears end to end in 8m 29s with no blocker.
+ *
+ * `BASE_ENEMY_HP` and `BASE_ENEMY_DEF` are the *pace* dials and only that — both divide
+ * straight into time-to-kill and neither survives a level or two of stat growth. Halving DEF
+ * is worth about 6% off a stage clear; the 3× HP cut is where the speed-up actually comes
+ * from. Because they wash out, the campaign end state is nearly identical at DEF 2 and DEF 3
+ * (same wall, same level, ~2% apart on total time), so do not reach for DEF expecting depth.
+ *
+ * `BASE_ENEMY_PWR` is the one that moves the campaign, and it is **not a survivability dial
+ * in the opening** — see `BASE_HP` for why. At level 1 the Beginner's DEF puts the mitigation
+ * clamp at enemy PWR 7: anywhere below that the Hero takes `MIN_DAMAGE` per hit regardless,
+ * so PWR 2 and PWR 6 are byte-identical on the first screen. Where 3 versus 5 shows up is
+ * depth, once levels have pushed the clamp behind the curve — the solo campaign runs 2
+ * prestiges / 3d 8h at 3, against 1 prestige / 4d 14h at 5 and 0 prestiges at the old 10.
+ */
+export const BASE_ENEMY_HP = 10 // UNTUNED ╧
+export const BASE_ENEMY_PWR = 3 // UNTUNED ╧
+export const BASE_ENEMY_DEF = 2 // UNTUNED ╧
 export const ELITE_STAT_MULT = 1.2 // UNTUNED ╧
 
 /**
@@ -264,12 +284,30 @@ export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
  * now exactly why it is load-bearing. It carries the level-1 solo opening on its own, freeing
  * `HP_PER_VIT` to be tuned for how a *levelled party* feels without breaking a fresh account.
  *
- * Raised 100 → 2000 in the session-1 playtest pass, alongside the `HP_PER_VIT` cut below.
- * Verified irrelevant past the opening: a party of 3 walls at exactly P2 W2S6 / level 808 for
- * every value from 1000 to 8000. Solo needs ≥2000 — at 1000 a level-1 Hero still cannot clear
- * World 1 Stage 1 and the campaign is unfarmable from the first screen.
+ * Raised 100 → 2000 in the session-1 playtest pass, alongside the `HP_PER_VIT` cut below,
+ * because at 2000 a level-1 Hero could clear World 1 Stage 1 and at 1000 it could not.
+ *
+ * ## Back to 100 in session 2, and why that is not a revert
+ *
+ * The session-1 derivation was measured against `BASE_ENEMY_PWR` at 10. That is the value the
+ * ≥2000 floor was a floor *of*: the enemy hit hard enough to matter, so the opening needed a
+ * pool deep enough to eat thirty of those hits in a row. Cutting `BASE_ENEMY_PWR` to 3 moved
+ * the thing being defended against, and the floor moved with it.
+ *
+ * ⚠ **In the opening this constant is not really a survivability dial, and neither is enemy
+ * PWR.** Mitigation clamps: below enemy PWR 7 a level-1 Beginner takes `MIN_DAMAGE` per hit
+ * flat, so incoming DPS is 1.46 at PWR 2 and 1.46 at PWR 6, then 4.38 at PWR 8. There is no
+ * gradient across the cliff — only which side of it you are on. At 100 the Hero carries 200
+ * EHP against that floor, which is 2.5× what World 1 Stage 1 asks and holds 2.1×–2.9× across
+ * every wave and elite stage of the world (bosses clear with 26×+). So "survives to the Stage
+ * 10 super boss" is bought by standing on the safe side of the clamp, not by the size of the
+ * pool. Raising this number does not buy a margin the clamp has not already given.
+ *
+ * The trade is that the opening is *deliberately* not lethal. If a session wants real early
+ * pressure back, the lever is `BASE_ENEMY_PWR` crossing 7 — and then this needs re-deriving
+ * upward again, because past the clamp damage scales normally and 200 EHP evaporates.
  */
-export const BASE_HP = 2000 // UNTUNED ╧
+export const BASE_HP = 100 // UNTUNED ╧
 
 /**
  * **The levelled-party survivability dial.** Cut 200 → 10 by the session-1 playtest.

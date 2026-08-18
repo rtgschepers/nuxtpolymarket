@@ -18,18 +18,33 @@ const hero = makeHero('class_beginner', 1)
  */
 const TO_THE_WALL = { maxPrestige: 6 }
 
+/**
+ * The shortest walk that still contains a blocked stage, and therefore a grind event.
+ *
+ * Was `{ maxPrestige: 0 }`, on the reasoning that one loop was the cheapest fixture that
+ * still hit a blocker. The session-2 enemy cut (`BASE_ENEMY_HP` 30 → 10, `BASE_ENEMY_PWR`
+ * 10 → 3) removed every blocker from the first loop: prestige 0 is now a clean 31-minute
+ * walk to W10S10 with zero grinding. That made three of the specs below vacuous rather than
+ * failing — "every grind raises the level" passes trivially over an empty list — so the whole
+ * file moves together rather than only the two that went red.
+ *
+ * One prestige, not six: the walk is still cheap, and grinding is what these specs are about.
+ */
+const PAST_A_BLOCKER = { maxPrestige: 1 }
+
 describe('analyzeCampaign', () => {
     it('walks past blockers by farming instead of stopping at the first one', () => {
-        const result = analyzeCampaign(hero, 0, { maxPrestige: 0 })
+        const result = analyzeCampaign(hero, 0, PAST_A_BLOCKER)
 
         expect(result.grinds.length).toBeGreaterThan(0)
-        // analyzeWorld gives up inside World 1; the campaign farms through it.
+        // `analyzeWorld` stops at the first stage it cannot clear; the campaign farms and
+        // keeps going, so it reports more than the one world a single-world walk would.
         expect(result.rows.length).toBeGreaterThan(1)
         expect(result.endLevel).toBeGreaterThan(result.startLevel)
     })
 
     it('every grind raises the level and costs finite time', () => {
-        const result = analyzeCampaign(hero, 0, { maxPrestige: 0 })
+        const result = analyzeCampaign(hero, 0, PAST_A_BLOCKER)
 
         for (const event of result.grinds) {
             expect(event.toLevel).toBeGreaterThan(event.fromLevel)
@@ -40,7 +55,7 @@ describe('analyzeCampaign', () => {
     })
 
     it('farms behind the blocked stage, never a boss', () => {
-        const result = analyzeCampaign(hero, 0, { maxPrestige: 0 })
+        const result = analyzeCampaign(hero, 0, PAST_A_BLOCKER)
 
         for (const event of result.grinds) {
             const behind = event.farmWorld < event.world
@@ -69,8 +84,8 @@ describe('analyzeCampaign', () => {
         const depth = (report: ReturnType<typeof analyzeCampaign>) =>
             (report.wall.prestige * WORLD_COUNT + report.wall.world) * STAGES_PER_WORLD + report.wall.stage
 
-        const tight = analyzeCampaign(hero, 0, { maxPrestige: 0, grindBudgetSeconds: 3600 })
-        const loose = analyzeCampaign(hero, 0, { maxPrestige: 0, grindBudgetSeconds: 3.2e10, maxLevel: 100000 })
+        const tight = analyzeCampaign(hero, 0, { ...PAST_A_BLOCKER, grindBudgetSeconds: 3600 })
+        const loose = analyzeCampaign(hero, 0, { ...PAST_A_BLOCKER, grindBudgetSeconds: 3.2e10, maxLevel: 100000 })
 
         expect(tight.wall.reason).toBe('grind_budget')
         expect(depth(loose)).toBeGreaterThan(depth(tight))
@@ -87,7 +102,7 @@ describe('analyzeCampaign', () => {
     })
 
     it('accumulates time and gold monotonically across the walk', () => {
-        const result = analyzeCampaign(hero, 0, { maxPrestige: 0 })
+        const result = analyzeCampaign(hero, 0, PAST_A_BLOCKER)
 
         expect(result.totalSeconds).toBeCloseTo(result.fightSeconds + result.grindSeconds, 6)
         expect(result.totalGold).toBeGreaterThan(0)

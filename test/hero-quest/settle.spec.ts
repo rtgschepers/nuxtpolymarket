@@ -72,12 +72,23 @@ function at(world: number, stage: number, killsInStage = 0, prestige = 0): RunPo
  */
 const LONGEST_SETTLE_SECONDS = 72 * 3600
 
-function firstStallingPosition(snapshot: HeroSnapshot, prestige = 0): RunPosition | null {
-    for (let world = 1; world <= WORLD_COUNT; world++) {
-        for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
-            const position = at(world, stage, 0, prestige)
-            const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(position))
-            if (!(spk <= LONGEST_SETTLE_SECONDS)) return position
+/**
+ * Scanned across prestiges, not just the first loop. The session-2 enemy cut (`BASE_ENEMY_HP`
+ * 30 → 10, `BASE_ENEMY_DEF` 5 → 2) pushed the stall out of the prestige-0 run entirely — a
+ * static level-1 Beginner now grinds through all ten worlds and walls at P1 W2S10. Naming a
+ * prestige here would be the same mistake as naming a stage: the claim under test is that the
+ * wall exists and that levels answer it, not where it sits.
+ */
+const STALL_SEARCH_PRESTIGES = 4
+
+function firstStallingPosition(snapshot: HeroSnapshot): RunPosition | null {
+    for (let prestige = 0; prestige < STALL_SEARCH_PRESTIGES; prestige++) {
+        for (let world = 1; world <= WORLD_COUNT; world++) {
+            for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+                const position = at(world, stage, 0, prestige)
+                const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(position))
+                if (!(spk <= LONGEST_SETTLE_SECONDS)) return position
+            }
         }
     }
     return null
@@ -337,8 +348,10 @@ describe('hero-quest settle', () => {
 
         it('earns nothing when the party dies before landing a single kill', () => {
             // The narrow band where the hero still scratches the enemy but one kill outlasts
-            // it — past this the hero deals literally 0 and `stalls` instead (below).
-            const position = at(2, 6)
+            // it — past this the hero deals literally 0 and `stalls` instead (below). Moved
+            // W2S6 → W2S9 by the session-2 enemy cut: with base HP at 10 the hero now kills
+            // fast enough at S6 to bank a kill before dropping, so the band starts later.
+            const position = at(2, 9)
             expect(secondsPerKillAt(position)).toBeLessThan(Number.POSITIVE_INFINITY)
             expect(wipeCount(position)).toBe(0)
 
