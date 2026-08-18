@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * The Training Grounds — Skill pulls, the equipped slots, and the collection.
+ * The Skill collection — the equipped slots and every skill in the roster.
  *
  * Hero-only (`skills-gacha.md` §1): Champions carry their own kits, fixed at recruitment, and
  * this system never touches them. Slots start at 2 and reach 5 through the prestige shop (§6).
  *
- * Two presentation rules from the doc:
+ * Two presentation rules from the doc survive the move off the Training Grounds tab:
  *
  * - **Actives and Passives are visually distinct** but freely mixable — either slot can hold
  *   either type, in any combination (§5). An equipped Active adds no button to the screen: every
@@ -13,24 +13,34 @@
  *   input burden (§3).
  * - **Training Grounds skills read as a separate system** from the Hero's innate class-tree
  *   skills (§7). The class tree uses square icon slots; these use round ones.
+ *
+ * Pulling moved to `/hero-quest/gacha` (session-1 playtest, finding 4). The Barracks / Archery
+ * Range / Wizard Tower art (§1) went with it — it dressed the recruitment block, not the roster.
  */
 
-const { initialized, training, pull, freePull, craft, buySeals, setLoadout } = useHeroQuest()
+const { initialized, training, craft, setLoadout } = useHeroQuest()
 
 const busy = ref(false)
-const lastPulls = ref<{ name: string; rarity: string; isNew: boolean; star: number; level: number; essence: number }[]>([])
 
 /** Local, unsaved slot edit. Null until the player touches something. */
 const draft = ref<string[] | null>(null)
 const equipped = computed(() => draft.value ?? training.value?.equippedSkillIds ?? [])
 const dirty = computed(() => draft.value !== null)
 
-const owned = computed(() => (training.value?.roster ?? []).filter(entry => entry.owned))
+/** Actives first: they are the half a player builds around, and the half §5 wants legible. */
+const view = useHqCollectionView(
+    () => training.value?.roster ?? [],
+    entry => entry.type,
+    ['active', 'passive']
+)
 
-const ART_LABEL: Record<string, string> = {
-    barracks: 'Barracks',
-    archery_range: 'Archery Range',
-    wizard_tower: 'Wizard Tower'
+const typeOptions = [
+    { value: 'active', label: 'Active' },
+    { value: 'passive', label: 'Passive' }
+]
+
+function skillById(id: string) {
+    return training.value?.roster.find(entry => entry.id === id) ?? null
 }
 
 function toggle(id: string) {
@@ -43,14 +53,6 @@ function toggle(id: string) {
     draft.value = current
 }
 
-/** The daily entitlement. Always ten — the server owns the size, not the button. */
-async function takeFreePull() {
-    await withBusy(async () => {
-        const result = await freePull('skill')
-        lastPulls.value = result?.pulls ?? []
-    })
-}
-
 async function withBusy(action: () => Promise<unknown>) {
     busy.value = true
     try {
@@ -58,13 +60,6 @@ async function withBusy(action: () => Promise<unknown>) {
     } finally {
         busy.value = false
     }
-}
-
-async function pullSkills(count: 1 | 10) {
-    await withBusy(async () => {
-        const result = await pull('skill', count)
-        lastPulls.value = result?.pulls ?? []
-    })
 }
 
 async function commit() {
@@ -76,10 +71,6 @@ async function commit() {
 
 async function craftSkill(contentId: string) {
     await withBusy(() => craft('skill', contentId))
-}
-
-async function buy() {
-    await withBusy(() => buySeals('skill', 1))
 }
 
 /** `+7%` reads better than `0.071` for a magnitude expressed as a fraction. */
@@ -98,46 +89,6 @@ function asPercent(fraction: number) {
     </div>
 
     <template v-else>
-      <HeroQuestGachaHeader
-        :gacha="training"
-        seal-name="Skill Seals"
-        essence-name="Skill Essence"
-        :busy="busy"
-        @pull="pullSkills"
-        @free-pull="takeFreePull"
-        @buy-seals="buy"
-      />
-
-      <div
-        v-if="lastPulls.length"
-        class="rounded-lg border border-primary/40 bg-primary/5 p-4"
-      >
-        <p class="text-xs text-muted mb-2">
-          Last pull
-        </p>
-        <div class="flex flex-wrap gap-2">
-          <div
-            v-for="(record, index) in lastPulls"
-            :key="index"
-            class="rounded border border-default bg-background px-3 py-2 text-sm"
-          >
-            <span :class="hqRarityClass(record.rarity)">{{ record.name }}</span>
-            <span
-              v-if="record.isNew"
-              class="ml-2 text-xs text-success"
-            >NEW</span>
-            <span
-              v-else-if="record.essence > 0"
-              class="ml-2 text-xs text-muted"
-            >+{{ record.essence }} essence</span>
-            <span
-              v-else
-              class="ml-2 text-xs text-muted"
-            >{{ record.star }}★ Lv{{ record.level }}</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Equipped -->
       <div>
         <div class="flex items-baseline justify-between mb-3 gap-4">
@@ -145,7 +96,7 @@ function asPercent(fraction: number) {
             Equipped — {{ equipped.length }}/{{ training.slotCount }}
           </h2>
           <p class="text-xs text-muted">
-            {{ ART_LABEL[training.art] }} · every Active fires on its own
+            Every Active fires on its own
           </p>
         </div>
 
@@ -159,21 +110,20 @@ function asPercent(fraction: number) {
               <!-- Round, so these never read as class-tree skills (§7's square-vs-circle rule). -->
               <span
                 class="size-6 rounded-full grid place-items-center shrink-0"
-                :class="training.roster.find(e => e.id === id)?.type === 'active'
+                :class="skillById(id)?.type === 'active'
                   ? 'bg-primary/20 text-primary'
                   : 'bg-elevated text-muted'"
               >
                 <UIcon
-                  :name="training.roster.find(e => e.id === id)?.type === 'active'
-                    ? 'i-lucide-zap' : 'i-lucide-shield'"
+                  :name="skillById(id)?.type === 'active' ? 'i-lucide-zap' : 'i-lucide-shield'"
                   class="size-3"
                 />
               </span>
               <span
                 class="text-sm truncate"
-                :class="hqRarityClass(training.roster.find(e => e.id === id)?.rarity ?? 'common')"
+                :class="hqRarityClass(skillById(id)?.rarity ?? 'common')"
               >
-                {{ training.roster.find(e => e.id === id)?.name }}
+                {{ skillById(id)?.name }}
               </span>
             </div>
             <UButton
@@ -219,35 +169,33 @@ function asPercent(fraction: number) {
       </div>
 
       <!-- Collection -->
-      <div>
-        <div class="flex items-baseline justify-between mb-3">
-          <h2 class="text-sm font-medium text-highlighted">
-            Collection — {{ owned.length }}/{{ training.roster.length }}
-          </h2>
-          <p class="text-xs text-muted">
-            18 Actives, 18 Passives — a slot takes either
-          </p>
-        </div>
+      <div class="space-y-3">
+        <HeroQuestCollectionToolbar
+          v-model:rarity="view.rarity.value"
+          v-model:ownership="view.ownership.value"
+          v-model:axis="view.axis.value"
+          axis-label="Type"
+          :axis-options="typeOptions"
+          :owned="view.ownedCount.value"
+          :total="view.total.value"
+          :showing="view.visible.value.length"
+        />
+
+        <p class="text-xs text-muted">
+          18 Actives, 18 Passives — a slot takes either
+        </p>
 
         <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="entry in training.roster"
+          <HeroQuestCollectionCard
+            v-for="entry in view.visible.value"
             :key="entry.id"
-            class="rounded-lg border p-3 space-y-1"
-            :class="entry.owned ? 'border-default bg-elevated/40' : 'border-default/50 bg-background opacity-50'"
+            :entry="entry"
+            :subtitle="entry.type"
+            :essence="training.essence"
+            :busy="busy"
+            @craft="craftSkill(entry.id)"
           >
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p
-                  class="text-sm font-medium truncate"
-                  :class="hqRarityClass(entry.rarity)"
-                >
-                  {{ entry.owned ? entry.name : '???' }}
-                </p>
-                <p class="text-xs text-muted capitalize">
-                  {{ entry.type }} · {{ entry.rarity }}
-                </p>
-              </div>
+            <template #action>
               <UButton
                 v-if="entry.owned"
                 size="xs"
@@ -258,60 +206,39 @@ function asPercent(fraction: number) {
               >
                 {{ equipped.includes(entry.id) ? 'Equipped' : 'Equip' }}
               </UButton>
-            </div>
+            </template>
 
             <!--
               Passive lines carry their resolved magnitude, so levelling is visible as a number
               rather than only as a star count. An Active's payload is a whole effect, so it shows
               the prose and leans on the potency badge below instead.
             -->
-            <ul
-              v-if="entry.owned"
-              class="text-xs text-muted space-y-0.5"
-            >
-              <li
-                v-for="(line, index) in entry.lines"
-                :key="index"
+            <template #detail>
+              <ul
+                v-if="entry.owned"
+                class="text-xs text-muted space-y-0.5"
               >
-                {{ line }}
-                <span
-                  v-if="entry.lineMagnitudes[index] !== null"
-                  class="text-default"
-                >{{ asPercent(entry.lineMagnitudes[index]!) }}</span>
-              </li>
-            </ul>
+                <li
+                  v-for="(line, index) in entry.lines"
+                  :key="index"
+                >
+                  {{ line }}
+                  <span
+                    v-if="entry.lineMagnitudes[index] !== null"
+                    class="text-default"
+                  >{{ asPercent(entry.lineMagnitudes[index]!) }}</span>
+                </li>
+              </ul>
+            </template>
 
-            <p
-              v-if="entry.owned"
-              class="text-xs text-muted"
-            >
-              {{ entry.star }}★ Lv{{ entry.level }}
-              <!-- What levelling this copy has actually bought. 1.0 at 0★/Lv1, so it is hidden. -->
+            <template #meta>
+              <!-- What levelling this copy has bought. 1.0 at 0★/Lv1, so it is hidden there. -->
               <span
                 v-if="entry.potency > 1"
                 class="text-primary"
               >· ×{{ entry.potency.toFixed(2) }} potency</span>
-              <template v-if="entry.maxed">
-                · maxed
-              </template>
-              <template v-else-if="entry.dupesToLevelUp">
-                · {{ entry.dupeProgress }}/{{ entry.dupesToLevelUp }} dupes
-              </template>
-            </p>
-
-            <UButton
-              v-if="!entry.maxed"
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              block
-              icon="i-lucide-hammer"
-              :disabled="busy || training.essence < entry.craftCost"
-              @click="craftSkill(entry.id)"
-            >
-              Craft · {{ formatNumber(entry.craftCost, false) }} essence
-            </UButton>
-          </div>
+            </template>
+          </HeroQuestCollectionCard>
         </div>
       </div>
     </template>

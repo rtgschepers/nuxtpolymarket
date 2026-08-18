@@ -1,15 +1,21 @@
 <script setup lang="ts">
 const route = useRoute()
 
-// All four gacha tabs, in `gear-equipment.md` §6's order — the Forge sits first overall, ahead of
-// the Guild, revised from an earlier second-place placement. Raid, trait, arena and encyclopedia
-// belong to Phase 4.
+/**
+ * Six tabs, down from nine.
+ *
+ * The four gacha tabs (Forge / Guild / Training / Dig-site) collapsed into **Gacha** and
+ * **Collections** in the session-1 playtest (findings 4 and 5). The split is by action rather
+ * than by system: every pull button is on one screen, everything you own is on the other. The
+ * four names survive as the cards on one and the submenu on the other — this is a navigation
+ * change, not a content one.
+ *
+ * Raid, trait, arena and encyclopedia belong to Phase 4.
+ */
 const tabs = [
   { label: 'Battle', to: '/hero-quest', icon: 'i-lucide-swords' },
-  { label: 'Forge', to: '/hero-quest/forge', icon: 'i-lucide-hammer' },
-  { label: 'Guild', to: '/hero-quest/guild', icon: 'i-lucide-users' },
-  { label: 'Training', to: '/hero-quest/training', icon: 'i-lucide-dumbbell' },
-  { label: 'Dig-site', to: '/hero-quest/dig-site', icon: 'i-lucide-pickaxe' },
+  { label: 'Gacha', to: '/hero-quest/gacha', icon: 'i-lucide-dices' },
+  { label: 'Collections', to: '/hero-quest/collections', icon: 'i-lucide-library' },
   { label: 'Loadouts', to: '/hero-quest/loadouts', icon: 'i-lucide-layout-grid' },
   { label: 'Prestige', to: '/hero-quest/prestige', icon: 'i-lucide-sparkles' },
   // The playtest harness. Dev builds only — the routes behind it 404 in production regardless,
@@ -19,7 +25,14 @@ const tabs = [
     : [])
 ]
 
-const activeTab = computed(() => route.path)
+/**
+ * Prefix match, not equality — Collections has its own submenu underneath, and the parent tab has
+ * to stay lit on `/hero-quest/collections/skills`. Battle is the exception: its path is a prefix
+ * of every other tab's, so it only ever matches exactly.
+ */
+function isActive(to: string) {
+  return route.path === to || (to !== '/hero-quest' && route.path.startsWith(`${to}/`))
+}
 </script>
 
 <template>
@@ -31,7 +44,7 @@ const activeTab = computed(() => route.path)
           :key="tab.to"
           :to="tab.to"
           class="flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-t-lg transition-colors"
-          :class="activeTab === tab.to
+          :class="isActive(tab.to)
             ? 'text-highlighted -mb-px'
             : 'text-muted hover:text-default'"
         >

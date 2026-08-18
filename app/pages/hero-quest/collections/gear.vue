@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { GEAR_SLOTS, GEAR_SLOT_NAME } from '#shared/utils/hero-quest/content/gear'
+
 /**
- * The Forge — Gear pulls, the six equipment slots, and the collection.
+ * The Gear collection — the six equipment slots and every piece in the roster.
  *
- * Two things here have no equivalent on the other three gacha tabs, and both come from
+ * Two things here have no equivalent in the other three collections, and both come from
  * `gear-equipment.md` §3's revision to **manual** equip:
  *
  * 1. **All six slots exist from account start.** No prestige-shop unlock track — the deliberate
@@ -12,30 +14,34 @@
  *    worn, the slot shows a badge. It only informs; the swap stays a manual tap. §3 names the
  *    consequence explicitly — a player who ignores it has lower stats than they have already
  *    earned — and the badge exists so that gap is never hidden, only left for them to close.
+ *
+ * Pulling moved to `/hero-quest/gacha` (session-1 playtest, finding 4).
  */
 
-const { initialized, forge, pull, freePull, craft, buySeals, setLoadout } = useHeroQuest()
+const { initialized, forge, craft, setLoadout } = useHeroQuest()
 
 const busy = ref(false)
-const lastPulls = ref<{ name: string; rarity: string; isNew: boolean; star: number; level: number; essence: number }[]>([])
 
-/** Which slot's piece list is open. Only one at a time — the grid is six rows, not six lists. */
+/** Which slot's piece list is open. Only one at a time — the panel is six rows, not six lists. */
 const openSlot = ref<string | null>(null)
 
-const owned = computed(() => (forge.value?.roster ?? []).filter(entry => entry.owned))
+const view = useHqCollectionView(
+    () => forge.value?.roster ?? [],
+    entry => entry.slot,
+    GEAR_SLOTS
+)
+
+const slotOptions = GEAR_SLOTS.map(slot => ({ value: slot, label: GEAR_SLOT_NAME[slot] }))
+
+function pieceById(id: string | null) {
+    if (!id) return null
+    return forge.value?.roster.find(entry => entry.id === id) ?? null
+}
 
 function piecesFor(slot: string) {
     return (forge.value?.roster ?? [])
         .filter(entry => entry.slot === slot && entry.owned)
         .sort((a, b) => b.equippedBonus - a.equippedBonus)
-}
-
-/** The daily entitlement. Always ten — the server owns the size, not the button. */
-async function takeFreePull() {
-    await withBusy(async () => {
-        const result = await freePull('gear')
-        lastPulls.value = result?.pulls ?? []
-    })
 }
 
 async function withBusy(action: () => Promise<unknown>) {
@@ -47,13 +53,6 @@ async function withBusy(action: () => Promise<unknown>) {
     }
 }
 
-async function pullGear(count: 1 | 10) {
-    await withBusy(async () => {
-        const result = await pull('gear', count)
-        lastPulls.value = result?.pulls ?? []
-    })
-}
-
 /**
  * Equip one piece. Sends the **whole** slot map rather than a delta, because that is what the
  * column holds and a partial write would have to be merged somewhere — the server rebuilds the
@@ -61,10 +60,10 @@ async function pullGear(count: 1 | 10) {
  */
 async function equip(slot: string, contentId: string) {
     await withBusy(async () => {
-        const next = { ...(forge.value?.slots ?? []).reduce<Record<string, string>>((map, entry) => {
+        const next = (forge.value?.slots ?? []).reduce<Record<string, string>>((map, entry) => {
             if (entry.equippedId) map[entry.slot] = entry.equippedId
             return map
-        }, {}) }
+        }, {})
         next[slot] = contentId
         await setLoadout({ gear: next }, 'Gear equipped')
         openSlot.value = null
@@ -73,10 +72,6 @@ async function equip(slot: string, contentId: string) {
 
 async function craftGear(contentId: string) {
     await withBusy(() => craft('gear', contentId))
-}
-
-async function buy() {
-    await withBusy(() => buySeals('gear', 1))
 }
 
 /** `+150%` reads better than `1.5` for a bonus expressed as a fraction of the stat. */
@@ -95,48 +90,7 @@ function asPercent(fraction: number) {
     </div>
 
     <template v-else>
-      <HeroQuestGachaHeader
-        :gacha="forge"
-        seal-name="Forge Seals"
-        essence-name="Gear Essence"
-        :busy="busy"
-        @pull="pullGear"
-        @free-pull="takeFreePull"
-        @buy-seals="buy"
-      />
-
-      <!-- Last pull result -->
-      <div
-        v-if="lastPulls.length"
-        class="rounded-lg border border-primary/40 bg-primary/5 p-4"
-      >
-        <p class="text-xs text-muted mb-2">
-          Last pull
-        </p>
-        <div class="flex flex-wrap gap-2">
-          <div
-            v-for="(record, index) in lastPulls"
-            :key="index"
-            class="rounded border border-default bg-background px-3 py-2 text-sm"
-          >
-            <span :class="hqRarityClass(record.rarity)">{{ record.name }}</span>
-            <span
-              v-if="record.isNew"
-              class="ml-2 text-xs text-success"
-            >NEW</span>
-            <span
-              v-else-if="record.essence > 0"
-              class="ml-2 text-xs text-muted"
-            >+{{ record.essence }} essence</span>
-            <span
-              v-else
-              class="ml-2 text-xs text-muted"
-            >{{ record.star }}★ Lv{{ record.level }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Equipment -->
+      <!-- Equipped -->
       <div>
         <div class="flex items-baseline justify-between mb-3 gap-4">
           <h2 class="text-sm font-medium text-highlighted">
@@ -165,11 +119,9 @@ function asPercent(fraction: number) {
                 </p>
                 <p
                   class="text-xs truncate"
-                  :class="slot.equippedId ? hqRarityClass(forge.roster.find(e => e.id === slot.equippedId)?.rarity ?? 'common') : 'text-muted'"
+                  :class="slot.equippedId ? hqRarityClass(pieceById(slot.equippedId)?.rarity ?? 'common') : 'text-muted'"
                 >
-                  {{ slot.equippedId
-                    ? forge.roster.find(e => e.id === slot.equippedId)?.name
-                    : 'Nothing equipped' }}
+                  {{ pieceById(slot.equippedId)?.name ?? 'Nothing equipped' }}
                 </p>
               </div>
 
@@ -227,35 +179,33 @@ function asPercent(fraction: number) {
       </div>
 
       <!-- Collection -->
-      <div>
-        <div class="flex items-baseline justify-between mb-3">
-          <h2 class="text-sm font-medium text-highlighted">
-            Collection — {{ owned.length }}/{{ forge.roster.length }}
-          </h2>
-          <p class="text-xs text-muted">
-            Unequipped pieces still grant a smaller passive bonus
-          </p>
-        </div>
+      <div class="space-y-3">
+        <HeroQuestCollectionToolbar
+          v-model:rarity="view.rarity.value"
+          v-model:ownership="view.ownership.value"
+          v-model:axis="view.axis.value"
+          axis-label="Slot"
+          :axis-options="slotOptions"
+          :owned="view.ownedCount.value"
+          :total="view.total.value"
+          :showing="view.visible.value.length"
+        />
+
+        <p class="text-xs text-muted">
+          Unequipped pieces still grant a smaller passive bonus
+        </p>
 
         <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="entry in forge.roster"
+          <HeroQuestCollectionCard
+            v-for="entry in view.visible.value"
             :key="entry.id"
-            class="rounded-lg border p-3 space-y-1"
-            :class="entry.owned ? 'border-default bg-elevated/40' : 'border-default/50 bg-background opacity-50'"
+            :entry="entry"
+            :subtitle="GEAR_SLOT_NAME[entry.slot]"
+            :essence="forge.essence"
+            :busy="busy"
+            @craft="craftGear(entry.id)"
           >
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p
-                  class="text-sm font-medium truncate"
-                  :class="hqRarityClass(entry.rarity)"
-                >
-                  {{ entry.owned ? entry.name : '???' }}
-                </p>
-                <p class="text-xs text-muted uppercase">
-                  {{ entry.stat }} · {{ entry.rarity }}
-                </p>
-              </div>
+            <template #action>
               <UBadge
                 v-if="entry.equipped"
                 color="primary"
@@ -264,35 +214,21 @@ function asPercent(fraction: number) {
               >
                 Equipped
               </UBadge>
-            </div>
+            </template>
 
-            <p
-              v-if="entry.owned"
-              class="text-xs text-muted"
-            >
-              {{ entry.star }}★ Lv{{ entry.level }}
-              · {{ asPercent(entry.bonus) }} {{ entry.stat.toUpperCase() }}
-              <template v-if="entry.maxed">
-                · maxed
-              </template>
-              <template v-else-if="entry.dupesToLevelUp">
-                · {{ entry.dupeProgress }}/{{ entry.dupesToLevelUp }} dupes
-              </template>
-            </p>
-
-            <UButton
-              v-if="!entry.maxed"
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              block
-              icon="i-lucide-hammer"
-              :disabled="busy || forge.essence < entry.craftCost"
-              @click="craftGear(entry.id)"
-            >
-              Craft · {{ formatNumber(entry.craftCost, false) }} essence
-            </UButton>
-          </div>
+            <template #detail>
+              <p
+                v-if="entry.owned"
+                class="text-xs text-muted"
+              >
+                {{ asPercent(entry.bonus) }} {{ entry.stat.toUpperCase() }}
+                <span
+                  v-if="!entry.equipped"
+                  class="text-muted/70"
+                >· {{ asPercent(entry.equippedBonus) }} if equipped</span>
+              </p>
+            </template>
+          </HeroQuestCollectionCard>
         </div>
       </div>
     </template>

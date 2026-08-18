@@ -152,10 +152,31 @@ One spec was wrong before the code was: it advanced a third claim by twenty cool
 
 Note the Guild page predates `GachaHeader` and still renders its own pull row, so the free-pull button is duplicated there. Finding 4 folds all four gachas onto one page, which deletes that copy.
 
-**4 — Gacha pages.** All four collapse to one page, 2×2. Each gets an info icon opening its drop rates across all 10 gacha levels.
+**4, 5 and 7 — the UI restructure. ✅ Applied together**, because they are one change. Moving Collections off the gacha pages is precisely what leaves a gacha small enough to be a card, so neither half lands on its own.
 
-**5 — Collections.** Own page with a submenu per collection. Sorted rarity **low→high**, then the system's own second axis (`archetype` for Champions, `slot` for Gear, active/passive for Skills, `category` for Artifacts). Unowned stay inline as locked `???`. Filters where they make sense. **Equipping moves here** — each collection shows its equipped slots above the grid, which is what frees the gacha page to be pull-only.
+**Navigation went from nine tabs to six.** The four gacha tabs (Forge / Guild / Training Grounds / Dig-site) became **Gacha** and **Collections**. The split is by *action*, not by system: every pull button is on one screen, everything you own is on the other.
 
-**6 — Wiki.** Static explainer (stats, damage/mitigation/crit, currencies, gacha/dupe/star, prestige) *plus* a reference section generated from the content modules, so it cannot go stale while ~99 constants are still moving.
+| Was | Is |
+|---|---|
+| `hero-quest/{forge,guild,training,dig-site}.vue` | `hero-quest/gacha.vue` — 2×2 of `GachaCard.vue` |
+| — | `hero-quest/collections/{gear,champions,skills,artifacts}.vue` under one submenu |
+| `GachaHeader.vue` (full-width, ×4 pages) | `GachaCard.vue` (a quarter of one page) |
+| four near-copies of a collection grid | `CollectionCard.vue` + `CollectionToolbar.vue`, written once |
 
-**7 — Dupes.** Progress bar with the count inside it, replacing the word.
+⚠ **This departs from the docs' four-tab layout**, which `gear-equipment.md` §6 and its siblings name as *places*. The names survive as the card headings and the submenu, and no rule, formula or number moved — but it is a real deviation from a locked design, taken on a playtest call rather than a doc revision, and it is written down here rather than left for someone to discover.
+
+**4 — Drop rates.** The info icon opens the **whole ladder**, all 10 levels × 6 rarities with the player's current rung marked, plus the pulls needed to leave each level. Derived on the client from `dropRatesFor`, the same pure function the server rolls against — not a server-authority violation, because the drop table is public content and a tampered client can only lie to itself about odds it cannot influence. What stays server-side is the *roll*.
+
+**5 — Ordering and filters.** Rarity low→high, then the system's own axis, then **name**. The name tiebreak is the non-obvious one: without it the order inside a rarity/axis cell falls back to array order, so a content edit that reorders a roster silently reshuffles a grid the player has learned the shape of. `hqSortCollection` is the only part of this restructure that is logic rather than layout, so it is the only part with a spec — nine of them, including that it does not mutate the payload it is handed.
+
+Three filters, identical on all four grids: rarity, the system's axis, and owned/missing. Unowned entries stay **inline as locked `???` cards** rather than being hidden or pushed to the end — that is what makes the grid a checklist, and "Missing" is how you look at only the gaps.
+
+**Equipping moved with the grids**, which is what makes the split hold up: a party, a gear slot, a skill loadout and an artifact set are all decisions about things you own. Gear keeps its six slots and the §3 upgrade badge; Champions keep the party editor and formation rows; all of it moved verbatim rather than being rewritten.
+
+**7 — Dupes.** `DupeBar.vue`: the count sits *inside* the bar, centred over the fill rather than within it (a label inside the fill vanishes at 0% and clips at every width between). Maxed copies read `MAX` instead of a ratio.
+
+Four intervals became one: `useHqClock` is a single shared ticker for all four free-pull countdowns, refcounted and torn down with the last subscriber. It still drives labels only — the server decides whether a pull is owed.
+
+*Verified:* typecheck clean, 967 tests (9 new), lint clean, build succeeds, and the compiled route table contains exactly the six intended tabs with the four old ones gone. **Not verified: how any of it looks with live data** — the pages sit behind a global auth middleware, so rendering is what the next session checks.
+
+**6 — Wiki.** Static explainer (stats, damage/mitigation/crit, currencies, gacha/dupe/star, prestige) *plus* a reference section generated from the content modules, so it cannot go stale while ~99 constants are still moving. **Still owed** — deliberately last, per the agreed order.

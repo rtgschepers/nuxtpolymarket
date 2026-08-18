@@ -285,6 +285,20 @@ No new game constants; the harness's own limits live beside it rather than in `c
 
 ---
 
+### 20. The nine-tab layout collapsed to six — **landed, and it deviates from the docs**
+
+Session-1 playtest, findings 4, 5 and 7 (see `playtest-notes.md` for the full record). The four gacha tabs — Forge, Guild, Training Grounds, Dig-site — are gone, replaced by **Gacha** (a 2×2 of pull cards) and **Collections** (one page, a submenu per system).
+
+**This is the deviation, stated plainly:** several locked docs describe those four as *places* the player visits — `gear-equipment.md` §6 gives their tab order, `skills-gacha.md` §1 dresses the Training Grounds with class-specific art, and `artifacts-dig-site-gacha.md` and `champions-guild-gacha.md` both write in terms of "the tab". Those pages no longer exist. The names survive as card headings and submenu entries, so nothing in the fiction changed, and **no rule, formula, drop table or number moved** — this is navigation only. But it was decided on a playtest call rather than a doc revision, so it is recorded here rather than left to be discovered by whoever next opens `gear-equipment.md` §6.
+
+The one piece of authored content that did not survive the move: `trainingGroundsArt` (Barracks / Archery Range / Wizard Tower, `skills-gacha.md` §1). It dressed the recruitment block, which is now a quarter-page card shared with three other systems. The server still serializes it; nothing renders it. Either the Gacha card grows a per-system art treatment or the field goes — worth deciding during the Pixi pass rather than now.
+
+**What the split bought, and why it is not just tidying.** The four pages were 90% the same page. Collapsing them turned four copies of a collection grid into `CollectionCard.vue` + `CollectionToolbar.vue`, and four copies of a recruitment block into one `GachaCard.vue` — the same argument that makes `gacha/pull.post.ts` one route rather than four, now applied to the client. A fifth gacha, if one ever ships, is a row in a table on both sides.
+
+**Sorting is the only logic in it**, and it is specced (`test/hero-quest/collection-sort.spec.ts`): rarity low→high, then the system's own axis, then name. The name tiebreak exists so that reordering a content array cannot reshuffle a grid the player has learned.
+
+---
+
 ## ⚪ Standing numeric tuning — **all of it deferred to playtest**
 
 Almost all of these are named constants with a formula shape already locked, just waiting on a value. Consolidated so the tuning pass has one list instead of hunting through 20 docs. `SEAL_LADDER_GROWTH[gear]` is no longer here since it's set (`gold-economy.md` section 7).
