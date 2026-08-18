@@ -8,6 +8,7 @@ For Hero Quest see @docs/hero-quest/CLAUDE.md
 - **ORM**: Drizzle ORM with PostgreSQL
 - **Auth**: better-auth — session is retrieved server-side via `auth.api.getSession({ headers: event.headers })`
 - **Package manager**: bun, exclusively. Use `bun` for installing packages and running scripts — never `pnpm`, `npm`, or `yarn`. `bun.lock` is the only lockfile; the others are gitignored so they cannot come back.
+- **The Nuxt CLI itself runs on Node, not Bun.** bun stays the package manager and the *production* runtime, but `nuxt dev` and `nuxt build` are invoked through Node — `bun run dev` works because `nuxt`'s shebang is `#!/usr/bin/env node`. **Do not "fix" the dev script back to `bun --bun nuxt dev`.** Under Bun's runtime the dev server leaks a TCP connection per request: measured at 56 sockets and 125 OS handles left over from a 60-request burst, against 0 and 3 on Node. The parent proxy eventually sheds its handles and stops responding entirely while still holding the port, so `localhost:3000` accepts connections and never answers — every request hangs pending, forever. The Dockerfile already installs Node into a Bun image for the same class of reason (see its comment on the bundling step).
 
 ## Colors
 
