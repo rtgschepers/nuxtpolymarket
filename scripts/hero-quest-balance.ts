@@ -7,16 +7,18 @@
  * that go load-bearing three phases later.
  *
  *   bun run balance:hero-quest --table=time-to-boss --prestige=0 --world=1
- *   bun run balance:hero-quest --solve=prestige-gold
  *
  * Tuning order matters — earlier links feed later ones:
- *   stat tiers → enemy base stats → K → BASE_GOLD → PRESTIGE_GOLD_FACTOR
+ *   stat tiers → enemy base stats → K → BASE_GOLD → GOLD_STEP_BASE
  */
 
 import {
     BASE_KILL_COUNT,
     BOSS_TIMER_SECONDS,
-    GOLD_PRESTIGE_CAP,
+    BASE_GOLD,
+    GOLD_BOUND_HORIZON_DAYS,
+    GOLD_TENURE_CRAWL,
+    GOLD_TENURE_DAYS,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
     MIN_SECONDS_PER_KILL,
     STAGES_PER_WORLD,
@@ -28,11 +30,14 @@ import {
     packSize,
     enemyStatsAt,
     goldPerKill,
+    goldProgressionFactor,
+    curveIndex,
+    goldTenureCeiling,
+    platformCeiling,
     killsRequired,
     maxGoldPerHour,
     offlineCapHours,
     offlineEfficiency,
-    prestigeGoldFactor,
     secondsPerKill,
     settle,
     stageArchetype,
@@ -54,9 +59,13 @@ function arg(name: string, fallback: string): string {
     return hit ? hit.slice(name.length + 3) : fallback
 }
 
+/** How far the Gold tables walk. There is no prestige cap any more, so this is a display choice. */
+const GOLD_CURVE_PRESTIGES = 20
+
 const table = arg('table', 'time-to-boss')
-const solve = arg('solve', '')
 const prestige = Number(arg('prestige', '0'))
+/** Account age these projections are read at — Gold is capped by it (`GOLD_TENURE_CEILING`). */
+const tenureDays = Number(arg('tenure-days', String(GOLD_BOUND_HORIZON_DAYS)))
 const world = Number(arg('world', '1'))
 const classId = arg('class', 'class_beginner') as ClassId
 const heroLevel = Number(arg('level', '1'))
@@ -146,7 +155,8 @@ function timeToBoss() {
         hero: hero(),
         position: { prestige, world, stage: 1, killsInStage: 0 },
         elapsedSeconds: 3600,
-        online: true
+        online: true,
+        tenureDays
     })
     console.log(`Live Gold/hr from stage 1: ${compact(gold.goldEarned)}  (${gold.kills} kills, ${gold.secondsPerKill.toFixed(2)}s/kill)`)
     console.log(`One-hour settle takes the hero to level ${gold.heroLevel}. Blocked at boss: ${gold.blockedAtBoss}\n`)
@@ -162,7 +172,8 @@ function offlineTable() {
                 hero: hero({ offlineEfficiencyLevel: level, offlineCapLevel: 32 }),
                 position: { prestige, world, stage: 1, killsInStage: 0 },
                 elapsedSeconds: hours * 3600,
-                online: false
+                online: false,
+                tenureDays
             })
             row[`eff ${Math.round(offlineEfficiency(level) * 100)}%`] = compact(result.goldEarned)
         }
@@ -178,28 +189,50 @@ function offlineTable() {
 }
 
 function goldCurve() {
-    console.log('\nGold curve vs gold-economy.md §3 targets (mid-run, no Gold% stack)\n')
-    const targets: Record<number, string> = {
-        0: '~2.5k (day 1)',
-        2: '~10k–30k (wk 1–2)',
-        5: '~1M–3M (month 1)',
-        8: '~30M (month 2)',
-        11: '~235M (month 3, LOCKED)',
-        16: '~0.71B (month 6, LOCKED)'
-    }
+    console.log('\nGold curve — progression against the tenure ceiling that gates it\n')
+    console.log('Mid-run reference point: world 5, stage 5. "payable from" is the account age at which')
+    console.log('the ceiling stops binding, i.e. when this prestige is actually worth what it says.')
+    console.log('"uncapped/hr" is the progression term alone — what a position would pay with no')
+    console.log('ceiling at all. Past a few prestiges nobody is ever paid it; see --table=tenure.\n')
     const rows = []
-    for (let p = 0; p <= GOLD_PRESTIGE_CAP + 3; p++) {
-        // Mid-run reference point: world 5, stage 5.
-        const perKill = goldPerKill(p, 5, 5)
+    for (let p = 0; p <= GOLD_CURVE_PRESTIGES; p++) {
+        const factor = goldProgressionFactor(p, 5, 5)
+        const perKill = BASE_GOLD * factor
+        // Smallest tenure whose ceiling clears this progression factor, to the nearest day.
+        let payableFrom = 0
+        while (payableFrom < 4000 && goldTenureCeiling(payableFrom) < factor) payableFrom++
         rows.push({
             prestige: p,
-            factor: compact(prestigeGoldFactor(p)),
+            'curve index': curveIndex(p, 5, 5),
+            'progress factor': compact(factor),
             'gold/kill': compact(perKill),
-            'gold/hr @floor': compact(perKill * (3600 / MIN_SECONDS_PER_KILL)),
-            target: targets[p] ?? ''
+            'uncapped/hr': compact(perKill * (3600 / MIN_SECONDS_PER_KILL)),
+            'payable from': payableFrom >= 4000 ? '> 10y' : `day ${payableFrom}`
         })
     }
     console.table(rows)
+}
+
+function tenureCurve() {
+    console.log('\nTenure ceiling — what an account of a given age may be paid, against the platform\n')
+    const rows = GOLD_TENURE_DAYS.map((day) => {
+        const ceiling = goldTenureCeiling(day)
+        return {
+            day,
+            ceiling: compact(ceiling),
+            'gold/hr @floor': compact(BASE_GOLD * ceiling * (3600 / MIN_SECONDS_PER_KILL)),
+            'platform/hr': compact(BASE_GOLD * platformCeiling(day) * (3600 / MIN_SECONDS_PER_KILL)),
+            'vs platform': `${(ceiling / platformCeiling(day)).toFixed(2)}x`,
+            'binds until prestige': (() => {
+                let p = 0
+                while (p <= GOLD_CURVE_PRESTIGES && goldProgressionFactor(p, 5, 5) < ceiling) p++
+                return p > GOLD_CURVE_PRESTIGES ? `> p${GOLD_CURVE_PRESTIGES}` : `p${p}`
+            })()
+        }
+    })
+    console.table(rows)
+    console.log(`Past day ${GOLD_TENURE_DAYS.at(-1)} the ceiling crawls at ${((GOLD_TENURE_CRAWL - 1) * 100).toFixed(2)}%/day.`)
+    console.log('Regenerate GOLD_TENURE_CEILING from scripts/lib/economy-stages.ts after any Colony or Xeno retune.\n')
 }
 
 function attackRate() {
@@ -263,77 +296,20 @@ function boundTable() {
     console.log(`XP per kill at p0 W1S1: ${formatHq(xpPerKill(0, 1, 1))}, at p10 W10S10: ${formatHq(xpPerKill(10, 10, 10))}`)
 }
 
-/**
- * Fit PRESTIGE_GOLD_FACTOR[] to §3's calendar anchors.
- *
- * Deliberately does NOT read the current table — it exists to produce that table, and a
- * solver that consumes its own output is not a solver. It interpolates geometrically
- * between the locked anchors and prints a paste-ready array.
- */
-function solvePrestigeGold() {
-    // Anchors: prestige → target realized Gold/hr (gold-economy.md §3).
-    const anchors: Array<[number, number]> = [
-        [0, 2_500],
-        [2, 20_000],
-        [5, 2_000_000],
-        [8, 30_000_000],
-        [11, 235_000_000],
-        [16, 710_000_000],
-        [GOLD_PRESTIGE_CAP, 850_000_000]
-    ]
-
-    const targetFor = (p: number): number => {
-        if (p <= anchors[0]![0]) return anchors[0]![1]
-        for (let i = 1; i < anchors.length; i++) {
-            const [hiP, hiV] = anchors[i]!
-            const [loP, loV] = anchors[i - 1]!
-            if (p <= hiP) {
-                const t = (p - loP) / (hiP - loP)
-                return loV * Math.pow(hiV / loV, t) // geometric interpolation
-            }
-        }
-        return anchors.at(-1)![1]
-    }
-
-    // Realized Gold/hr = goldPerKill × kills/hr × stack. Normalise so p=0 lands on factor 1,
-    // which makes the table a pure multiplier chain independent of BASE_GOLD's own value.
-    const base = targetFor(0)
-    const factors: number[] = []
-    for (let p = 0; p <= GOLD_PRESTIGE_CAP; p++) {
-        factors.push(Number((targetFor(p) / base).toPrecision(6)))
-    }
-
-    console.log('\nFitted PRESTIGE_GOLD_FACTOR — paste into constants.ts\n')
-    console.log('export const PRESTIGE_GOLD_FACTOR: readonly number[] = [ // UNTUNED ╧')
-    console.log(factors.map(value => `    ${value}`).join(',\n'))
-    console.log(']\n')
-
-    console.table(factors.map((factor, p) => ({
-        prestige: p,
-        factor: compact(factor),
-        'implied gold/hr': compact(targetFor(p)),
-        'ratio vs prev': p === 0 ? '—' : (factor / factors[p - 1]!).toFixed(2)
-    })))
-    console.log(`Past prestige ${GOLD_PRESTIGE_CAP} the curve crawls at +2%/prestige (GOLD_PLATEAU_GROWTH).`)
-    console.log('Re-derive BASE_GOLD first — this table is a multiplier chain, not an absolute.\n')
-}
-
 // ── dispatch ───────────────────────────────────────────────────────────────────────────
 
-if (solve === 'prestige-gold') {
-    solvePrestigeGold()
-} else {
+{
     switch (table) {
         case 'time-to-boss': timeToBoss(); break
         case 'offline': offlineTable(); break
         case 'gold-curve': goldCurve(); break
+        case 'tenure': tenureCurve(); break
         case 'attack-rate': attackRate(); break
         case 'level-curve': levelCurve(); break
         case 'bound': boundTable(); break
         default:
             console.log(`Unknown table "${table}".`)
-            console.log('Tables: time-to-boss, offline, gold-curve, attack-rate, level-curve, bound')
-            console.log('Solvers: --solve=prestige-gold')
+            console.log('Tables: time-to-boss, offline, gold-curve, tenure, attack-rate, level-curve, bound')
             console.log('Filters: --prestige=N --world=N --class=class_beginner --level=N')
     }
 }

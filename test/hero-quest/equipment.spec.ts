@@ -63,6 +63,8 @@ const CHAMPION: ChampionSnapshot = {
 }
 
 const START: RunPosition = { prestige: 0, world: 1, stage: 1, killsInStage: 0 }
+/** Mature, so the Gold tenure ceiling never sets the rate these specs denominate against. */
+const WEALTH_TENURE_DAYS = 3650
 
 describe('modifier summing', () => {
     it('stacks same-kind lines additively, not multiplicatively', () => {
@@ -439,19 +441,20 @@ describe('the wealth factor', () => {
     it('reads banked hours against a wealth-neutral rate, so it never depends on itself', () => {
         // One fixed-point iteration, stated rather than hidden — see `wealthHoursFor`. What this
         // pins is that the *input* is stable: the same banked Gold gives the same hours whether
-        // or not the Hero happens to carry a wealth-scaled skill.
+        // or not the Hero happens to carry a wealth-scaled skill. Read at a mature tenure, so the
+        // Gold rate it denominates against is progression's and not the tenure ceiling's.
         const gambler: HeroSnapshot = {
             ...BARE,
             equippedSkills: [{ contentId: 'skill_gamblers_strike', star: 0, level: 1 }]
         }
-        const hours = wealthHoursFor(gambler, START, 1_000_000)
+        const hours = wealthHoursFor(gambler, START, 1_000_000, WEALTH_TENURE_DAYS)
         expect(hours).toBeGreaterThan(0)
-        expect(wealthHoursFor({ ...gambler, wealthHours: 999 }, START, 1_000_000)).toBeCloseTo(hours, 10)
+        expect(wealthHoursFor({ ...gambler, wealthHours: 999 }, START, 1_000_000, WEALTH_TENURE_DAYS)).toBeCloseTo(hours, 10)
     })
 
     it('reads zero hours for an empty balance rather than dividing by nothing', () => {
-        expect(wealthHoursFor(BARE, START, 0)).toBe(0)
-        expect(wealthHoursFor(BARE, START, Number.NaN)).toBe(0)
+        expect(wealthHoursFor(BARE, START, 0, WEALTH_TENURE_DAYS)).toBe(0)
+        expect(wealthHoursFor(BARE, START, Number.NaN, WEALTH_TENURE_DAYS)).toBe(0)
     })
 })
 

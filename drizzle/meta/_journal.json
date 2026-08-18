@@ -71,6 +71,13 @@
       "when": 1787076056155,
       "tag": "0009_rapid_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787084291658,
+      "tag": "0010_nappy_star_brand",
+      "breakpoints": true
     }
   ]
 }

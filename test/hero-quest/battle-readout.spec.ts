@@ -27,6 +27,9 @@ import { settle, totalXpForLevel } from '#shared/utils/hero-quest/settle'
 import { BASE_KILL_COUNT, BOSS_STAGE, STAGES_PER_WORLD } from '#shared/utils/hero-quest/constants'
 import { ZERO } from '#shared/utils/hero-quest/numbers'
 
+/** Mature, so the Gold tenure ceiling never binds and these specs measure the walk, not the cap. */
+const SPEC_TENURE_DAYS = 3650
+
 const anchor: RunAnchor = {
     prestige: 0,
     world: 1,
@@ -37,7 +40,8 @@ const anchor: RunAnchor = {
     goldBonusPct: 0,
     xpBonusPct: 0,
     heroLevel: 1,
-    heroXp: '0'
+    heroXp: '0',
+    tenureDays: SPEC_TENURE_DAYS
 }
 const project = (over: Partial<RunAnchor>, seconds: number) =>
     projectRun({ ...anchor, ...over }, seconds)
@@ -140,7 +144,8 @@ describe('agreement with the settle it is drawing', () => {
                 hero,
                 position: { prestige: 0, world: 1, stage: 1, killsInStage: 0 },
                 elapsedSeconds: seconds,
-                online: true
+                online: true,
+                tenureDays: SPEC_TENURE_DAYS
             })
 
             const projected = project({

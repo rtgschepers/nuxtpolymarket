@@ -88,6 +88,8 @@ import {
     offlineCapHours,
     offlineEfficiency,
     goldPerKill,
+    goldProgressionFactor,
+    goldTenureCeiling,
     packDps,
     packHp,
     packSize,
@@ -295,6 +297,19 @@ export function ownedChampionsFor(collection: readonly HqCollectionRow[]) {
  * `bankedGold` is optional and only the Gambler's Strike family reads it. Callers that do not
  * have it hand back a wealth-neutral Hero, which is exactly what every pre-Phase-3 caller got.
  */
+/**
+ * Wall-clock age of the account in days, as of the row's own settle clock.
+ *
+ * Feeds the Gold tenure ceiling. Measuring it against `lastSettledAt` rather than `Date.now()`
+ * is what makes it conservative in the one place that matters: inside `settleHq` this is read
+ * off the pre-update row, so a window is priced at the tenure the account had when the window
+ * *opened*, not when it closed. Every other caller reads it off a row that was just settled, so
+ * `lastSettledAt` is `now` and the answer is the live one.
+ */
+export function tenureDaysOf(state: HqStateRow): number {
+    return Math.max(0, (state.lastSettledAt.getTime() - state.createdAt.getTime()) / 86_400_000)
+}
+
 export function heroSnapshotOf(
     state: HqStateRow,
     shopLevels: Record<string, number>,
@@ -344,7 +359,7 @@ export function heroSnapshotOf(
      */
     if (bankedGold === undefined || !hasWealthScaledSkill(base)) return base
     // One fixed-point iteration, against a wealth-neutral rate — see `wealthHoursFor`.
-    return { ...base, wealthHours: wealthHoursFor(base, positionOf(state), bankedGold) }
+    return { ...base, wealthHours: wealthHoursFor(base, positionOf(state), bankedGold, tenureDaysOf(state)) }
 }
 
 /** Does this Hero field anything whose damage reads banked Gold? */
@@ -487,7 +502,8 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
         // All four systems now, in one query — every one of them moves the rate.
         const collections = await getCollections(userId, tx)
         const hero = heroSnapshotOf(state, shopLevels, collections, bankedGold)
-        const result = settle({ hero, position: positionOf(state), elapsedSeconds, online })
+        // Read off the pre-update row, so the window is priced at the tenure it opened with.
+        const result = settle({ hero, position: positionOf(state), elapsedSeconds, online, tenureDays: tenureDaysOf(state) })
 
         // The free time-gated Seal grant rides the settle rather than a route of its own:
         // settle is the one thing every read and every mutation already goes through, and a
@@ -562,6 +578,7 @@ export function pickableClasses(state: HqStateRow): ClassId[] {
 
 export function serializeRun(state: HqStateRow, hero: HeroSnapshot) {
     const position = positionOf(state)
+    const tenureDays = tenureDaysOf(state)
     /**
      * Through `rateAt`, not by assembling the pipeline here.
      *
@@ -611,10 +628,18 @@ export function serializeRun(state: HqStateRow, hero: HeroSnapshot) {
         /** Seconds to clear a whole encounter — what the battle animation should cycle on. */
         secondsPerPack: Number.isFinite(spk) ? spk * packSize(pack) : null,
         /** Both already carry every Gold% and burst source, so the client never stacks them itself. */
-        goldPerKill: goldPerKill(position.prestige, position.world, position.stage) * goldMultiplier,
+        goldPerKill: goldPerKill(position.prestige, position.world, position.stage, tenureDays) * goldMultiplier,
         goldPerHour: Number.isFinite(spk) && spk > 0
-            ? (3600 / spk) * goldPerKill(position.prestige, position.world, position.stage) * goldMultiplier
+            ? (3600 / spk) * goldPerKill(position.prestige, position.world, position.stage, tenureDays) * goldMultiplier
             : 0,
+        /**
+         * Account age in days, and whether it is the calendar or progress that currently caps
+         * Gold. The client's between-refresh projection needs the first to run the same math;
+         * the second is what the UI needs to explain a rate that stopped tracking progress.
+         */
+        tenureDays,
+        goldCappedByTenure: goldTenureCeiling(tenureDays)
+            < goldProgressionFactor(position.prestige, position.world, position.stage),
         /** What the collection is currently adding, so the Fortune lines are visible as numbers. */
         goldBonusPct: goldMultiplier - 1,
         xpBonusPct: (1 + economy.xpPct) * abilities.xpFactor - 1,

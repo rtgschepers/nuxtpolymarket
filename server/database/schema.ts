@@ -839,6 +839,13 @@ export const hqState = pgTable('hq_state', {
   userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
   /** The settle clock. Never compare-and-swap on this — Postgres keeps microseconds, JS Dates don't. */
   lastSettledAt: timestamp('last_settled_at').defaultNow().notNull(),
+  /**
+   * Account age, the input to the Gold tenure ceiling (`GOLD_TENURE_CEILING`).
+   *
+   * Written once at row creation and never again — it is read-only for the whole lifetime of the
+   * account, which is what keeps it clear of the compare-and-swap trap above.
+   */
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 
   // Run position — the only group prestige resets.
   prestige: integer('prestige').notNull().default(0),

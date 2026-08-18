@@ -76,7 +76,8 @@ export function useHqLiveRun(
             goldBonusPct: anchor.goldBonusPct,
             xpBonusPct: anchor.xpBonusPct,
             heroLevel: self.level,
-            heroXp: self.xp
+            heroXp: self.xp,
+            tenureDays: anchor.tenureDays
         }, sincePayload.value)
     })
 

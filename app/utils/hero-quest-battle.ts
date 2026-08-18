@@ -12,7 +12,7 @@
  * that it is the *same walk*, over the same pure helpers (`killsRequired`, `nextStage`,
  * `goldPerKill`, `xpPerKill`, `applyXp`, `offlineFarmStage`), against a rate the server handed
  * over. The next payload overwrites all of it. No projected number is ever sent back, and
- * nothing here decides anything — `docs/hero-quest/CLAUDE.md` §3, server authority.
+ * nothing here decides anything — `docs/games/hero-quest/CLAUDE.md` §3, server authority.
  *
  * ## The one rate
  *
@@ -66,6 +66,14 @@ export interface RunAnchor {
     heroLevel: number
     /** Decimal, as a string — XP passes `Number.MAX_SAFE_INTEGER` early. */
     heroXp: string
+    /**
+     * Account age in days as of the last settle, straight from the server.
+     *
+     * Held constant for the projection rather than advanced with the animation clock: the
+     * server will price the next window off the same figure, so a client that crept it forward
+     * would draw Gold the settle is about to refuse to pay.
+     */
+    tenureDays: number
 }
 
 export interface RunForecast {
@@ -136,7 +144,7 @@ export function projectRun(anchor: RunAnchor, elapsedSeconds: number): RunForeca
     let walled = false
 
     const earn = (kills: number, atWorld: number, atStage: number) => {
-        gold += kills * goldPerKill(prestige, atWorld, atStage) * goldMultiplier
+        gold += kills * goldPerKill(prestige, atWorld, atStage, anchor.tenureDays) * goldMultiplier
         xp = xp.add(xpPerKill(prestige, atWorld, atStage).mul(kills).mul(xpMultiplier))
         landed += kills
     }

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { analyzeCampaign, analyzeStage, makeHero, minLevelToClear } from '../../scripts/hero-quest/sim'
+import { analyzeCampaign, analyzeStage, makeHero, minLevelToClear, SIM_MATURE_TENURE_DAYS } from '../../scripts/hero-quest/sim'
 import { STAGES_PER_WORLD, WORLD_COUNT } from '#shared/utils/hero-quest/constants'
 
 const hero = makeHero('class_beginner', 1)
@@ -71,7 +71,7 @@ describe('analyzeCampaign', () => {
 
         expect(wall.reason).not.toBe('prestige_limit')
         const stuck = analyzeStage(
-            makeHero(hero.classId, wall.level), wall.prestige, wall.world, wall.stage)
+            makeHero(hero.classId, wall.level), wall.prestige, wall.world, wall.stage, SIM_MATURE_TENURE_DAYS)
         expect(stuck.verdict).not.toBe('clear')
 
         // A grind wall is the honest kind: clearable, just not affordably.
@@ -115,8 +115,8 @@ describe('minLevelToClear', () => {
         const required = minLevelToClear(hero, 0, 1, STAGES_PER_WORLD)
         expect(required).not.toBeNull()
 
-        expect(analyzeStage(makeHero(hero.classId, required!), 0, 1, STAGES_PER_WORLD).verdict).toBe('clear')
-        expect(analyzeStage(makeHero(hero.classId, required! - 1), 0, 1, STAGES_PER_WORLD).verdict).not.toBe('clear')
+        expect(analyzeStage(makeHero(hero.classId, required!), 0, 1, STAGES_PER_WORLD, SIM_MATURE_TENURE_DAYS).verdict).toBe('clear')
+        expect(analyzeStage(makeHero(hero.classId, required! - 1), 0, 1, STAGES_PER_WORLD, SIM_MATURE_TENURE_DAYS).verdict).not.toBe('clear')
     })
 
     it('respects the search floor', () => {

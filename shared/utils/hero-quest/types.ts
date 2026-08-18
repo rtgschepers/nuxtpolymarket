@@ -19,7 +19,7 @@ export type StatTier = 'low' | 'mid' | 'mid_high' | 'high'
  * The 6 main stats, identical for Hero and Champions. HP and EVA are secondary — HP is
  * derived from VIT, EVA is granted only by external sources (Traits, Phase 4).
  *
- * **Decimal, not `number`** — `docs/hero-quest/CLAUDE.md` §3 requires it and, since stat
+ * **Decimal, not `number`** — `docs/games/hero-quest/CLAUDE.md` §3 requires it and, since stat
  * growth became geometric (`STAT_PER_LEVEL_GROWTH`), a float block overflows to `Infinity`
  * somewhere around hero level 10,400. In a game with unbounded prestige that is a reachable
  * ceiling rather than a theoretical one, and everything downstream — damage, HP, mitigation —
@@ -330,6 +330,14 @@ export interface SettleInput {
     position: RunPosition
     elapsedSeconds: number
     online: boolean
+    /**
+     * Wall-clock age of the account in days, measured at the **start** of this window.
+     *
+     * Feeds the Gold tenure ceiling (`GOLD_TENURE_CEILING`). Taking it at the window's start
+     * rather than its end is the conservative reading: the ceiling only climbs, so a long
+     * offline window is paid at the price the account had when it went away.
+     */
+    tenureDays: number
     /** Battle Speed — Phase 4. Callers pass `undefined` until then. */
     speedBoost?: { multiplier: number; overlapSeconds: number }
 }

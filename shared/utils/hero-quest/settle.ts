@@ -24,10 +24,12 @@ import {
     FORMATION_ROW_CAPACITY,
     ENEMY_PRESTIGE_STEP_MULT,
     ENEMY_STEP_BASE,
-    GOLD_PLATEAU_GROWTH,
-    GOLD_PRESTIGE_CAP,
-    GOLD_STAGE_BASE,
-    GOLD_WORLD_BASE,
+    GOLD_BOUND_HORIZON_DAYS,
+    GOLD_PLATFORM_DISCOUNT,
+    GOLD_STEP_BASE,
+    GOLD_TENURE_CEILING,
+    GOLD_TENURE_CRAWL,
+    GOLD_TENURE_DAYS,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY,
     MIN_SECONDS_PER_KILL,
@@ -36,7 +38,6 @@ import {
     OFFLINE_CAP_MAX_HOURS,
     OFFLINE_EFFICIENCY_PER_LEVEL,
     PACK_LIVE_STREAM_FRACTION,
-    PRESTIGE_GOLD_FACTOR,
     PRESTIGE_INDEX_STEPS,
     STAGES_PER_WORLD,
     SUPER_BOSS_HP_MULT,
@@ -332,7 +333,8 @@ export function rateAt(hero: HeroSnapshot, position: RunPosition): RateContext {
 export function wealthHoursFor(
     hero: HeroSnapshot,
     position: RunPosition,
-    bankedGold: number
+    bankedGold: number,
+    tenureDays: number
 ): number {
     if (!Number.isFinite(bankedGold) || bankedGold <= 0) return 0
     // `wealthHours` stripped so the rate this is measured against cannot depend on itself.
@@ -340,7 +342,7 @@ export function wealthHoursFor(
     const { secondsPerKill: spk } = rateAt(neutral, position)
     if (!Number.isFinite(spk) || spk <= 0) return 0
 
-    const perKill = goldPerKill(position.prestige, position.world, position.stage)
+    const perKill = goldPerKill(position.prestige, position.world, position.stage, tenureDays)
     const goldPerHour = (3600 / spk) * perKill * (1 + economyBonuses(neutral).goldPct)
     if (!Number.isFinite(goldPerHour) || goldPerHour <= 0) return 0
     return bankedGold / goldPerHour
@@ -503,25 +505,74 @@ export function killsRequired(pos: RunPosition): number {
 // ── Currency curves ────────────────────────────────────────────────────────────────────
 
 /**
- * Config table rather than a closed form: the growth rate itself has to decay, which no
- * single `G^p` produces. Past the cap it crawls at +2% per prestige instead of going flat.
+ * How much progress alone says a kill is worth, before the calendar gets a say.
+ *
+ * `GOLD_STEP_BASE^n` on the shared `curveIndex` — the same shape as `enemyMultiplier`, at a
+ * far shallower base. Strictly increasing along the play order with no seam at a world or
+ * prestige boundary, which the old table-times-two-bases form could not manage: it paid x11.6
+ * across a run and only x2.8 for the prestige, so looping back to World 1 cut Gold per kill.
+ *
+ * Unbounded, and that is fine — `goldPerKill` mins it against the tenure ceiling, so the
+ * ceiling is what bounds Gold at every position. This curve owns no cap of its own.
  */
-export function prestigeGoldFactor(prestige: number): number {
-    const lastIndex = Math.min(GOLD_PRESTIGE_CAP, PRESTIGE_GOLD_FACTOR.length - 1)
-    if (prestige <= lastIndex) return PRESTIGE_GOLD_FACTOR[Math.max(0, prestige)] ?? 1
-    return (PRESTIGE_GOLD_FACTOR[lastIndex] ?? 1) * Math.pow(GOLD_PLATEAU_GROWTH, prestige - lastIndex)
+export function goldProgressionFactor(prestige: number, world: number, stage: number): number {
+    return Math.pow(GOLD_STEP_BASE, curveIndex(prestige, world, stage))
 }
 
 /**
- * Gold is deliberately decoupled from the exponential enemy curve — its within-run growth
- * (1.25/1.05) is far shallower than the enemy's (1.6/1.15), and its prestige growth is
- * capped outright. That's what keeps Gold inside the shared `user.balance` numeric column.
+ * The largest progression factor an account this old is allowed to be paid on.
+ *
+ * Geometric interpolation between the `GOLD_TENURE_DAYS` rungs, then `GOLD_TENURE_CRAWL` per
+ * day past the last one. Geometric rather than linear because the platform economies this is
+ * derived from grow geometrically — interpolating them linearly would sag between rungs.
+ *
+ * `GOLD_PLATFORM_DISCOUNT` is applied last, on the way out, so the table itself stays readable
+ * as the platform curve and the discount stays one number rather than twelve.
+ *
+ * See `GOLD_TENURE_CEILING` in `constants.ts` for why tenure is wall-clock account age and not
+ * playtime, progression, or time-in-run.
  */
-export function goldPerKill(prestige: number, world: number, stage: number): number {
-    return BASE_GOLD
-        * Math.pow(GOLD_WORLD_BASE, world - 1)
-        * Math.pow(GOLD_STAGE_BASE, stage - 1)
-        * prestigeGoldFactor(prestige)
+export function goldTenureCeiling(tenureDays: number): number {
+    return GOLD_PLATFORM_DISCOUNT * platformCeiling(tenureDays)
+}
+
+/** The undiscounted platform curve, as a factor. Exported for the balance script's comparison. */
+export function platformCeiling(tenureDays: number): number {
+    const days = Number.isFinite(tenureDays) ? Math.max(0, tenureDays) : 0
+    const last = GOLD_TENURE_DAYS.length - 1
+    const lastDay = GOLD_TENURE_DAYS[last] ?? 0
+    const lastCeiling = GOLD_TENURE_CEILING[last] ?? 1
+
+    if (days >= lastDay) return lastCeiling * Math.pow(GOLD_TENURE_CRAWL, days - lastDay)
+
+    for (let i = 1; i <= last; i++) {
+        const hiDay = GOLD_TENURE_DAYS[i] ?? 0
+        if (days > hiDay) continue
+        const loDay = GOLD_TENURE_DAYS[i - 1] ?? 0
+        const lo = GOLD_TENURE_CEILING[i - 1] ?? 1
+        const hi = GOLD_TENURE_CEILING[i] ?? 1
+        const span = hiDay - loDay
+        if (span <= 0) return hi
+        return lo * Math.pow(hi / lo, (days - loDay) / span)
+    }
+    return GOLD_TENURE_CEILING[0] ?? 1
+}
+
+/**
+ * Gold per kill: progression, speed-limited by the calendar.
+ *
+ * The `min` is the whole design. Progression is what earns Gold — pushing deeper and prestiging
+ * both raise the first term, and an account that stops progressing stops growing. The ceiling
+ * only refuses to pay out ahead of the clock, which is what stops a three-hour-old account
+ * out-earning a two-month-old platform account by two orders of magnitude.
+ *
+ * `tenureDays` is **wall-clock age of the account**, and callers must evaluate it at the *start*
+ * of the window being settled. The ceiling only rises with time, so the window's first instant
+ * is its cheapest — settling a 72-hour offline window at its end price would pay three days of
+ * kills at a ceiling the account only reached on the last of them.
+ */
+export function goldPerKill(prestige: number, world: number, stage: number, tenureDays: number): number {
+    return BASE_GOLD * Math.min(goldProgressionFactor(prestige, world, stage), goldTenureCeiling(tenureDays))
 }
 
 /**
@@ -741,7 +792,7 @@ export function settle(input: SettleInput): SettleResult {
             // Gate. Every remaining kill farms the preceding wave stage; position stays put.
             blockedAtBoss = true
             const farm = offlineFarmStage(pos)
-            gold += remaining * goldPerKill(pos.prestige, farm.world, farm.stage) * goldMultiplier
+            gold += remaining * goldPerKill(pos.prestige, farm.world, farm.stage, input.tenureDays) * goldMultiplier
             xp = xp.add(xpPerKill(pos.prestige, farm.world, farm.stage).mul(remaining).mul(xpMultiplier))
             killsLanded += remaining
             remaining = 0
@@ -756,7 +807,7 @@ export function settle(input: SettleInput): SettleResult {
         if (wipeAt < required) {
             wipedOnWave = true
             if (wipeAt > 0) {
-                gold += remaining * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
+                gold += remaining * goldPerKill(pos.prestige, pos.world, pos.stage, input.tenureDays) * goldMultiplier
                 xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(remaining).mul(xpMultiplier))
                 killsLanded += remaining
                 // Where the current attempt stands, having restarted every `wipeAt` kills.
@@ -776,7 +827,7 @@ export function settle(input: SettleInput): SettleResult {
             continue
         }
 
-        gold += applied * goldPerKill(pos.prestige, pos.world, pos.stage) * goldMultiplier
+        gold += applied * goldPerKill(pos.prestige, pos.world, pos.stage, input.tenureDays) * goldMultiplier
         xp = xp.add(xpPerKill(pos.prestige, pos.world, pos.stage).mul(applied).mul(xpMultiplier))
         killsLanded += applied
         remaining -= applied
@@ -812,11 +863,14 @@ function isBossStage(stage: number): boolean {
 /**
  * The provable Gold/hour ceiling: bounded per-kill value × bounded kill rate.
  *
- * Evaluated at `GOLD_PRESTIGE_CAP` and the deepest stage. Past the cap the factor table
- * crawls at +2%/prestige by design — decades of prestiging still lands within one order of
- * magnitude of the plateau, versus a column ceiling six orders away.
+ * No position appears here any more. `goldProgressionFactor` grows without limit, so the `min`
+ * in `goldPerKill` is the tenure ceiling for every position deep enough to matter — which makes
+ * the ceiling the bound outright, rather than something evaluated at a hand-picked worst case.
+ *
+ * Takes a horizon because `GOLD_TENURE_CRAWL` never goes flat, so "the maximum" is only
+ * meaningful with a date attached. `GOLD_BOUND_HORIZON_DAYS` is ten years.
  */
-export function maxGoldPerHour(goldStack = 1, battleSpeed = 1): number {
-    const maxGoldPerKill = goldPerKill(GOLD_PRESTIGE_CAP, WORLD_COUNT, STAGES_PER_WORLD)
+export function maxGoldPerHour(goldStack = 1, battleSpeed = 1, tenureDays = GOLD_BOUND_HORIZON_DAYS): number {
+    const maxGoldPerKill = BASE_GOLD * goldTenureCeiling(tenureDays)
     return maxGoldPerKill * (3600 / MIN_SECONDS_PER_KILL) * goldStack * battleSpeed
 }

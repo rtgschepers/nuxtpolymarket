@@ -8,6 +8,9 @@ import {
     enemyStatsAt,
     fallbackStage,
     goldPerKill,
+    goldProgressionFactor,
+    goldTenureCeiling,
+    platformCeiling,
     killsBeforeWipe,
     killsRequired,
     maxGoldPerHour,
@@ -16,7 +19,6 @@ import {
     offlineCapHours,
     offlineEfficiency,
     offlineFarmStage,
-    prestigeGoldFactor,
     rateAt,
     secondsPerKill,
     settle,
@@ -30,8 +32,13 @@ import {
     BOSS_STAGE,
     ENEMY_CURVE_T,
     ENEMY_STEP_BASE,
-    GOLD_PLATEAU_GROWTH,
-    GOLD_PRESTIGE_CAP,
+    BASE_GOLD,
+    GOLD_BOUND_HORIZON_DAYS,
+    GOLD_PLATFORM_DISCOUNT,
+    GOLD_STEP_BASE,
+    GOLD_TENURE_CEILING,
+    GOLD_TENURE_CRAWL,
+    GOLD_TENURE_DAYS,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
@@ -125,12 +132,20 @@ function firstLevelClearing(snapshot: HeroSnapshot, position: RunPosition, maxLe
     return null
 }
 
+/**
+ * Old enough that the Gold tenure ceiling is never the binding term, so every assertion below
+ * that is really about the *progression* curve keeps measuring the progression curve. The
+ * ceiling gets its own block, where it is the thing under test.
+ */
+const SPEC_TENURE_DAYS = 3650
+
 function input(overrides: Partial<SettleInput> = {}): SettleInput {
     return {
         hero,
         position: at(1, 1),
         elapsedSeconds: 3600,
         online: false,
+        tenureDays: SPEC_TENURE_DAYS,
         ...overrides
     }
 }
@@ -430,7 +445,7 @@ describe('hero-quest settle', () => {
             expect(parked.blockedAtBoss).toBe(true)
             expect(parked.goldEarned).toBeGreaterThan(0)
             // Everything earned was valued at Stage 4, the wave stage before the gate.
-            expect(parked.goldEarned).toBeCloseTo(parked.kills * goldPerKill(0, 1, 4), 6)
+            expect(parked.goldEarned).toBeCloseTo(parked.kills * goldPerKill(0, 1, 4, SPEC_TENURE_DAYS), 6)
         })
 
         it('gates Stage 10 the same way it gates Stage 5', () => {
@@ -510,7 +525,7 @@ describe('hero-quest settle', () => {
             // 30 kills clears Stage 1; the rest are worth more, so the average beats Stage 1's rate.
             const result = settle(input({ position: at(1, 1), elapsedSeconds: 8 * 3600 }))
             expect(result.kills).toBeGreaterThan(BASE_KILL_COUNT)
-            expect(result.goldEarned / result.kills).toBeGreaterThan(goldPerKill(0, 1, 1))
+            expect(result.goldEarned / result.kills).toBeGreaterThan(goldPerKill(0, 1, 1, SPEC_TENURE_DAYS))
         })
 
         it('accrues nothing for a zero or negative window', () => {
@@ -537,21 +552,41 @@ describe('hero-quest settle', () => {
 
     describe('gold curve', () => {
         it('grows within a run but far more slowly than the enemy curve', () => {
-            const goldGrowth = goldPerKill(0, 10, 10) / goldPerKill(0, 1, 1)
+            const goldGrowth = goldPerKill(0, 10, 10, SPEC_TENURE_DAYS) / goldPerKill(0, 1, 1, SPEC_TENURE_DAYS)
             const enemyGrowth = enemyMultiplier(0, 10, 10).toNumber() / enemyMultiplier(0, 1, 1).toNumber()
             expect(goldGrowth).toBeGreaterThan(1)
             expect(goldGrowth).toBeLessThan(enemyGrowth)
         })
 
-        it('crawls at +2% per prestige past the cap instead of going flat', () => {
-            const atCap = prestigeGoldFactor(GOLD_PRESTIGE_CAP)
-            expect(prestigeGoldFactor(GOLD_PRESTIGE_CAP + 1)).toBeCloseTo(atCap * GOLD_PLATEAU_GROWTH, 6)
-            expect(prestigeGoldFactor(GOLD_PRESTIGE_CAP + 10)).toBeCloseTo(atCap * Math.pow(GOLD_PLATEAU_GROWTH, 10), 6)
+        it('rides the same index as the enemy, one base, no seam at a boundary', () => {
+            expect(goldProgressionFactor(0, 1, 1)).toBeCloseTo(1, 12)
+            // Every adjacent pair along the play order steps by exactly one base, including
+            // the two boundaries the old table-times-two-bases form discontinued at.
+            const steps: [number, number, number][] = [
+                [0, 1, 1], [0, 1, 2], [0, 1, 10], [0, 2, 1], [0, 10, 10], [1, 1, 1], [1, 1, 2]
+            ]
+            for (let i = 1; i < steps.length; i++) {
+                const [p0, w0, s0] = steps[i - 1]!
+                const [p1, w1, s1] = steps[i]!
+                const gap = curveIndex(p1, w1, s1) - curveIndex(p0, w0, s0)
+                expect(goldProgressionFactor(p1, w1, s1) / goldProgressionFactor(p0, w0, s0))
+                    .toBeCloseTo(Math.pow(GOLD_STEP_BASE, gap), 9)
+            }
         })
 
-        it('keeps a century of prestiging inside one order of magnitude of the plateau', () => {
-            const ratio = prestigeGoldFactor(GOLD_PRESTIGE_CAP + 100) / prestigeGoldFactor(GOLD_PRESTIGE_CAP)
-            expect(ratio).toBeLessThan(10)
+        it('never falls back when a run loops to the next prestige', () => {
+            // The old curve paid x11.6 across a run but only x2.8 for the prestige, so
+            // finishing World 10 and starting World 1 again *cut* Gold per kill by ~4x.
+            const lastStage = goldProgressionFactor(0, WORLD_COUNT, STAGES_PER_WORLD)
+            const firstOfNext = goldProgressionFactor(1, 1, 1)
+            expect(firstOfNext).toBeGreaterThan(lastStage)
+        })
+
+        it('needs no cap of its own, because the ceiling is the bound', () => {
+            // Progression is unbounded by design; `goldPerKill` is not, at any depth.
+            expect(goldProgressionFactor(50, 10, 10)).toBeGreaterThan(goldProgressionFactor(20, 10, 10))
+            const deep = goldPerKill(50, WORLD_COUNT, STAGES_PER_WORLD, SPEC_TENURE_DAYS)
+            expect(deep).toBeCloseTo(BASE_GOLD * goldTenureCeiling(SPEC_TENURE_DAYS), 9)
         })
 
         it('bounds Gold per hour by construction', () => {
@@ -571,6 +606,110 @@ describe('hero-quest settle', () => {
             // At least 100 hours of uninterrupted worst-case earning before the column is
             // even a question. Tighten this if the Gold curve is ever re-fitted upward.
             expect(headroomHours).toBeGreaterThan(100)
+        })
+
+        it('clears the column by three orders of magnitude on the largest single collect', () => {
+            // `gold-economy.md` §9.4. The biggest one-shot payout the game can produce is a
+            // full 72-hour offline window at the worst-case rate, taken at the horizon the
+            // tenure crawl is stated at.
+            const collect = maxGoldPerHour(4, 4, GOLD_BOUND_HORIZON_DAYS) * OFFLINE_CAP_MAX_HOURS
+            expect(collect).toBeLessThan(1e15 / 1000)
+        })
+    })
+
+    describe('gold tenure ceiling', () => {
+        it('rises with account age and never falls', () => {
+            let previous = 0
+            for (const day of [0, 0.5, 1, 7, 30, 90, 180, 230, 500, 3650]) {
+                const ceiling = goldTenureCeiling(day)
+                expect(ceiling).toBeGreaterThanOrEqual(previous)
+                previous = ceiling
+            }
+        })
+
+        it('lands exactly on its rungs and interpolates geometrically between them', () => {
+            GOLD_TENURE_DAYS.forEach((day, index) => {
+                expect(platformCeiling(day)).toBeCloseTo(GOLD_TENURE_CEILING[index]!, 6)
+            })
+            // Midpoint of a rung pair is the geometric mean, not the arithmetic one.
+            const lo = GOLD_TENURE_CEILING[2]!
+            const hi = GOLD_TENURE_CEILING[3]!
+            const midDay = (GOLD_TENURE_DAYS[2]! + GOLD_TENURE_DAYS[3]!) / 2
+            expect(platformCeiling(midDay)).toBeCloseTo(Math.sqrt(lo * hi), 6)
+        })
+
+        it('sits under the platform curve by exactly the stated discount', () => {
+            // The ceiling is what pays an invested account most of the time, so parity here
+            // would be parity overall. The gap is deliberate and is one constant.
+            expect(GOLD_PLATFORM_DISCOUNT).toBeLessThan(1)
+            for (const day of [0, 1, 30, 230, 1000]) {
+                expect(goldTenureCeiling(day)).toBeCloseTo(GOLD_PLATFORM_DISCOUNT * platformCeiling(day), 9)
+            }
+        })
+
+        it('crawls past the last rung rather than going flat', () => {
+            const last = GOLD_TENURE_DAYS.at(-1)!
+            const atLast = goldTenureCeiling(last)
+            expect(goldTenureCeiling(last + 100)).toBeCloseTo(atLast * Math.pow(GOLD_TENURE_CRAWL, 100), 6)
+        })
+
+        it('treats a missing or nonsense age as a brand new account', () => {
+            const fresh = goldTenureCeiling(0)
+            expect(goldTenureCeiling(-5)).toBe(fresh)
+            expect(goldTenureCeiling(Number.NaN)).toBe(fresh)
+            expect(goldTenureCeiling(Number.POSITIVE_INFINITY)).toBe(fresh)
+        })
+
+        it('caps a young account that has out-progressed the calendar', () => {
+            // Four prestige loops fit inside the first few hours of play, so this is the
+            // ordinary case rather than an exotic one.
+            const young = goldPerKill(4, 10, 10, 0.1)
+            expect(young).toBeCloseTo(BASE_GOLD * goldTenureCeiling(0.1), 9)
+            expect(young).toBeLessThan(BASE_GOLD * goldProgressionFactor(4, 10, 10))
+        })
+
+        it('leaves a dormant account earning what its progress is worth, not its age', () => {
+            // Wall-clock tenure alone would let six months of doing nothing pay like six
+            // months of playing. The min() is what closes that: progress is still 1x here.
+            const dormant = goldPerKill(0, 1, 1, 180)
+            expect(dormant).toBeCloseTo(BASE_GOLD * goldProgressionFactor(0, 1, 1), 9)
+            expect(dormant).toBeLessThan(BASE_GOLD * goldTenureCeiling(180) / 1000)
+        })
+
+        it('pays progress once the calendar has caught up with it', () => {
+            const factor = goldProgressionFactor(2, 5, 5)
+            const mature = GOLD_TENURE_DAYS.at(-1)!
+            expect(goldTenureCeiling(mature)).toBeGreaterThan(factor)
+            expect(goldPerKill(2, 5, 5, mature)).toBeCloseTo(BASE_GOLD * factor, 9)
+        })
+
+        it('prices the same position lower the younger the account is', () => {
+            // Why `settleHq` reads tenure off the pre-update row: a 72-hour offline window
+            // priced at its closing age would pay three days of kills at a ceiling the
+            // account only reached on the last of them.
+            const position = [4, 10, 10] as const
+            const opened = goldPerKill(...position, 1)
+            const closed = goldPerKill(...position, 4)
+            expect(opened).toBeLessThan(closed)
+            expect(opened).toBeCloseTo(BASE_GOLD * goldTenureCeiling(1), 9)
+        })
+
+        it('applies inside settle(), not just at the formula', () => {
+            // A hero deep enough to have out-progressed a young calendar — which takes a few
+            // prestige loops, i.e. a few hours. Parked at a gate so position holds and every
+            // kill farms Stage 4 at one rate, making the payout readable as kills x one value.
+            const deep = { hero: { ...hero, heroLevel: 1500 }, position: at(10, BOSS_STAGE, 0, 2) }
+
+            const young = settle(input({ ...deep, tenureDays: 0, elapsedSeconds: 3600, online: true }))
+            expect(young.blockedAtBoss).toBe(true)
+            expect(young.kills).toBeGreaterThan(0)
+            expect(young.goldEarned).toBeCloseTo(young.kills * BASE_GOLD * goldTenureCeiling(0), 6)
+
+            // Identical progress, mature account: the ceiling lifts and progress gets paid.
+            const mature = settle(input({ ...deep, tenureDays: SPEC_TENURE_DAYS, elapsedSeconds: 3600, online: true }))
+            expect(mature.kills).toBe(young.kills)
+            expect(mature.goldEarned).toBeCloseTo(mature.kills * BASE_GOLD * goldProgressionFactor(2, 10, 4), 6)
+            expect(mature.goldEarned).toBeGreaterThan(young.goldEarned)
         })
     })
 

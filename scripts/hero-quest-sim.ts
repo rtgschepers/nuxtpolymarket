@@ -45,7 +45,8 @@ const {
     makeParty,
     DEFAULT_CAMPAIGN_MAX_LEVEL,
     DEFAULT_CAMPAIGN_MAX_PRESTIGE,
-    DEFAULT_GRIND_BUDGET_SECONDS
+    DEFAULT_GRIND_BUDGET_SECONDS,
+    SIM_MATURE_TENURE_DAYS
 } = await import('./hero-quest/sim')
 const { formatHq, formatSeconds } = await import('../shared/utils/hero-quest/numbers')
 const { explainStats, levelsToCover, stagesOfCurve } = await import('../shared/utils/hero-quest/explain')
@@ -58,6 +59,8 @@ const level = Number(arg('level', '1'))
 const world = Number(arg('world', '1'))
 const stage = Number(arg('stage', '10'))
 const prestige = Number(arg('prestige', '0'))
+/** Account age the Gold column is read at. Verdicts never touch it; Gold is capped by it. */
+const tenureDays = Number(arg('tenure-days', String(SIM_MATURE_TENURE_DAYS)))
 const sweep = arg('sweep', '')
 const asJson = flag('json')
 const levelUp = !flag('no-levelup')
@@ -110,7 +113,7 @@ function stageRow(row: StageReport) {
 }
 
 function reportStage() {
-    const row = analyzeStage(makeParty(classId, level, party), prestige, world, stage)
+    const row = analyzeStage(makeParty(classId, level, party), prestige, world, stage, tenureDays)
     if (asJson) return console.log(JSON.stringify(row, replacer))
 
     banner()

@@ -131,7 +131,12 @@ export function makeParty(classId: ClassId, heroLevel: number, size: number, ove
 }
 
 /** Full picture for one stage: can the party kill it, how fast, and does it survive doing so. */
-export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number, stage: number): StageReport {
+/**
+ * `tenureDays` is account age, which Gold now reads through its ceiling. Callers that are
+ * asking a pure combat question pass `SIM_MATURE_TENURE_DAYS`; the campaign walk passes its
+ * own accumulated clock, which is the only place the ceiling can be seen binding.
+ */
+export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number, stage: number, tenureDays: number): StageReport {
     const position = { prestige, world, stage, killsInStage: 0 }
     // Per-enemy stats for the display columns; the pack for everything that resolves against
     // the whole encounter. A wave stage is still 30 bodies — they just arrive N at a time.
@@ -204,7 +209,7 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
         survivalWindow,
         survivalRatio,
         verdict,
-        goldPerKill: goldPerKill(prestige, world, stage)
+        goldPerKill: goldPerKill(prestige, world, stage, tenureDays)
     }
 }
 
@@ -226,7 +231,7 @@ export interface WorldReport {
  * frozen hero would report clear times for a run nobody plays. Pass `levelUp: false` to
  * hold power fixed and see one snapshot's reach instead.
  */
-export function analyzeWorld(hero: HeroSnapshot, prestige: number, world: number, levelUp = true): WorldReport {
+export function analyzeWorld(hero: HeroSnapshot, prestige: number, world: number, levelUp = true, tenureDays = SIM_MATURE_TENURE_DAYS): WorldReport {
     let level = hero.heroLevel
     let xp = hero.heroXp
     let totalSeconds = 0
@@ -234,7 +239,7 @@ export function analyzeWorld(hero: HeroSnapshot, prestige: number, world: number
     const rows: StageReport[] = []
 
     for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
-        const row = analyzeStage(makeHero(hero.classId, level, { ...hero, heroLevel: level, heroXp: xp }), prestige, world, stage)
+        const row = analyzeStage(makeHero(hero.classId, level, { ...hero, heroLevel: level, heroXp: xp }), prestige, world, stage, tenureDays)
         rows.push(row)
 
         if (Number.isFinite(row.clearSeconds)) totalSeconds += row.clearSeconds
@@ -288,7 +293,7 @@ export function minLevelToClear(
     maxLevel = 5000
 ): number | null {
     const at = (level: number) => ({ ...hero, heroLevel: level, heroXp: ZERO })
-    const clears = (level: number) => analyzeStage(at(level), prestige, world, stage).verdict === 'clear'
+    const clears = (level: number) => analyzeStage(at(level), prestige, world, stage, SIM_MATURE_TENURE_DAYS).verdict === 'clear'
 
     const low0 = Math.max(1, Math.floor(fromLevel))
     if (low0 >= maxLevel) return clears(maxLevel) ? maxLevel : null
@@ -409,6 +414,17 @@ export interface CampaignReport {
     prestigesCompleted: number
 }
 
+/**
+ * Tenure to answer combat-only questions at.
+ *
+ * Gate searches, class comparisons and single-stage reports all care about verdicts, which do
+ * not read Gold at all — but `analyzeStage` reports a Gold figure regardless, and it now needs
+ * an account age. A mature account keeps the ceiling clear of the progression term so those
+ * reports show what the *position* is worth. The campaign walk is the exception and passes its
+ * own clock, which is where the ceiling is supposed to be visible.
+ */
+export const SIM_MATURE_TENURE_DAYS = 3650
+
 export const DEFAULT_CAMPAIGN_MAX_PRESTIGE = 10
 export const DEFAULT_GRIND_BUDGET_SECONDS = 24 * 3600
 export const DEFAULT_CAMPAIGN_MAX_LEVEL = 5000
@@ -429,14 +445,14 @@ function killsFor(row: StageReport): number {
  * curve XP/second actually falls with depth (XP rides 1.05^stage, enemy HP 1.15^stage), so
  * a player min-maxing would farm shallower and grind faster than this reports.
  */
-function farmStageFor(hero: HeroSnapshot, prestige: number, world: number, stage: number): StageReport | null {
+function farmStageFor(hero: HeroSnapshot, prestige: number, world: number, stage: number, tenureDays: number): StageReport | null {
     let w = world
     let s = stage - 1
     while (w >= 1) {
         while (s >= 1) {
             const archetype = stageArchetype(s)
             if (archetype !== 'boss' && archetype !== 'super_boss') {
-                const row = analyzeStage(hero, prestige, w, s)
+                const row = analyzeStage(hero, prestige, w, s, tenureDays)
                 if (row.verdict === 'clear' && Number.isFinite(row.secondsPerKill)) return row
             }
             s--
@@ -496,10 +512,12 @@ export function analyzeCampaign(
             let completed = true
 
             for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
-                let row = analyzeStage(at(), prestige, world, stage)
+                // Conservative, exactly as `settleHq` is: the clock as the stage opens.
+                const tenureDays = (fightSeconds + worldFight + grindSeconds + worldGrind) / 86_400
+                let row = analyzeStage(at(), prestige, world, stage, tenureDays)
 
                 if (row.verdict !== 'clear') {
-                    const detour = resolveBlock(at(), prestige, world, stage, row, level, xp, maxLevel, grindBudget)
+                    const detour = resolveBlock(at(), prestige, world, stage, row, level, xp, maxLevel, grindBudget, tenureDays)
                     if ('wall' in detour) {
                         wall = detour.wall
                         completed = false
@@ -513,7 +531,7 @@ export function analyzeCampaign(
                     worldGrinds++
                     grinds.push(detour.event)
 
-                    row = analyzeStage(at(), prestige, world, stage)
+                    row = analyzeStage(at(), prestige, world, stage, tenureDays)
                     if (row.verdict !== 'clear') {
                         // Levelled past the searched threshold and still stuck: only reachable if
                         // clearing is non-monotonic in level, which would be a combat-math bug.
@@ -600,7 +618,8 @@ function resolveBlock(
     level: number,
     xp: Decimal,
     maxLevel: number,
-    grindBudget: number
+    grindBudget: number,
+    tenureDays: number
 ): { level: number; xp: Decimal; event: GrindEvent } | { wall: CampaignWall } {
     const base: Omit<CampaignWall, 'reason' | 'requiredLevel' | 'detail'> = {
         prestige,
@@ -623,7 +642,7 @@ function resolveBlock(
         }
     }
 
-    const farm = farmStageFor(hero, prestige, world, stage)
+    const farm = farmStageFor(hero, prestige, world, stage, tenureDays)
     if (!farm) {
         return {
             wall: {
@@ -693,7 +712,7 @@ export interface ClassRow {
 /** Every class side by side at the same level and stage. Shows whether the paths diverge. */
 export function compareClasses(prestige: number, world: number, stage: number, level: number, party = 1): ClassRow[] {
     return CLASS_NODES.map((node) => {
-        const report = analyzeStage(makeParty(node.id, level, party), prestige, world, stage)
+        const report = analyzeStage(makeParty(node.id, level, party), prestige, world, stage, SIM_MATURE_TENURE_DAYS)
         return {
             classId: node.id,
             name: node.name,
