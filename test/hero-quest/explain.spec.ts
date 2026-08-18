@@ -18,8 +18,10 @@ import { maxHpFor } from '#shared/utils/hero-quest/combat'
 import {
     DPS_STAT_EXPONENT,
     ENEMY_STEP_BASE,
+    LCK_BASE_SCALE,
     STAT_PACE_RATIO,
-    STAT_PER_LEVEL_GROWTH
+    STAT_PER_LEVEL_GROWTH,
+    STAT_SCALES_WITH_LEVEL
 } from '#shared/utils/hero-quest/constants'
 import { CHAMPIONS, RARITY_STAT_MULTIPLIER, getChampion } from '#shared/utils/hero-quest/content/champions'
 import { ZERO } from '#shared/utils/hero-quest/numbers'
@@ -99,13 +101,37 @@ describe('agreement with the stats the game fights with', () => {
     })
 })
 
-describe('exactly one source has no ceiling', () => {
-    it('marks the level curve, and nothing else', () => {
+describe('which sources have no ceiling', () => {
+    it('marks the level curve for the stats it applies to, and nothing else', () => {
         const unit = explainStats(hero({ heroLevel: 50 })).units[0]!
         for (const stat of unit.stats) {
-            const unbounded = stat.stages.filter(stage => stage.unbounded)
-            expect(unbounded.map(stage => stage.id)).toEqual(['level'])
+            const unbounded = stat.stages.filter(stage => stage.unbounded).map(stage => stage.id)
+            expect(unbounded, stat.key).toEqual(STAT_SCALES_WITH_LEVEL[stat.key] ? ['level'] : [])
         }
+    })
+
+    it('leaves LCK with no compounding source whatsoever', () => {
+        // The crit retune, stated as an assertion rather than as a constant. Crit chance is
+        // `LCK × rate` clamped to 100%, so any unbounded source behind LCK makes the cap a
+        // question of when and never of whether — which is exactly what it used to be.
+        const unit = explainStats(hero({ classId: 'class_marksman', heroLevel: 50 })).units[0]!
+        const lck = unit.stats.find(stat => stat.key === 'lck')!
+        expect(lck.stages.some(stage => stage.unbounded)).toBe(false)
+    })
+
+    it('holds LCK still across 400 levels while PWR runs away', () => {
+        const finals = (heroLevel: number) => {
+            const unit = explainStats(hero({ classId: 'class_marksman', heroLevel })).units[0]!
+            return {
+                lck: unit.stats.find(stat => stat.key === 'lck')!.final,
+                pwr: unit.stats.find(stat => stat.key === 'pwr')!.final
+            }
+        }
+        const early = finals(1)
+        const late = finals(400)
+
+        expect(late.lck.toString()).toBe(early.lck.toString())
+        expect(late.pwr.gt(early.pwr.mul(100))).toBe(true)
     })
 })
 
@@ -178,15 +204,32 @@ describe('what the base spread was built from', () => {
             .toBeCloseTo(base.factor.toNumber(), 10)
     })
 
+    it('scales LCK down as its own line rather than folding it into the tier', () => {
+        // `LCK_BASE_SCALE` is multiplicative and every other part of the base stage is in
+        // points, so it is carried as the points it removed. That keeps "the parts sum to the
+        // value" true for all six stats, which is the only reason the panel can render one
+        // template per stat.
+        const lck = explainStats(hero({ classId: 'class_marksman' })).units[0]!
+            .stats.find(stat => stat.key === 'lck')!
+        const base = lck.stages[0]!
+
+        expect(base.parts.at(-1)!.label).toContain(String(LCK_BASE_SCALE))
+        expect(base.parts.reduce((total, part) => total + part.amount, 0))
+            .toBeCloseTo(base.factor.toNumber(), 10)
+        expect(base.formula).toContain(`× ${LCK_BASE_SCALE}`)
+    })
+
     it('gives a Champion no class path at all', () => {
         // `champions-guild-gacha.md` §1: Champions never touch the 16-node class tree, so there
-        // is no ancestor to inherit a specialization shift from.
+        // is no ancestor to inherit a specialization shift from. A base-scale line is not one —
+        // it is a global scalar, not an inherited shift — so it is excluded rather than counted.
         const champion = explainStats(hero({
             heroLevel: 10,
             champions: [fielded(CHAMPIONS[0]!.id)]
         })).units[1]!
         for (const stat of champion.stats) {
-            expect(stat.stages[0]!.parts).toHaveLength(1)
+            expect(stat.stages[0]!.parts.filter(part => part.label.includes('specialization')))
+                .toHaveLength(0)
         }
         expect(champion.stats[0]!.stages.map(stage => stage.id))
             .toEqual(['base', 'level', 'investment', 'passives'])
@@ -211,9 +254,20 @@ describe('the derived values', () => {
         expect(capped.note).toMatch(/MIN_ATTACK_INTERVAL_SECONDS/)
     })
 
-    it('says when crit chance has hit its ceiling', () => {
-        const capped = explainStats(hero({ classId: 'class_archer', heroLevel: 400 })).units[0]!
-            .derived.find(d => d.key === 'critChance')!
+    it('says when crit chance has hit its ceiling — which now takes a build, not a level', () => {
+        // Three maxed Precision Edge Artifacts, out of the five Offense slots §4 allows. That
+        // is what reaching 100% costs now; levelling to 400 does not come close, which is the
+        // whole intent of taking LCK off the curve.
+        const built = hero({
+            classId: 'class_archer',
+            equippedArtifacts: ['artifact_offense_1', 'artifact_offense_7', 'artifact_offense_10']
+                .map(contentId => ({ contentId, star: 5, level: 10 }))
+        })
+        const capped = explainStats(built).units[0]!.derived.find(d => d.key === 'critChance')!
         expect(capped.note).toMatch(/100%/)
+
+        const levelled = explainStats(hero({ classId: 'class_archer', heroLevel: 400 })).units[0]!
+            .derived.find(d => d.key === 'critChance')!
+        expect(levelled.note).toMatch(/off the level curve/)
     })
 })

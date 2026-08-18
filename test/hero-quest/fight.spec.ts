@@ -91,10 +91,12 @@ describe('hero-quest seeded fights', () => {
         it('times out at exactly the boss timer, never past it', () => {
             // Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s —
             // and now also enough HP to still be standing at 30s, which is the narrow part.
-            // The window is genuinely narrow, and the session-2 enemy cut narrowed it further
-            // and moved it down: at W3S10 the band is levels 56–60 exactly, 80 now wins. 58 is
-            // its middle. If this ever goes red, re-find the band rather than nudging the level.
-            const result = runFight({ hero: hero(58), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+            // The band moves whenever either side of that moves: the session-2 enemy cut put it
+            // at W3S10 levels 56–60, and the crit retune (LCK off the level curve,
+            // `CRIT_DAMAGE_PER_POINT` 0.05 → 0.02) widened it to **59–73** by taking DPS out of
+            // the Hero without touching its HP. 66 is its middle. If this goes red, re-find the
+            // band rather than nudging the level.
+            const result = runFight({ hero: hero(66), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
             expect(result.outcome).toBe('timeout')
             expect(result.secondsElapsed).toBe(BOSS_TIMER_SECONDS)
             expect(D(result.enemyHpRemaining).gt(0)).toBe(true)
@@ -358,12 +360,13 @@ describe('hero-quest seeded fights', () => {
          * four skills and a Mythic's three all come off cooldown at least once.
          *
          * W6/80 → W4/18 with the session-2 enemy cut: at the old depth the party now wipes on
-         * the boss's first swing at 2.4s, before the Hero's later skills come round. The band
-         * where every Berserker skill and every Kaira and Rask ability fires is **W4, levels
-         * 10–25**; 18 is its middle and the fight runs ~7.6s.
+         * the boss's first swing at 2.4s, before the Hero's later skills come round. The crit
+         * retune then slowed the party down again, which *lengthens* these fights rather than
+         * shortening them — the band at W4 where every Berserker skill and every Kaira and Rask
+         * ability fires moved from levels 10–25 up to **19–48**. 33 is its middle.
          */
         const deepFight = (champions: ChampionSnapshot[]) => runFight({
-            hero: withParty(hero(18, 'class_berserker'), champions),
+            hero: withParty(hero(33, 'class_berserker'), champions),
             position: at(4, SUPER_BOSS_STAGE),
             seed: 7
         })

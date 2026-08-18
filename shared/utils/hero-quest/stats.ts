@@ -9,10 +9,12 @@ import {
     BASE_THREAT,
     CHAMPION_INVESTMENT_PER_POINT,
     CHAMPION_PASSIVE_PER_POINT,
+    LCK_BASE_SCALE,
     MIN_STAT_VALUE,
     TANK_THREAT_MULTIPLIER,
     STAT_PER_LEVEL_FLAT,
     STAT_PER_LEVEL_GROWTH,
+    STAT_SCALES_WITH_LEVEL,
     STAT_TIER_VALUES
 } from './constants'
 import { classPath, getClass } from './content/classes'
@@ -44,6 +46,21 @@ export function tierValue(tier: StatTier): number {
 }
 
 /**
+ * The per-stat scalar applied to an **accumulated** base spread — tier value plus every
+ * specialization delta on the class path, then this.
+ *
+ * Only LCK carries one. `STAT_TIER_VALUES` is shared by all six stats, so it is not where a
+ * single stat's magnitude can be moved; scaling the finished sum is, and it keeps a class's
+ * spread shape intact while lowering the number crit chance is read off. See `LCK_BASE_SCALE`
+ * for why LCK in particular needs its own dial now that it does not scale with level.
+ *
+ * Shared with `explain.ts` so the breakdown itemises the same scalar the pipeline applied.
+ */
+export function baseScaleFor(key: HqStatKey): number {
+    return key === 'lck' ? LCK_BASE_SCALE : 1
+}
+
+/**
  * Level-1 stat block for a class: its own tier spread, plus every specialization delta
  * along the path from the root. Berserker therefore carries Warrior's and Barbarian's
  * shifts, not just its own.
@@ -64,7 +81,7 @@ export function baseSpreadFor(node: ClassNode): HqStatBlock {
 
     const block = {} as HqStatBlock
     for (const key of STAT_KEYS) {
-        block[key] = D(Math.max(MIN_STAT_VALUE, raw[key]!))
+        block[key] = D(Math.max(MIN_STAT_VALUE, raw[key]! * baseScaleFor(key)))
     }
     return block
 }
@@ -88,6 +105,22 @@ export function statAtLevel(base: DecimalSource, level: number): Decimal {
 }
 
 /**
+ * `statAtLevel`, gated on whether the stat is one the level curve is allowed to touch.
+ *
+ * **LCK is not** (`STAT_SCALES_WITH_LEVEL`), so it comes back at its base value however high the
+ * Hero climbs. That is the whole of the mechanism: crit chance is `LCK × rate` clamped to 100%,
+ * and a stat on a geometric curve feeding a clamped output means the clamp is reached on a
+ * schedule rather than earned. Every other stat is unchanged.
+ *
+ * The floor still applies on the frozen path — a scaled-down base can land below
+ * `MIN_STAT_VALUE` where the unscaled tier value would not have.
+ */
+export function statAtLevelFor(key: HqStatKey, base: DecimalSource, level: number): Decimal {
+    if (STAT_SCALES_WITH_LEVEL[key]) return statAtLevel(base, level)
+    return decMax(MIN_STAT_VALUE, D(base))
+}
+
+/**
  * Level-1 stat block for a Champion archetype.
  *
  * The Champion equivalent of `baseSpreadFor`, minus the delta accumulation — Champions never
@@ -99,7 +132,7 @@ export function archetypeSpread(archetype: ChampionArchetype): HqStatBlock {
     const definition = getArchetype(archetype)
     const block = {} as HqStatBlock
     for (const key of STAT_KEYS) {
-        block[key] = D(Math.max(MIN_STAT_VALUE, tierValue(definition.spread[key])))
+        block[key] = D(Math.max(MIN_STAT_VALUE, tierValue(definition.spread[key]) * baseScaleFor(key)))
     }
     return block
 }
@@ -137,7 +170,7 @@ export function heroStatBlock(
     const base = baseSpreadFor(getClass(classId))
     const block = {} as HqStatBlock
     for (const key of STAT_KEYS) {
-        block[key] = statAtLevel(base[key], heroLevel)
+        block[key] = statAtLevelFor(key, base[key], heroLevel)
             .mul(passive?.[key] ?? 1)
             .mul(Math.max(0, modifiers?.[key] ?? 1))
     }
@@ -227,7 +260,7 @@ export function championStatBlock(
     for (const key of STAT_KEYS) {
         block[key] = decMax(
             MIN_STAT_VALUE,
-            statAtLevel(base[key], heroLevel).mul(scale).mul(Math.max(0, modifiers?.[key] ?? 1))
+            statAtLevelFor(key, base[key], heroLevel).mul(scale).mul(Math.max(0, modifiers?.[key] ?? 1))
         )
     }
     return block

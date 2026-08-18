@@ -27,6 +27,7 @@ import {
 } from '#shared/utils/hero-quest/settle'
 import {
     BASE_KILL_COUNT,
+    BOSS_STAGE,
     ENEMY_CURVE_T,
     ENEMY_STEP_BASE,
     GOLD_PLATEAU_GROWTH,
@@ -38,6 +39,7 @@ import {
     OFFLINE_CAP_MAX_HOURS,
     PRESTIGE_INDEX_STEPS,
     STAGES_PER_WORLD,
+    SUPER_BOSS_STAGE,
     WORLD_COUNT,
     XP_STEP_BASE,
     XP_TO_LEVEL_BASE,
@@ -85,11 +87,40 @@ function firstStallingPosition(snapshot: HeroSnapshot): RunPosition | null {
     for (let prestige = 0; prestige < STALL_SEARCH_PRESTIGES; prestige++) {
         for (let world = 1; world <= WORLD_COUNT; world++) {
             for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+                // Wave stages only. A gate settles to zero kills because it is a gate — the
+                // fight is a separate seeded resolution — so a gate would satisfy every
+                // assertion below without the DEF wall being involved at all, and the spec
+                // would quietly stop testing what it claims to. The crit retune made that a
+                // live hazard rather than a theoretical one: the lower DPS moved the first
+                // stall onto P0 W10S10, the last gate of the opening loop.
+                if (stage === BOSS_STAGE || stage === SUPER_BOSS_STAGE) continue
                 const position = at(world, stage, 0, prestige)
                 const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(position))
                 if (!(spk <= LONGEST_SETTLE_SECONDS)) return position
             }
         }
+    }
+    return null
+}
+
+/**
+ * The lowest level at which the wall stops being a wall — found, not named, for the same reason
+ * the wall itself is. The crit retune moved it by well over a hundred levels in one edit.
+ *
+ * Searched through `settle` rather than through `secondsPerKill`, because the rate alone is not
+ * what decides whether a window yields anything: the offline cap shortens the window, a party
+ * that wipes restarts the stage, and `MIN_SECONDS_PER_KILL` floors the result. Asking the thing
+ * under test is both simpler and harder to fool than reproducing its three gates here and
+ * getting one of them subtly wrong.
+ */
+function firstLevelClearing(snapshot: HeroSnapshot, position: RunPosition, maxLevel = 1000): number | null {
+    for (let heroLevel = 1; heroLevel <= maxLevel; heroLevel++) {
+        const attempt = settle(input({
+            hero: { ...snapshot, heroLevel },
+            position,
+            elapsedSeconds: LONGEST_SETTLE_SECONDS
+        }))
+        if (attempt.kills > 0) return heroLevel
     }
     return null
 }
@@ -432,8 +463,11 @@ describe('hero-quest settle', () => {
             expect(stalled.kills).toBe(0)
             expect(stalled.goldEarned).toBe(0)
 
+            const answering = firstLevelClearing(hero, wall!)
+            expect(answering).not.toBeNull()
+
             const levelled = settle(input({
-                hero: { ...hero, heroLevel: 200 },
+                hero: { ...hero, heroLevel: answering! },
                 position: wall!,
                 elapsedSeconds: LONGEST_SETTLE_SECONDS
             }))

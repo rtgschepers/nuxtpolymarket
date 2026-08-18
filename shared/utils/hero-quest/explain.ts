@@ -42,7 +42,8 @@ import {
     MIN_STAT_VALUE,
     SPD_ATTACK_RATE_PER_POINT,
     STAT_PER_LEVEL_FLAT,
-    STAT_PER_LEVEL_GROWTH
+    STAT_PER_LEVEL_GROWTH,
+    STAT_SCALES_WITH_LEVEL
 } from './constants'
 import { classPath, getClass } from './content/classes'
 import { getArchetype } from './content/champions'
@@ -50,6 +51,7 @@ import { gearModifiers } from './content/gear'
 import { skillModifiers } from './content/skills'
 import { artifactModifiers } from './content/artifacts'
 import {
+    baseScaleFor,
     championInvestmentMultiplier,
     collectionPassiveMultipliers,
     heroModifierTotals,
@@ -83,10 +85,13 @@ export const STAT_LABELS: Readonly<Record<HqStatKey, string>> = {
  * `exponent` defaults to `DPS_STAT_EXPONENT` because that is what a source lifting *every* stat
  * is worth. Pass 1 for a source that lifts a single stat, which buys proportionally less.
  *
- * ⚠ `DPS_STAT_EXPONENT` is the *asymptotic* 2, true once crit chance has capped at 100% and
- * attack rate at its ceiling; below those caps LCK and SPD scale too and the real exponent is
- * nearer 4. So this **understates** early-game sources. Its own comment says as much — this
- * inherits the caveat rather than papering over it.
+ * ⚠ `DPS_STAT_EXPONENT` is the *asymptotic* 2, true once attack rate has hit its ceiling;
+ * below it SPD scales too and the real exponent is nearer 3. So this **understates** early-game
+ * sources. Its own comment says as much — this inherits the caveat rather than papering over it.
+ *
+ * It understated them by more when LCK rode the level curve and the early exponent was nearer 4.
+ * `STAT_SCALES_WITH_LEVEL` took LCK off the curve, so that term is gone and the conversion is
+ * now closer to honest over the range anyone actually plays.
  */
 export function stagesOfCurve(factor: Decimal | number, exponent = DPS_STAT_EXPONENT): number {
     const value = D(factor)
@@ -110,9 +115,13 @@ export interface StatStage {
     /** The stat's value after this stage. */
     running: Decimal
     /**
-     * No ceiling. Exactly one stage per unit is unbounded — the level curve — and naming which
+     * No ceiling. At most one stage per stat is unbounded — the level curve — and naming which
      * is the whole point of the breakdown: everything else is a fixed multiplier on a moving
      * number, so no amount of it changes the *shape* of the run.
+     *
+     * **LCK has none at all.** `STAT_SCALES_WITH_LEVEL` holds it at its base value, so every one
+     * of its stages is bounded and the stat has no compounding source whatsoever — which is
+     * itself the most important thing this breakdown can say about crit chance.
      */
     unbounded: boolean
     /** The additive sources that produced `factor`, when more than one can. */
@@ -195,7 +204,19 @@ function baseStage(key: HqStatKey, tier: StatTier, deltaSources: readonly { name
         parts.push({ label: `${source.name} specialization`, amount: source.delta })
         raw += source.delta
     }
-    const total = Math.max(MIN_STAT_VALUE, raw)
+
+    // The per-stat scalar (`LCK_BASE_SCALE`, and nothing else today) is multiplicative, but every
+    // other part of this stage is in points. Carrying it as the *points it removed* keeps the
+    // "parts sum to the value" invariant true for all six stats; the formula below is where the
+    // multiplication is actually shown, so nobody has to reverse-engineer -4 back into ×0.75.
+    const scale = baseScaleFor(key)
+    const scaled = raw * scale
+    if (scale !== 1) parts.push({ label: `base scale ×${scale}`, amount: scaled - raw })
+
+    const total = Math.max(MIN_STAT_VALUE, scaled)
+    const points = parts.slice(0, scale === 1 ? undefined : -1)
+        .map(part => (part.amount < 0 ? `- ${-part.amount}` : `+ ${part.amount}`))
+        .join(' ').replace(/^\+ /, '')
     return {
         id: 'base',
         label: 'Base spread',
@@ -203,14 +224,32 @@ function baseStage(key: HqStatKey, tier: StatTier, deltaSources: readonly { name
         running: D(total),
         unbounded: false,
         parts,
-        formula: parts.map(part => (part.amount < 0 ? `- ${-part.amount}` : `+ ${part.amount}`))
-            .join(' ').replace(/^\+ /, '')
-            + (total !== raw ? ` → floored to ${MIN_STAT_VALUE}` : '')
+        formula: (scale === 1 ? points : `(${points}) × ${scale}`)
+            + (total !== scaled ? ` → floored to ${MIN_STAT_VALUE}` : '')
     }
 }
 
-/** The only unbounded stage there is. */
-function levelStage(base: Decimal, heroLevel: number): StatStage {
+/**
+ * The only unbounded stage there is — for the five stats that have one.
+ *
+ * LCK does not: `STAT_SCALES_WITH_LEVEL` excludes it, so this reports an explicit ×1 rather than
+ * omitting the stage. Keeping the stage list the same shape for every stat is what lets the
+ * report be read as a table, and "Level 200 · ×1.0000" states the fact that levelling buys this
+ * stat nothing far more plainly than a missing column would.
+ */
+function levelStage(key: HqStatKey, base: Decimal, heroLevel: number): StatStage {
+    if (!STAT_SCALES_WITH_LEVEL[key]) {
+        return {
+            id: 'level',
+            label: `Level ${heroLevel}`,
+            factor: ONE,
+            running: base,
+            unbounded: false,
+            parts: [],
+            formula: 'off the level curve — only the collection passive, Gear, Skills and Artifacts raise this'
+        }
+    }
+
     const steps = Math.max(0, heroLevel - 1)
     const additive = base.add(STAT_PER_LEVEL_FLAT * steps)
     const factor = decPow(STAT_PER_LEVEL_GROWTH, steps)
@@ -342,9 +381,14 @@ function derivedFor(unit: UnitStats, block: Record<HqStatKey, Decimal>): Derived
             label: 'Crit chance',
             value: `${(unit.critChance * 100).toFixed(1)}%`,
             formula: `lck ${block.lck.toFixed(2)} × ${CRIT_CHANCE_PER_POINT} + modifiers`,
+            // Two different "this number is not what the formula suggests" cases, and the second
+            // is the one people will actually hit: a Hero who levels for an hour and sees crit
+            // chance sit exactly still is looking at design, not at a bug.
             note: unit.critChance >= 1
                 ? 'at 100% — further LCK converts at OVERFLOW_CONVERSION_RATE instead'
-                : undefined
+                : STAT_SCALES_WITH_LEVEL.lck
+                    ? undefined
+                    : 'LCK is off the level curve — levelling will not move this, only the collection passive and LCK lines will'
         },
         {
             key: 'critMultiplier',
@@ -377,7 +421,7 @@ function statBreakdowns(
 ): StatBreakdown[] {
     return STAT_KEYS.map((key) => {
         const stages: StatStage[] = [baseStage(key, tiers[key], deltasFor(key))]
-        stages.push(levelStage(stages[0]!.running, heroLevel))
+        stages.push(levelStage(key, stages[0]!.running, heroLevel))
         for (const stage of extraStages(key, stages.at(-1)!.running)) stages.push(stage)
 
         const last = stages.at(-1)!

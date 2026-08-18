@@ -19,7 +19,7 @@
  * lists the complete fill-in set.
  */
 
-import type { StatTier } from './types'
+import type { HqStatKey, StatTier } from './types'
 
 // ── Run structure ──────────────────────────────────  core-progression-and-prestige.md §2
 
@@ -58,8 +58,8 @@ export const ELITE_STAGE_MAX = 9
  * not 30 lone enemies trickling past. Keep any retune a divisor of 30 or the last pack of a
  * stage is a ragged remainder.
  */
-export const WAVE_PACK_SIZE = 6 // UNTUNED ╧
-export const ELITE_PACK_SIZE = 6 // UNTUNED ╧
+export const WAVE_PACK_SIZE = 6
+export const ELITE_PACK_SIZE = 6
 
 /**
  * Minions standing with a boss or super boss. The boss itself is always exactly one, so a
@@ -70,7 +70,7 @@ export const ELITE_PACK_SIZE = 6 // UNTUNED ╧
  * `BOSS_TIMER_SECONDS` gate covers the **whole encounter**, so every minion is time taken off
  * the boss — which is what makes clearing adds a real decision rather than free damage.
  */
-export const BOSS_MINION_COUNT = 2 // UNTUNED ╧
+export const BOSS_MINION_COUNT = 2
 
 /**
  * Fraction of a pack still swinging, averaged over one stage attempt.
@@ -264,15 +264,38 @@ export const TANK_THREAT_MULTIPLIER = 3 // UNTUNED ╧
 /** What an active taunt multiplies threat by, on top of whatever the unit already carries. */
 export const TAUNT_THREAT_MULTIPLIER = 10 // UNTUNED ╧
 
-/** Archer's LCK 16 → 16% crit; Warrior's LCK 5 → 5%. */
+/**
+ * Crit chance per point of LCK.
+ *
+ * With `LCK_BASE_SCALE` at 0.75 that is a Marksman opening at LCK 12 → 12% and a Warrior at
+ * LCK 3.75 → 3.8%. Those are also the numbers they *keep*: LCK is off the level curve, so
+ * nothing but the collection passive and equipment lines moves them again.
+ */
 export const CRIT_CHANCE_PER_POINT = 0.01 // UNTUNED ╧
 
-/** IMP 10 → 1.5× crit damage. */
-export const CRIT_DAMAGE_PER_POINT = 0.05 // UNTUNED ╧
+/**
+ * Crit damage per point of IMP: IMP 10 → ×1.2.
+ *
+ * Cut 0.05 → 0.02 by the session-2 playtest. Unlike LCK, IMP **does** ride the level curve, so
+ * this is a per-point rate on an exponentially growing stat and it is the only thing bounding
+ * how fast the crit multiplier runs away: at 0.05 a level-200 Hero carried IMP 464 for a ×24
+ * crit multiplier, and with crit chance capped at 100% by that point it was a flat ×24 on
+ * everything the party swung.
+ *
+ * The *shape* — linear and unbounded in IMP — is load-bearing and was left alone deliberately;
+ * see `STAT_SCALES_WITH_LEVEL` for why it is what makes `DPS_STAT_EXPONENT` 2.
+ */
+export const CRIT_DAMAGE_PER_POINT = 0.02 // UNTUNED ╧
 
 /**
  * LCK past 100% crit chance converts to crit damage at this rate. Must sit well below
  * CRIT_DAMAGE_PER_POINT — overflow is a "nothing wasted" valve, not a rival to IMP.
+ *
+ * ⚠ **Rarely reached now.** With LCK off the level curve (`STAT_SCALES_WITH_LEVEL`) a unit only
+ * passes 100% crit chance by stacking collection passives and LCK lines deliberately, so this
+ * went from "every Hero, from mid-game onward" to "a built crit Hero, late". It is still live
+ * code and still the right behaviour when it fires; it is no longer a rate that shapes the
+ * average run, and if `LCK_BASE_SCALE` is cut much further it stops firing at all.
  */
 export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
 
@@ -542,6 +565,28 @@ export const DELTA_MODEST = 2 // UNTUNED ╧
 export const DELTA_NORMAL = 4 // UNTUNED ╧
 export const DELTA_EXTREME = 8 // UNTUNED ╧
 
+/**
+ * What every class's and archetype's **accumulated** LCK base is multiplied by.
+ *
+ * Applied after the tier value and the whole class path's deltas, so it lowers every unit's
+ * starting crit chance without disturbing the relative spread — a Marksman still out-crits a
+ * Warrior by the same ratio it always did.
+ *
+ * This is now the *only* dial on crit chance, because LCK is off the level curve
+ * (`STAT_SCALES_WITH_LEVEL`): base LCK **is** the crit chance a unit carries forever, give or
+ * take what the collection passive and the Gear/Skill/Artifact lines multiply onto it. So it
+ * trades directly against `CRIT_CHANCE_PER_POINT` — the two move the same number, and halving
+ * either halves crit chance at every level for every class.
+ *
+ * ⚠ Pushed far enough down, the 100% cap and `OVERFLOW_CONVERSION_RATE` stop being reachable at
+ * all and the overflow valve becomes dead code. At 0.75 the cap is still very much reachable,
+ * but only deliberately: a Marksman opens at LCK 12 → 12%, and **three maxed Precision Edge
+ * Artifacts take it to exactly 100%** — three of the five Offense slots `artifacts-dig-site-
+ * gacha.md` §4 allows, spent on one stat. That is the intended "crit is a build, not a
+ * birthright" shape. Cutting this much further turns it into an unreachable one.
+ */
+export const LCK_BASE_SCALE = 0.75 // UNTUNED ╧
+
 /** Floor for any derived stat. Sorcerer lands here on VIT/DEF, which is the design intent. */
 export const MIN_STAT_VALUE = 1
 
@@ -570,11 +615,18 @@ export const STAT_PER_LEVEL_FLAT = 0 // UNTUNED ╧
  * curve *squared*, not linearly — at level 156 that is PWR 7.6e6 × critMult 380,260, and the
  * Hero outruns a curve it appears on paper to be matching.
  *
- * 2 is the asymptotic value, once crit chance has capped at 100% and attack rate at its
- * ceiling. Below those caps LCK and SPD scale too and the true exponent is nearer 4, so
- * early levels are worth more than this says. That is a real wrinkle in the model and not
- * one a single constant can express — it is why `STAT_PACE_RATIO` still wants playtesting
- * rather than solving.
+ * 2 is the asymptotic value, once attack rate has hit its ceiling. Below that SPD scales too,
+ * so the true exponent is nearer 3 and early levels are worth somewhat more than this says.
+ *
+ * It used to be nearer **4**. LCK rode the level curve as well, so crit chance grew with it
+ * until it capped, and that was a whole extra factor of the stat curve inside DPS.
+ * `STAT_SCALES_WITH_LEVEL` took LCK off the curve and removed that term outright — the early
+ * exponent dropped by a full point, and the early game now behaves much closer to the model
+ * this constant describes. The asymptote is unchanged, because crit chance was already capped
+ * and contributing nothing by the time it applied.
+ *
+ * The remaining gap is a real wrinkle in the model and not one a single constant can express —
+ * it is why `STAT_PACE_RATIO` still wants playtesting rather than solving.
  */
 export const DPS_STAT_EXPONENT = 2
 
@@ -604,6 +656,36 @@ export const STAT_PACE_RATIO = 0.5 // UNTUNED ╧
 
 /** Derived, never set directly — move `STAT_PACE_RATIO`. */
 export const STAT_PER_LEVEL_GROWTH = Math.pow(ENEMY_STEP_BASE, STAT_PACE_RATIO / DPS_STAT_EXPONENT)
+
+/**
+ * Which stats the hero-level curve is allowed to touch.
+ *
+ * **LCK is deliberately excluded.** Crit chance is `LCK × CRIT_CHANCE_PER_POINT` clamped to
+ * 100%, so putting LCK on a geometric curve made the cap a question of *when* and never of
+ * *whether*: a Marksman opening at 16% crossed 100% around level 96 — inside the first prestige
+ * loop — and every level after that was LCK poured into the overflow valve. Frozen at base,
+ * crit chance is something the collection passive, Gear, Skills and Artifacts have to buy,
+ * which is what `champions-guild-gacha.md` §7 and `gear-equipment.md` §2 intended their LCK
+ * lines to be for.
+ *
+ * ⚠ **This changes what `DPS_STAT_EXPONENT` describes early on** — see its comment. It does not
+ * touch the asymptotic value: crit chance had already capped there and was contributing
+ * nothing, so freezing it removes over-performance the pacing model never priced in rather
+ * than removing growth the model was counting on.
+ *
+ * **IMP stays on the curve on purpose.** `critMultiplier = 1 + IMP × CRIT_DAMAGE_PER_POINT` is
+ * unbounded and linear in IMP, and that is exactly what makes `DPS_STAT_EXPONENT` 2 rather than
+ * 1. Taking IMP off the curve as well would halve the exponent DPS rides and force
+ * `STAT_PER_LEVEL_GROWTH` to be re-derived — a much larger change than lowering its rate.
+ */
+export const STAT_SCALES_WITH_LEVEL: Readonly<Record<HqStatKey, boolean>> = {
+    pwr: true,
+    spd: true,
+    lck: false,
+    imp: true,
+    vit: true,
+    def: true
+}
 
 /**
  * What one point of a Champion's `(star × 10 + level)` scalar is worth as a stat multiplier.

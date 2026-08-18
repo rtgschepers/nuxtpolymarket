@@ -215,7 +215,9 @@ function partLabel(amount: number, isBase: boolean) {
           </div>
           <p class="text-xs text-dimmed pt-1">
             Only the level curve compounds. Every other source is a fixed multiplier — it moves
-            the wall by a constant number of stages and then never helps again.
+            the wall by a constant number of stages and then never helps again. Luck does not
+            even have that: it sits off the level curve, so only the collection passive and
+            equipment lines move it.
           </p>
         </div>
       </div>

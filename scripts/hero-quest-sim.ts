@@ -287,8 +287,9 @@ function reportStats() {
     console.log('  is for — so a whole-block multiplier is worth about double a single stat.')
     console.log()
     console.log('  Every non-level source is a FIXED multiplier on a moving number: it shifts')
-    console.log('  the wall by a constant number of stages and then never helps again. Only')
-    console.log('  the level column compounds.\n')
+    console.log('  the wall by a constant number of stages and then never helps again. The')
+    console.log('  level column is the only one that compounds — and it is blank for LCK,')
+    console.log('  which has no compounding source at all (STAT_SCALES_WITH_LEVEL).\n')
 
     if (sweepLevels.length > 0) reportStatScaling()
 }
