@@ -246,6 +246,31 @@ describe('hero-quest settle', () => {
         })
     })
 
+    describe('the opening is playable at all', () => {
+        /**
+         * A level-1 solo Hero must be able to clear the very first stage.
+         *
+         * This is the floor the whole game stands on: below it a new account is walled on World
+         * 1 Stage 1 with no way forward, which the campaign sim reports as "unfarmable from the
+         * first screen". `BASE_HP` is the constant that decides it — the session-1 playtest set
+         * it to 2000 specifically because solo needs ≥2000, and party results are identical from
+         * 1000 to 8000, so nothing else in the suite is sensitive to it.
+         *
+         * Pinned deliberately rather than left to incidental coverage. That value silently
+         * reverted to its pre-playtest 100 twice during editing; the suite happened to catch it
+         * the second time only because an unrelated retune had made other specs sensitive to it.
+         * "Happened to" is not a safety net.
+         */
+        it('lets a level-1 Hero survive long enough to clear World 1 Stage 1', () => {
+            const units = partyUnitStats({ ...hero, heroLevel: 1 })
+            const position = at(1, 1)
+            const pack = enemyPackAt(position)
+            const survives = killsBeforeWipe(units, pack, secondsPerKill(units, pack))
+
+            expect(survives).toBeGreaterThanOrEqual(BASE_KILL_COUNT)
+        })
+    })
+
     describe('the wave wipe', () => {
         /** Deep enough that a level-1 Beginner still deals damage but cannot outlast a stage. */
         const unsurvivable = at(2, 2)
