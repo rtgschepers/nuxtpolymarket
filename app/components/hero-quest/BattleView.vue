@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { formatHq } from '#shared/utils/hero-quest/numbers'
+import { D, formatHq } from '#shared/utils/hero-quest/numbers'
 
 /**
  * The live battle. Presentation only — it renders, it never decides.
  *
  * Between server refreshes it interpolates the kill counter forward at the server's own
- * `secondsPerKill`, so the bar moves continuously instead of jumping once a minute. The
+ * `secondsPerKill`, so the bars move continuously instead of jumping once a minute. The
  * server's next payload is always the truth; this only fills the gap.
  *
- * Deliberately DOM rather than Pixi for Phase 1. The floating-damage and HP-bar contract
- * here is the same one a Pixi scene would consume, so swapping the renderer later touches
- * no sim and no server code.
+ * **Everything on screen derives from one quantity, `killsFloat`.** The enemy bar, the enemy HP
+ * figure, the count of bodies still standing, the Hero's HP and the stage counter are all
+ * functions of it, so they cannot disagree with each other. They previously could, and did: the
+ * enemy bar swept on a free-running wall clock while the HP figure beside it was a static
+ * per-enemy number that never moved, which is what made the encounter read as inconsistent.
+ *
+ * Deliberately DOM rather than Pixi for Phase 1. The HP-bar contract here is the same one a Pixi
+ * scene would consume, so swapping the renderer later touches no sim and no server code.
  */
 const props = defineProps<{
     run: {
@@ -21,11 +26,16 @@ const props = defineProps<{
         walled: boolean
         killsBeforeWipe: number | null
         secondsPerKill: number | null
-        /** Seconds to clear a whole encounter — `secondsPerKill × packSize`. */
-        secondsPerPack: number | null
         packSize: number
-        enemyHp: string
-        partyDps: string
+        /**
+         * The **pack** total, not one body's HP — what the player is actually fighting.
+         *
+         * `state.get.ts` also serves per-enemy `enemyHp`, `secondsPerPack` and `partyDps`; this
+         * component read none of them, so they are left out of the contract rather than declared
+         * and ignored. Showing the per-body figure next to a bar that tracked the whole pack is
+         * what made the encounter read as inconsistent in the first place.
+         */
+        packHp: string
     }
     hero: {
         className: string
@@ -34,50 +44,60 @@ const props = defineProps<{
     }
 }>()
 
-/** Kills predicted since the last server payload. Never allowed to outrun the real counter. */
-const predicted = ref(0)
+/**
+ * Seconds since the last server payload.
+ *
+ * **It has to be reset when a payload lands.** An earlier version predicted from a clock that
+ * only ever counted up from mount and reset `predicted` alone — which the ticker overwrote
+ * 100ms later. The reset was a no-op, so the prediction grew without bound and the bar simply
+ * pinned to the ceiling: a stage bar reading 30/30 forever while the real count was elsewhere.
+ *
+ * It was invisible for a second reason too. The prediction is *supposed* to be corrected by the
+ * next payload, so a bug here only shows once payloads stop arriving — which is exactly what the
+ * dev-server hang was doing.
+ */
+const sincePayload = ref(0)
 let ticker: ReturnType<typeof setInterval> | null = null
 
 watch(() => props.run.killCount, () => {
-    predicted.value = 0
-})
-
-const displayKills = computed(() => {
-    if (props.run.atBossGate) return props.run.killCount
-    // A walled stage restarts rather than banking, so the ceiling is what one attempt
-    // survives — otherwise the bar would sail past a threshold the run can never reach.
-    const ceiling = props.run.walled && props.run.killsBeforeWipe !== null
-        ? props.run.killsBeforeWipe
-        : props.run.killsRequired
-    return Math.min(ceiling, props.run.killCount + predicted.value)
-})
-
-const killProgress = computed(() => {
-    if (props.run.killsRequired <= 0) return 100
-    return Math.min(100, (displayKills.value / props.run.killsRequired) * 100)
+    sincePayload.value = 0
 })
 
 /**
- * Enemy HP bar, driven off the fractional part of the current *encounter*. Pure decoration.
+ * Every readout, derived together from one server-anchored quantity.
  *
- * Cycles on `secondsPerPack`, not `secondsPerKill`: with a pack of N the bar represents the
- * whole group, so sweeping it once per individual kill would empty it N times per encounter.
+ * The derivation lives in `hero-quest-battle.ts` rather than here so its edge cases — pack
+ * rollover, an undying party, a walled ceiling below the stage requirement — can be pinned by a
+ * spec instead of only ever being exercised by looking at the screen.
  */
-const enemyHpPct = computed(() => {
-    const perPack = props.run.secondsPerPack ?? props.run.secondsPerKill
-    if (!perPack || props.run.atBossGate) return 100
-    return 100 - ((elapsed.value % perPack) / perPack) * 100
+const view = computed(() => battleReadout({
+    killCount: props.run.killCount,
+    killsRequired: props.run.killsRequired,
+    killsBeforeWipe: props.run.killsBeforeWipe,
+    secondsPerKill: props.run.secondsPerKill,
+    packSize: props.run.packSize,
+    walled: props.run.walled,
+    atBossGate: props.run.atBossGate,
+    sincePayload: sincePayload.value
+}))
+
+/**
+ * HP left across the whole pack, and on the Hero — both as Decimals.
+ *
+ * Enemy HP passes `Number.MAX_SAFE_INTEGER` early in the game, so neither can be float
+ * arithmetic even though the percentages driving them are plain numbers.
+ */
+const enemyHpRemaining = computed(() => D(props.run.packHp).mul(view.value.enemyHpPct / 100))
+const heroHpRemaining = computed(() => D(props.hero.stats.maxHp).mul(view.value.heroHpPct / 100))
+
+const heroHpColor = computed(() => {
+    if (view.value.heroHpPct <= 20) return 'error'
+    if (view.value.heroHpPct <= 50) return 'warning'
+    return 'success'
 })
 
-const elapsed = ref(0)
-
 onMounted(() => {
-    ticker = setInterval(() => {
-        elapsed.value += 0.1
-        const spk = props.run.secondsPerKill
-        if (!spk || props.run.atBossGate) return
-        predicted.value = Math.floor(elapsed.value / spk)
-    }, 100)
+    ticker = setInterval(() => { sincePayload.value += 0.1 }, 100)
 })
 
 onUnmounted(() => {
@@ -108,13 +128,19 @@ onUnmounted(() => {
         <div class="flex items-center justify-between text-sm">
           <span class="font-medium text-highlighted">
             {{ run.enemyName }}
-            <!-- HP below is per enemy, so the count has to be visible next to it. -->
-            <span v-if="run.packSize > 1" class="text-muted">×{{ run.packSize }}</span>
+            <!-- Counts down as bodies drop, so the pack reads as a group being worn away. -->
+            <span
+              v-if="run.packSize > 1"
+              class="text-muted"
+            >×{{ view.enemiesStanding }}</span>
           </span>
-          <span class="text-muted">{{ formatHq(run.enemyHp) }} HP</span>
+          <!-- The whole pack, remaining over total — the number the bar beside it is showing. -->
+          <span class="text-muted tabular-nums">
+            {{ formatHq(enemyHpRemaining) }} / {{ formatHq(run.packHp) }} HP
+          </span>
         </div>
         <UProgress
-          :model-value="enemyHpPct"
+          :model-value="view.enemyHpPct"
           size="sm"
           color="error"
         />
@@ -125,26 +151,41 @@ onUnmounted(() => {
           <span class="font-medium text-highlighted">
             {{ hero.className }} <span class="text-muted">Lv {{ hero.level }}</span>
           </span>
-          <span class="text-muted">{{ formatHq(hero.stats.maxHp) }} HP</span>
+          <span class="text-muted tabular-nums">
+            {{ formatHq(heroHpRemaining) }} / {{ formatHq(hero.stats.maxHp) }} HP
+          </span>
         </div>
         <UProgress
-          :model-value="100"
+          :model-value="view.heroHpPct"
           size="sm"
-          color="success"
+          :color="heroHpColor"
         />
       </div>
 
       <div class="pt-1">
         <div class="flex items-center justify-between text-xs text-muted mb-1">
           <span>Stage progress</span>
-          <span>{{ displayKills }} / {{ run.killsRequired }}</span>
+          <span>{{ view.displayKills }} / {{ run.killsRequired }}</span>
         </div>
         <UProgress
-          :model-value="killProgress"
+          :model-value="view.killProgress"
           size="md"
           :color="run.walled ? 'error' : 'primary'"
         />
       </div>
+
+      <!--
+        Only shown when it matters. `killsBeforeWipe` below `killsRequired` is the definition of
+        a walled stage, and the Hero bar above will visibly empty first — this names what the
+        player is about to watch happen.
+      -->
+      <p
+        v-if="run.walled && run.killsBeforeWipe !== null"
+        class="text-xs text-error"
+      >
+        This stage drops you after {{ run.killsBeforeWipe }} of
+        {{ run.killsRequired }} kills — it restarts rather than clearing. Level up to break through.
+      </p>
     </template>
   </div>
 </template>
