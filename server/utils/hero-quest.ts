@@ -98,6 +98,7 @@ import {
     xpToNextLevel
 } from '#shared/utils/hero-quest/settle'
 import { economyBonuses, partyUnitStats } from '#shared/utils/hero-quest/stats'
+import type { StatsExplanation } from '#shared/utils/hero-quest/explain'
 import { D, ZERO, decPow, fromStore, toStore } from '#shared/utils/hero-quest/numbers'
 import { CLASS_NODES, childrenOf, getClass, kitFor } from '#shared/utils/hero-quest/content/classes'
 import { SHOP_TRACKS, maxLevelFor, shopTrackCost, type ShopTrackId } from '#shared/utils/hero-quest/content/shop'
@@ -659,6 +660,44 @@ export function serializeHero(state: HqStateRow, hero: HeroSnapshot) {
             critChance: self.critChance,
             critMultiplier: self.critMultiplier.toString()
         }
+    }
+}
+
+/**
+ * The stat breakdown, with its Decimals turned into strings for the wire.
+ *
+ * Shape-preserving and nothing else — `explain.ts` decides what a breakdown *is*, and this only
+ * does the `Decimal` → `string` conversion every Hero Quest payload does (`tech-architecture.md`
+ * §5). Kept beside the other serializers rather than inside the route so the conversion lives
+ * where a reader looking for "how do Hero Quest values cross the wire" will find it.
+ */
+export function serializeStatExplanation(explained: StatsExplanation) {
+    return {
+        heroLevel: explained.heroLevel,
+        pacing: explained.pacing,
+        units: explained.units.map(unit => ({
+            label: unit.label,
+            role: unit.role,
+            heroLevel: unit.heroLevel,
+            derived: unit.derived,
+            stats: unit.stats.map(stat => ({
+                key: stat.key,
+                label: stat.label,
+                tier: stat.tier,
+                final: stat.final.toString(),
+                stagesOfCurve: stat.stagesOfCurve,
+                stages: stat.stages.map(stage => ({
+                    id: stage.id,
+                    label: stage.label,
+                    factor: stage.factor.toString(),
+                    running: stage.running.toString(),
+                    unbounded: stage.unbounded,
+                    floored: stage.floored ?? false,
+                    formula: stage.formula,
+                    parts: stage.parts
+                }))
+            }))
+        }))
     }
 }
 

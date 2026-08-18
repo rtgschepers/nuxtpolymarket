@@ -20,6 +20,9 @@ const {
  */
 const { liveRun, liveHero } = useHqLiveRun(run, hero)
 
+/** The stat-attribution slideover. Fetched on open, never with the state payload. */
+const breakdownOpen = ref(false)
+
 const fight = ref<Awaited<ReturnType<typeof engageBoss>>>(null)
 const engaging = ref(false)
 /** Which of the two paths opened the replay — only an automatic one dismisses itself. */
@@ -178,6 +181,19 @@ const awayReport = computed(() => {
           from `HQ_STAT_DOCS`, the same table the wiki renders, so the tooltip and the wiki page
           can never describe a stat differently.
         -->
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-muted">Stats</span>
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            icon="i-lucide-list-tree"
+            @click="breakdownOpen = true"
+          >
+            Breakdown
+          </UButton>
+        </div>
+
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <div
             v-for="tile in statTiles"
@@ -222,6 +238,8 @@ const awayReport = computed(() => {
         </div>
       </div>
     </template>
+
+    <HeroQuestStatBreakdown v-model:open="breakdownOpen" />
 
     <HeroQuestBossFightModal
       :fight="fight"
