@@ -22,15 +22,42 @@ const { liveRun, liveHero } = useHqLiveRun(run, hero)
 
 const fight = ref<Awaited<ReturnType<typeof engageBoss>>>(null)
 const engaging = ref(false)
+/** Which of the two paths opened the replay — only an automatic one dismisses itself. */
+const fightWasAutomatic = ref(false)
 
-async function onEngage() {
+async function runFightAt(automatic: boolean) {
     engaging.value = true
     try {
-        fight.value = await engageBoss()
+        const result = await engageBoss({ silentErrors: automatic })
+        fightWasAutomatic.value = automatic
+        fight.value = result
     } finally {
         engaging.value = false
     }
 }
+
+const onEngage = () => runFightAt(false)
+
+/**
+ * Bosses fire on their own while the tab is visible.
+ *
+ * Visibility is the presence check, and it is the same presence the refresh interval already
+ * demonstrates — a backgrounded or closed tab still never engages one, so "a boss requires the
+ * player to be present" is unchanged. `shouldAutoEngage` holds the rest of the rules, including
+ * the one that stops a cleared run re-fighting the World 10 super boss forever.
+ *
+ * Driven off `liveRun`, not `run`, so it fires when the *screen* reaches the gate rather than up
+ * to a minute later when the next poll lands. That is also why an engage can arrive before the
+ * server has settled that far, which `useHqAutoBoss` retries rather than surfaces.
+ */
+useHqAutoBoss({
+    atBossGate: () => liveRun.value?.atBossGate ?? false,
+    runCleared: () => liveRun.value?.runCleared ?? false,
+    secondsPerKill: () => liveRun.value?.secondsPerKill ?? null,
+    engaging: () => engaging.value,
+    replayOpen: () => fight.value !== null,
+    engage: () => runFightAt(true)
+})
 
 /**
  * The four headline stats, paired with the glossary entry that explains each.
@@ -84,7 +111,7 @@ const awayReport = computed(() => {
       </h1>
       <p class="text-muted max-w-md mx-auto">
         Ten worlds, ten stages each. Your hero fights on its own — even while you're away.
-        Bosses are the one thing that waits for you.
+        Bosses are the one thing that needs you watching.
       </p>
       <UButton
         size="lg"
@@ -200,6 +227,7 @@ const awayReport = computed(() => {
       :fight="fight"
       :enemy-name="liveRun?.enemyName ?? 'Boss'"
       :boss-timer-seconds="liveRun?.bossTimerSeconds ?? 30"
+      :auto-close="fightWasAutomatic"
       @close="fight = null"
     />
   </div>

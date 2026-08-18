@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatHq } from '#shared/utils/hero-quest/numbers'
+import { AUTO_ENGAGE_REPLAY_HOLD_SECONDS } from '#shared/utils/hero-quest/constants'
 import type { FightEvent, FightOutcome } from '#shared/utils/hero-quest/fight'
 
 /**
@@ -24,6 +25,16 @@ const props = defineProps<{
     } | null
     enemyName: string
     bossTimerSeconds: number
+    /**
+     * This fight started on its own, so it closes on its own.
+     *
+     * A boss the player asked for waits on Continue — they chose that moment and they choose
+     * when it ends. A boss that fired because the tab was visible cannot wait on a click, or
+     * automatic engagement would only ever resolve one fight and then sit behind a modal, which
+     * is the same stall it exists to remove. It still plays in full and holds on the outcome for
+     * `AUTO_ENGAGE_REPLAY_HOLD_SECONDS` before dismissing itself.
+     */
+    autoClose?: boolean
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -107,6 +118,21 @@ const outcomeCopy = computed(() => {
     }
 })
 
+/**
+ * The self-dismiss, armed once the replay has finished playing.
+ *
+ * Held separately from the playback ticker so that `skip` — which stops that ticker — still leads
+ * to a close rather than leaving an auto-engaged fight parked on screen forever.
+ */
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
+watch([finished, () => props.autoClose], ([done, auto]) => {
+    if (closeTimer) clearTimeout(closeTimer)
+    closeTimer = null
+    if (!done || !auto || !props.fight) return
+    closeTimer = setTimeout(() => emit('close'), AUTO_ENGAGE_REPLAY_HOLD_SECONDS * 1000)
+})
+
 watch(() => props.fight, (fight) => {
     if (ticker) clearInterval(ticker)
     clock.value = 0
@@ -121,6 +147,7 @@ watch(() => props.fight, (fight) => {
 
 onUnmounted(() => {
     if (ticker) clearInterval(ticker)
+    if (closeTimer) clearTimeout(closeTimer)
 })
 
 function skip() {
@@ -209,7 +236,7 @@ function skip() {
           :disabled="!finished"
           @click="emit('close')"
         >
-          Continue
+          {{ autoClose ? 'Back to the fight' : 'Continue' }}
         </UButton>
       </div>
     </template>

@@ -29,6 +29,15 @@ import { randomInt } from '#shared/utils/random'
  * never engages one, win or lose, which is also why Void Shards can never be earned purely
  * from idle time (`idle-mechanics.md` §5).
  *
+ * The client now calls this **automatically** while `document.visibilityState` reads `visible`
+ * (`useHqAutoBoss`), so most requests arrive without anyone pressing anything. Nothing here
+ * changes for that: presence is still what gates a boss, visibility is just a more direct reading
+ * of it than a button press was. ⚠ The one consequence worth knowing is that the 400 below is now
+ * a **routine** response rather than a misuse — the client projects kills fractionally and settles
+ * floored, so it can reach a gate a beat before this route agrees, and it retries rather than
+ * reporting. Do not "fix" that rejection into something softer; it is the check that stops a
+ * client's optimism from moving the run.
+ *
  * The lock is held across verify → resolve → apply, so a burst of concurrent engages cannot
  * each advance the run: the first one moves the stage off the gate, and every other request
  * then reads a position that is no longer parked at a boss and is rejected. Reading the

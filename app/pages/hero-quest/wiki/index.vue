@@ -78,13 +78,15 @@ const minutesOnline = Math.round(ONLINE_THRESHOLD_MS / 60_000)
     </HeroQuestWikiSection>
 
     <HeroQuestWikiSection
-      title="Bosses are the one thing that waits"
+      title="Bosses are the one thing that needs you watching"
       icon="i-lucide-shield-alert"
     >
       <p>
-        Waves clear themselves. A boss does not — it sits there until you press the button, and
-        that is deliberate: it is the only moment the game asks for your attention, and the only
-        gate that <em>cannot</em> be passed while you are away.
+        Waves clear themselves wherever you are. A boss only fights while this page is actually
+        open in front of you — it engages on its own a moment after your hero reaches the gate,
+        and it stops the instant you switch tabs or close the app. That is deliberate: it is the
+        one gate that <em>cannot</em> be passed while you are away. You can always engage it
+        yourself rather than waiting.
       </p>
       <p>
         A boss fight is resolved in full the moment you engage, on the server, from the stats you

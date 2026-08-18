@@ -790,6 +790,53 @@ export const HQ_REFRESH_INTERVAL_MS = 60_000 // UNTUNED ╧
  */
 export const ONLINE_THRESHOLD_MS = HQ_REFRESH_INTERVAL_MS * 3 // UNTUNED ╧
 
+// ── Automatic boss engagement ──────────────────────  tech-architecture.md §4b
+//
+// A boss fires on its own while `document.visibilityState` reads `visible`, which is the same
+// presence the refresh interval above demonstrates — a backgrounded or closed tab still never
+// engages one, so "bosses require the player to be present" holds unchanged.
+
+/**
+ * Kills of margin the client waits for before firing an automatic engage.
+ *
+ * **Not cosmetic, and not a debounce.** The client's projection counts kills fractionally so a
+ * bar can move smoothly; `settle()` floors its budget into whole banked kills. The client
+ * therefore crosses a stage boundary up to one kill *early* — up to `secondsPerKill` of wall
+ * clock — and an engage sent in that window is rejected by `boss/engage.post.ts`, which settles
+ * and then checks the position under its lock. Waiting a full kill is exactly what guarantees the
+ * server's floored count has crossed the same boundary.
+ *
+ * Expressed in kills rather than seconds because the lead it covers *is* one kill: the right
+ * wait is `secondsPerKill`, whatever that currently happens to be.
+ */
+export const AUTO_ENGAGE_GRACE_KILLS = 1
+
+/**
+ * Floor and ceiling on the wait that comes out of it, in seconds.
+ *
+ * The floor covers request latency at stages where a kill takes almost no time; the ceiling
+ * stops a deep stage's minute-long `secondsPerKill` from making the gate feel broken, and is
+ * safe because a rejected engage is retried rather than surfaced.
+ */
+export const AUTO_ENGAGE_MIN_DELAY_SECONDS = 1
+export const AUTO_ENGAGE_MAX_DELAY_SECONDS = 10
+
+/**
+ * How long after a rejected automatic engage to try again.
+ *
+ * A rejection means the client ran ahead of the server, not that anything is wrong, so it is
+ * swallowed rather than toasted and simply retried — see `useHqAutoBoss`.
+ */
+export const AUTO_ENGAGE_RETRY_SECONDS = 3
+
+/**
+ * How long an automatically-engaged replay holds on its outcome before closing itself.
+ *
+ * Long enough to read "Victory" or "Your hero fell" and the line under it. A *manually* engaged
+ * fight never auto-closes — the player asked for that one and dismisses it themselves.
+ */
+export const AUTO_ENGAGE_REPLAY_HOLD_SECONDS = 2.5
+
 // ── Gacha ──────────────────────────────────────────  gacha-shared-system.md §2–6
 //
 // Shared by all four gachas. Champions are the only one built (Phase 2); Gear, Skills and

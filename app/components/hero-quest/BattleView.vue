@@ -26,6 +26,8 @@ const props = defineProps<{
         killsFloat: number
         killsRequired: number
         atBossGate: boolean
+        /** World 10 Stage 10 is already down: the gate stays, but nothing engages it again. */
+        runCleared: boolean
         walled: boolean
         killsBeforeWipe: number | null
         packSize: number
@@ -88,10 +90,17 @@ const heroHpColor = computed(() => {
         class="size-10 text-error"
       />
       <p class="text-lg font-semibold text-highlighted">
-        {{ run.enemyName }} blocks the way
+        {{ run.runCleared ? `${run.enemyName} is beaten` : `${run.enemyName} blocks the way` }}
       </p>
+      <!--
+        The copy has to match what actually happens, and what happens now depends on whether the
+        run is finished. A boss engages itself while this tab is visible; a *cleared* run does
+        not, or beating World 10 would re-fight the final boss on a loop.
+      -->
       <p class="text-sm text-muted">
-        Bosses never resolve on their own. Engage when you're ready.
+        {{ run.runCleared
+          ? 'The run is complete — prestige to start the next one.'
+          : 'The fight starts on its own while this tab is open, or engage it now.' }}
       </p>
     </div>
 

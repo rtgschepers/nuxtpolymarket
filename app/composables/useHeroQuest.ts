@@ -37,14 +37,27 @@ export const useHeroQuest = () => {
     const walled = computed(() => run.value?.walled ?? false)
     const canPrestige = computed(() => state.value?.run?.runCleared ?? false)
 
-    async function call<T>(url: string, body: Record<string, unknown>, successMsg: string): Promise<T | null> {
+    /**
+     * `silentErrors` suppresses the failure toast but still rethrows, for the one caller that
+     * expects to be rejected as a matter of course: automatic boss engagement races the server's
+     * lazy settle and a 400 there means "not yet", not "something went wrong". The caller decides
+     * what a given failure means; it never decides whether the request happened.
+     */
+    async function call<T>(
+        url: string,
+        body: Record<string, unknown>,
+        successMsg: string,
+        options: { silentErrors?: boolean } = {}
+    ): Promise<T | null> {
         try {
             const res = await $fetch(url, { method: 'POST', body })
             if (successMsg) toast.add({ title: successMsg, color: 'success' })
             await refresh()
             return res as T
         } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            toast.add({ title: e?.data?.message ?? 'Something went wrong', color: 'error' })
+            if (!options.silentErrors) {
+                toast.add({ title: e?.data?.message ?? 'Something went wrong', color: 'error' })
+            }
             throw e
         }
     }
@@ -73,8 +86,8 @@ export const useHeroQuest = () => {
      * and handed back the event log, so the modal animates a result that already happened.
      * Toast is suppressed: the replay itself is the feedback.
      */
-    async function engageBoss() {
-        return call<BossResult>('/api/hero-quest/boss/engage', {}, '')
+    async function engageBoss(options: { silentErrors?: boolean } = {}) {
+        return call<BossResult>('/api/hero-quest/boss/engage', {}, '', options)
     }
 
     async function prestige() {
