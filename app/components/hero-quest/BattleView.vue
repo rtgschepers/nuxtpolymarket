@@ -2,17 +2,18 @@
 import { D, formatHq } from '#shared/utils/hero-quest/numbers'
 
 /**
- * The live battle. Presentation only — it renders, it never decides.
+ * The live battle. Presentation only — it renders, it never decides, and it no longer predicts.
  *
- * Between server refreshes it interpolates the kill counter forward at the server's own
- * `secondsPerKill`, so the bars move continuously instead of jumping once a minute. The
- * server's next payload is always the truth; this only fills the gap.
+ * **Everything on screen derives from one quantity, `killsFloat`** — kills into the current stage
+ * attempt, fractional. The enemy bar, the enemy HP figure, the count of bodies still standing, the
+ * Hero's HP and the stage counter are all functions of it, so they cannot disagree with each
+ * other. They previously could, and did: the enemy bar swept on a free-running wall clock while
+ * the HP figure beside it was a static per-enemy number that never moved.
  *
- * **Everything on screen derives from one quantity, `killsFloat`.** The enemy bar, the enemy HP
- * figure, the count of bodies still standing, the Hero's HP and the stage counter are all
- * functions of it, so they cannot disagree with each other. They previously could, and did: the
- * enemy bar swept on a free-running wall clock while the HP figure beside it was a static
- * per-enemy number that never moved, which is what made the encounter read as inconsistent.
+ * `killsFloat` and every other field now arrive already walked forward by `useHqLiveRun`, which is
+ * also what advances the stage, the world and the Hero's level underneath this component. Keeping
+ * the walk in one place matters: a second predictor here would drift against that one within
+ * seconds, and the stage rollover in particular has to happen exactly once.
  *
  * Deliberately DOM rather than Pixi for Phase 1. The HP-bar contract here is the same one a Pixi
  * scene would consume, so swapping the renderer later touches no sim and no server code.
@@ -21,11 +22,12 @@ const props = defineProps<{
     run: {
         enemyName: string
         killCount: number
+        /** Fractional kills into the attempt — what every bar below is drawn from. */
+        killsFloat: number
         killsRequired: number
         atBossGate: boolean
         walled: boolean
         killsBeforeWipe: number | null
-        secondsPerKill: number | null
         packSize: number
         /**
          * The **pack** total, not one body's HP — what the player is actually fighting.
@@ -45,40 +47,18 @@ const props = defineProps<{
 }>()
 
 /**
- * Seconds since the last server payload.
- *
- * **It has to be reset when a payload lands.** An earlier version predicted from a clock that
- * only ever counted up from mount and reset `predicted` alone — which the ticker overwrote
- * 100ms later. The reset was a no-op, so the prediction grew without bound and the bar simply
- * pinned to the ceiling: a stage bar reading 30/30 forever while the real count was elsewhere.
- *
- * It was invisible for a second reason too. The prediction is *supposed* to be corrected by the
- * next payload, so a bug here only shows once payloads stop arriving — which is exactly what the
- * dev-server hang was doing.
- */
-const sincePayload = ref(0)
-let ticker: ReturnType<typeof setInterval> | null = null
-
-watch(() => props.run.killCount, () => {
-    sincePayload.value = 0
-})
-
-/**
- * Every readout, derived together from one server-anchored quantity.
+ * Every readout, derived together from one already-projected quantity.
  *
  * The derivation lives in `hero-quest-battle.ts` rather than here so its edge cases — pack
- * rollover, an undying party, a walled ceiling below the stage requirement — can be pinned by a
- * spec instead of only ever being exercised by looking at the screen.
+ * rollover, an undying party, a walled stage that restarts instead of clearing — can be pinned by
+ * a spec instead of only ever being exercised by looking at the screen.
  */
 const view = computed(() => battleReadout({
-    killCount: props.run.killCount,
+    killsInStage: props.run.killsFloat,
     killsRequired: props.run.killsRequired,
     killsBeforeWipe: props.run.killsBeforeWipe,
-    secondsPerKill: props.run.secondsPerKill,
     packSize: props.run.packSize,
-    walled: props.run.walled,
-    atBossGate: props.run.atBossGate,
-    sincePayload: sincePayload.value
+    atBossGate: props.run.atBossGate
 }))
 
 /**
@@ -94,14 +74,6 @@ const heroHpColor = computed(() => {
     if (view.value.heroHpPct <= 20) return 'error'
     if (view.value.heroHpPct <= 50) return 'warning'
     return 'success'
-})
-
-onMounted(() => {
-    ticker = setInterval(() => { sincePayload.value += 0.1 }, 100)
-})
-
-onUnmounted(() => {
-    if (ticker) clearInterval(ticker)
 })
 </script>
 
@@ -176,8 +148,8 @@ onUnmounted(() => {
 
       <!--
         Only shown when it matters. `killsBeforeWipe` below `killsRequired` is the definition of
-        a walled stage, and the Hero bar above will visibly empty first — this names what the
-        player is about to watch happen.
+        a walled stage, and the Hero bar above will visibly empty and refill as each attempt
+        restarts — this names what the player is about to watch happen.
       -->
       <p
         v-if="run.walled && run.killsBeforeWipe !== null"

@@ -1,67 +1,219 @@
 /**
- * What the battle screen draws (session-1 playtest: the Hero HP bar never moved, the enemy HP
- * figure disagreed with the bar beside it, and the pack count never came down).
+ * What the battle screen draws, and where it thinks the run has got to.
  *
- * The fix was to derive every readout from one quantity — kills into the attempt, fractional —
- * so the bars cannot disagree. These specs pin that they genuinely share it, and cover the
- * cases that are awkward to reach by looking at a screen: a pack rolling over, a party the
- * server calls undying, and a walled stage whose ceiling is below the stage requirement.
+ * Two halves, matching the module. `projectRun` walks the run forward from a payload — kills,
+ * stage, world, XP, level — and `battleReadout` turns where it landed into bars.
+ *
+ * The projection half exists because the screen was a minute-old photograph: the stage counter
+ * filled and then sat at 30/30, the world and stage never moved until the poll landed, and the XP
+ * bar was frozen the whole time. The specs that matter most here are the ones pinning that the
+ * client's walk is the *same* walk `settle()` does — stage rollover, the boss gate that stops it,
+ * and the wave wall that restarts instead of clearing. A client that advanced past a gate the
+ * server parks at would be lying about where the player is.
+ *
+ * The readout half comes from the session-1 playtest: the Hero HP bar never moved, the enemy HP
+ * figure disagreed with the bar beside it, and the pack count never came down. The fix was to
+ * derive every readout from one quantity, so the bars cannot disagree.
  */
 
 import { describe, expect, it } from 'vitest'
-import { battleReadout, type BattleReadoutInput } from '../../app/utils/hero-quest-battle'
+import {
+    battleReadout,
+    projectRun,
+    type BattleReadoutInput,
+    type RunAnchor
+} from '../../app/utils/hero-quest-battle'
+import { settle, totalXpForLevel } from '#shared/utils/hero-quest/settle'
+import { BASE_KILL_COUNT, BOSS_STAGE, STAGES_PER_WORLD } from '#shared/utils/hero-quest/constants'
+import { ZERO } from '#shared/utils/hero-quest/numbers'
 
-const base: BattleReadoutInput = {
+const anchor: RunAnchor = {
+    prestige: 0,
+    world: 1,
+    stage: 1,
     killCount: 0,
-    killsRequired: 30,
-    killsBeforeWipe: 60,
     secondsPerKill: 2,
-    packSize: 6,
-    walled: false,
-    atBossGate: false,
-    sincePayload: 0
+    killsBeforeWipe: 60,
+    goldBonusPct: 0,
+    xpBonusPct: 0,
+    heroLevel: 1,
+    heroXp: '0'
 }
-const read = (over: Partial<BattleReadoutInput> = {}) => battleReadout({ ...base, ...over })
+const project = (over: Partial<RunAnchor>, seconds: number) =>
+    projectRun({ ...anchor, ...over }, seconds)
 
-describe('interpolation between payloads', () => {
+describe('walking the run forward between payloads', () => {
     it('advances the kill count at the server\'s own seconds-per-kill', () => {
-        expect(read({ sincePayload: 0 }).displayKills).toBe(0)
-        expect(read({ sincePayload: 2 }).displayKills).toBe(1)
-        expect(read({ sincePayload: 9 }).displayKills).toBe(4)
+        expect(project({}, 0).killsInStage).toBe(0)
+        expect(project({}, 2).killsInStage).toBe(1)
+        expect(project({}, 9).killsInStage).toBe(4.5)
     })
 
     it('starts from the served count rather than from zero', () => {
-        expect(read({ killCount: 10, sincePayload: 4 }).displayKills).toBe(12)
+        expect(project({ killCount: 10 }, 4).killsInStage).toBe(12)
     })
 
     it('stands still when the server reports no rate', () => {
         // `secondsPerKill` is null when the party cannot kill anything. Dividing by it would
-        // send the bar to Infinity; the honest reading is that nothing is happening.
-        expect(read({ secondsPerKill: null, sincePayload: 999 }).displayKills).toBe(0)
-        expect(read({ secondsPerKill: 0, sincePayload: 999 }).displayKills).toBe(0)
+        // send the run to Infinity; the honest reading is that nothing is happening.
+        expect(project({ secondsPerKill: null }, 9999).killsInStage).toBe(0)
+        expect(project({ secondsPerKill: 0 }, 9999).killsInStage).toBe(0)
+        expect(project({ secondsPerKill: null }, 9999).stage).toBe(1)
     })
 
-    it('never runs past the stage requirement', () => {
-        const far = read({ sincePayload: 10_000 })
-        expect(far.displayKills).toBe(30)
-        expect(far.killProgress).toBe(100)
+    it('rolls over into the next stage instead of pinning at the requirement', () => {
+        // The regression this whole half exists for: the counter used to fill and stop.
+        const rolled = project({}, BASE_KILL_COUNT * 2 + 4)
+        expect(rolled.stage).toBe(2)
+        expect(rolled.killsInStage).toBe(2)
+        expect(rolled.killsRequired).toBe(BASE_KILL_COUNT)
+    })
+
+    it('never turns a world over on its own — the last stage of one is a super boss', () => {
+        // Worth pinning as a property rather than left implicit: every world ends in a gate, so
+        // the projection can advance stages freely but a *world* only ever changes because the
+        // player won a fight the server resolved. The screen cannot walk itself into World 2.
+        const held = project(
+            { stage: STAGES_PER_WORLD, killCount: 0, killsBeforeWipe: null },
+            100_000
+        )
+        expect(held.atBossGate).toBe(true)
+        expect(held.world).toBe(1)
+        expect(held.stage).toBe(STAGES_PER_WORLD)
     })
 })
+
+describe('the stops the server would have made', () => {
+    it('parks at a boss gate rather than walking through it', () => {
+        const far = project({ stage: BOSS_STAGE - 1, killCount: BASE_KILL_COUNT - 1 }, 100_000)
+        expect(far.stage).toBe(BOSS_STAGE)
+        expect(far.atBossGate).toBe(true)
+    })
+
+    it('keeps earning while parked, because the gate farms the stage before it', () => {
+        const parked = project({ stage: BOSS_STAGE }, 600)
+        expect(parked.atBossGate).toBe(true)
+        expect(parked.stage).toBe(BOSS_STAGE)
+        expect(parked.goldEarned).toBeGreaterThan(0)
+        expect(parked.heroXp.gt(0) || parked.levelsGained > 0).toBe(true)
+    })
+
+    it('restarts a walled stage instead of clearing it, however long it runs', () => {
+        // A wall is `killsBeforeWipe < killsRequired`. The attempt cycles rather than banking,
+        // so the stage is never left and the Hero bar sawtooths.
+        const walled = project({ killsBeforeWipe: 12 }, 100_000)
+        expect(walled.walled).toBe(true)
+        expect(walled.stage).toBe(1)
+        expect(walled.killsInStage).toBeLessThan(12)
+    })
+
+    it('earns nothing on a stage that kills faster than it clears', () => {
+        const hopeless = project({ killsBeforeWipe: 0 }, 100_000)
+        expect(hopeless.killsInStage).toBe(0)
+        expect(hopeless.goldEarned).toBe(0)
+        expect(hopeless.killsLanded).toBe(0)
+    })
+})
+
+describe('agreement with the settle it is drawing', () => {
+    /**
+     * The client's walk and the server's have to land in the same place, or the screen shows a
+     * stage the run is not on and then snaps back when the poll arrives.
+     *
+     * Compared against `settle()` directly rather than against a hand-written expectation: the
+     * claim is not "stage 4" but "wherever the server would have put it". The two differ by under
+     * one kill by construction — `settle` floors its kill budget into whole banked kills and the
+     * projection does not, because a bar redrawn ten times a second should not step in bodies.
+     */
+    const hero = {
+        classId: 'class_beginner' as const,
+        heroLevel: 1,
+        heroXp: ZERO,
+        goldBonusPct: 0,
+        offlineEfficiencyLevel: 0,
+        offlineCapLevel: 0
+    }
+
+    for (const seconds of [30, 120, 600, 3600]) {
+        it(`lands where settle() would after ${seconds}s online`, () => {
+            const served = settle({
+                hero,
+                position: { prestige: 0, world: 1, stage: 1, killsInStage: 0 },
+                elapsedSeconds: seconds,
+                online: true
+            })
+
+            const projected = project({
+                secondsPerKill: served.secondsPerKill,
+                killsBeforeWipe: null
+            }, seconds)
+
+            expect(projected.world).toBe(served.position.world)
+            expect(projected.stage).toBe(served.position.stage)
+            expect(Math.floor(projected.killsInStage)).toBe(served.position.killsInStage)
+            expect(projected.heroLevel).toBe(served.heroLevel)
+        })
+    }
+})
+
+describe('the hero\'s level and XP', () => {
+    it('fills the XP bar continuously rather than once a payload', () => {
+        const early = project({}, 10)
+        const later = project({}, 40)
+        expect(later.heroXp.gt(early.heroXp) || later.heroLevel > early.heroLevel).toBe(true)
+        expect(early.xpProgress).toBeGreaterThan(0)
+        expect(early.xpProgress).toBeLessThanOrEqual(1)
+    })
+
+    it('levels up mid-projection, and says how many levels it granted', () => {
+        const levelled = project({ killsBeforeWipe: null }, 3600)
+        expect(levelled.heroLevel).toBeGreaterThan(1)
+        expect(levelled.levelsGained).toBe(levelled.heroLevel - 1)
+        // XP resets into the new level rather than accumulating past the threshold.
+        expect(levelled.heroXp.lt(levelled.xpToNextLevel)).toBe(true)
+    })
+
+    it('applies the served XP bonus rather than stacking one of its own', () => {
+        // Measured on lifetime XP, not on `heroXp` — that field is the remainder *after*
+        // levelling, so doubling the intake moves the level rather than the remainder.
+        const lifetime = (over: Partial<RunAnchor>) => {
+            const ahead = project(over, 100)
+            return totalXpForLevel(ahead.heroLevel).add(ahead.heroXp)
+        }
+        expect(lifetime({ xpBonusPct: 1 }).div(lifetime({})).toNumber()).toBeCloseTo(2, 6)
+    })
+
+    it('applies the served Gold bonus the same way', () => {
+        expect(project({ goldBonusPct: 0.5 }, 100).goldEarned)
+            .toBeCloseTo(project({}, 100).goldEarned * 1.5, 6)
+    })
+})
+
+// ── The bars ───────────────────────────────────────────────────────────────────────────
+
+const base: BattleReadoutInput = {
+    killsInStage: 0,
+    killsRequired: 30,
+    killsBeforeWipe: 60,
+    packSize: 6,
+    atBossGate: false
+}
+const read = (over: Partial<BattleReadoutInput> = {}) => battleReadout({ ...base, ...over })
 
 describe('the pack in front of you', () => {
     it('counts bodies down as they drop, and never reaches zero mid-encounter', () => {
         // Six standing at the start; one fewer per kill; the last is still up until the pack
         // rolls over, because an encounter with nothing in it is not a state the player sees.
-        expect(read({ killCount: 0 }).enemiesStanding).toBe(6)
-        expect(read({ killCount: 1 }).enemiesStanding).toBe(5)
-        expect(read({ killCount: 5 }).enemiesStanding).toBe(1)
-        expect(read({ killCount: 6 }).enemiesStanding).toBe(6)
+        expect(read({ killsInStage: 0 }).enemiesStanding).toBe(6)
+        expect(read({ killsInStage: 1 }).enemiesStanding).toBe(5)
+        expect(read({ killsInStage: 5 }).enemiesStanding).toBe(1)
+        expect(read({ killsInStage: 6 }).enemiesStanding).toBe(6)
     })
 
     it('empties the pack bar in step with the bodies', () => {
-        expect(read({ killCount: 0 }).enemyHpPct).toBe(100)
-        expect(read({ killCount: 3 }).enemyHpPct).toBeCloseTo(50, 10)
-        expect(read({ killCount: 6 }).enemyHpPct).toBe(100)
+        expect(read({ killsInStage: 0 }).enemyHpPct).toBe(100)
+        expect(read({ killsInStage: 3 }).enemyHpPct).toBeCloseTo(50, 10)
+        expect(read({ killsInStage: 6 }).enemyHpPct).toBe(100)
     })
 
     it('keeps the bar and the body count telling the same story', () => {
@@ -70,7 +222,7 @@ describe('the pack in front of you', () => {
         // always means less of the bar left.
         let previousHp = 101
         for (let kills = 0; kills < 6; kills++) {
-            const view = read({ killCount: kills })
+            const view = read({ killsInStage: kills })
             expect(view.enemyHpPct, `kill ${kills}`).toBeLessThan(previousHp)
             expect(view.enemiesStanding, `kill ${kills}`).toBe(6 - kills)
             previousHp = view.enemyHpPct
@@ -78,7 +230,7 @@ describe('the pack in front of you', () => {
     })
 
     it('handles a pack of one without dividing by it', () => {
-        const view = read({ packSize: 1, killCount: 0, sincePayload: 1 })
+        const view = read({ packSize: 1, killsInStage: 0.5 })
         expect(view.enemiesStanding).toBe(1)
         expect(view.enemyHpPct).toBeCloseTo(50, 10)
     })
@@ -88,34 +240,34 @@ describe('the Hero bar', () => {
     it('drains across the attempt, per the settle model\'s own semantics', () => {
         // `settle.ts`: "HP carries across the whole stage attempt and refills only when the
         // stage clears or restarts." So the fraction spent is kills over killsBeforeWipe.
-        expect(read({ killCount: 0 }).heroHpPct).toBe(100)
-        expect(read({ killCount: 30 }).heroHpPct).toBeCloseTo(50, 10)
+        expect(read({ killsInStage: 0 }).heroHpPct).toBe(100)
+        expect(read({ killsInStage: 30 }).heroHpPct).toBeCloseTo(50, 10)
     })
 
     it('stays full for a party the server calls undying', () => {
         // `killsBeforeWipe` is null when nothing can bring the party down — not a reason to
         // divide by nothing.
-        expect(read({ killsBeforeWipe: null, killCount: 25 }).heroHpPct).toBe(100)
-        expect(read({ killsBeforeWipe: 0, killCount: 25 }).heroHpPct).toBe(100)
+        expect(read({ killsBeforeWipe: null, killsInStage: 25 }).heroHpPct).toBe(100)
+        expect(read({ killsBeforeWipe: 0, killsInStage: 25 }).heroHpPct).toBe(100)
     })
 
-    it('empties before the stage bar fills on a walled stage — the whole point', () => {
-        // A wall is `killsBeforeWipe < killsRequired`. The Hero bar reaching empty while the
-        // stage counter is short of its target is exactly what the player needs to see.
-        const walled = read({ walled: true, killsBeforeWipe: 12, sincePayload: 10_000 })
-        expect(walled.heroHpPct).toBe(0)
-        expect(walled.displayKills).toBe(12)
-        expect(walled.killProgress).toBeLessThan(100)
+    it('refills as a walled attempt restarts, rather than pinning at empty', () => {
+        // The projection cycles `killsInStage` modulo `killsBeforeWipe` on a walled stage, so
+        // the bar sawtooths. Watching it refill is how the player sees the restart happen.
+        const nearlyDead = read({ killsBeforeWipe: 12, killsInStage: 11.9 })
+        const restarted = read({ killsBeforeWipe: 12, killsInStage: 0.1 })
+        expect(nearlyDead.heroHpPct).toBeLessThan(5)
+        expect(restarted.heroHpPct).toBeGreaterThan(95)
     })
 
     it('never reports a negative bar', () => {
-        expect(read({ killsBeforeWipe: 5, killCount: 30 }).heroHpPct).toBe(0)
+        expect(read({ killsBeforeWipe: 5, killsInStage: 30 }).heroHpPct).toBe(0)
     })
 })
 
 describe('at a boss gate', () => {
     it('parks every bar — a boss is a fight, not a counter', () => {
-        const view = read({ atBossGate: true, killCount: 3, killsRequired: 0, sincePayload: 500 })
+        const view = read({ atBossGate: true, killsInStage: 3, killsRequired: 0 })
         expect(view.displayKills).toBe(3)
         expect(view.enemyHpPct).toBe(100)
         expect(view.heroHpPct).toBe(100)

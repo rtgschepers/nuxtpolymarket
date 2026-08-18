@@ -1,35 +1,223 @@
 /**
- * What the battle screen shows, derived from one number.
+ * What the battle screen shows, projected forward from one server payload.
  *
- * The enemy bar, the enemy HP figure, the count of bodies still standing, the Hero's HP bar and
- * the stage counter are all functions of `killsFloat` — kills into the current stage attempt,
- * fractional. That is the point: they previously moved independently and disagreed, which is
- * what made the encounter read as inconsistent. Derived together, they cannot.
+ * Two functions, in order. `projectRun` walks the run forward from the last payload — kills,
+ * stage, world, Gold, XP, level — and `battleReadout` turns the position it lands on into bars.
+ * Everything on screen is a function of the one quantity `projectRun` accrues, so nothing on
+ * screen can disagree with anything else on it.
  *
- * Pure, and separate from the component, because the edge cases are worth pinning: a pack
- * rolling over, a party the server calls undying, a walled stage whose ceiling is lower than the
- * stage requirement, and a `secondsPerKill` of zero or null.
+ * ## Why the client is allowed to do this at all
  *
- * Holds no game math — every input is server-derived. This only decides how to *draw* them.
+ * `settle()` is the authority and this is not a second one. What makes the projection safe is
+ * that it is the *same walk*, over the same pure helpers (`killsRequired`, `nextStage`,
+ * `goldPerKill`, `xpPerKill`, `applyXp`, `offlineFarmStage`), against a rate the server handed
+ * over. The next payload overwrites all of it. No projected number is ever sent back, and
+ * nothing here decides anything — `docs/hero-quest/CLAUDE.md` §3, server authority.
+ *
+ * ## The one rate
+ *
+ * `secondsPerKill` and `killsBeforeWipe` come from the payload and are held for the whole
+ * projection, including across a stage or world boundary. That is not an approximation the
+ * client invented: `settle()` does exactly the same thing, deliberately ("offline holds one
+ * rate… a window that carries the run into deeper stages fights all of them at the departure
+ * stage's difficulty"). Holding them is what keeps the projection and the settle in agreement;
+ * recomputing them would make the screen disagree with the server it is drawing.
+ *
+ * Position-only quantities are a different case and are **not** held — pack size, per-enemy HP
+ * and pack HP depend on nothing but `RunPosition`, so `battleReadout`'s caller recomputes them
+ * exactly from the projected position rather than showing World 3's HP total on World 4.
+ *
+ * Pure, and separate from the components, because the edge cases are worth pinning: a pack
+ * rolling over, a party the server calls undying, a walled stage that restarts instead of
+ * clearing, a boss gate that stops the walk, and a `secondsPerKill` of zero or null.
  */
 
-export interface BattleReadoutInput {
+import { D, ZERO, type Decimal } from '#shared/utils/hero-quest/numbers'
+import {
+    applyXp,
+    goldPerKill,
+    killsRequired,
+    nextStage,
+    offlineFarmStage,
+    stageArchetype,
+    xpPerKill,
+    xpToNextLevel
+} from '#shared/utils/hero-quest/settle'
+
+/**
+ * The last thing the server said, and everything the walk needs to carry on from it.
+ *
+ * Every field is served as-is by `state.get.ts` — this holds no game math and derives no input
+ * of its own.
+ */
+export interface RunAnchor {
+    prestige: number
+    world: number
+    stage: number
     /** Server truth: kills banked into this stage attempt. */
     killCount: number
+    /** Held for the whole projection. `null` when the party cannot kill anything. */
+    secondsPerKill: number | null
+    /** Held likewise. `null` when the server calls the party undying. */
+    killsBeforeWipe: number | null
+    /** Already carries every passive and burst source, so nothing is stacked here. */
+    goldBonusPct: number
+    xpBonusPct: number
+    heroLevel: number
+    /** Decimal, as a string — XP passes `Number.MAX_SAFE_INTEGER` early. */
+    heroXp: string
+}
+
+export interface RunForecast {
+    prestige: number
+    world: number
+    stage: number
+    /**
+     * Kills into the current stage attempt, **fractional**.
+     *
+     * `settle()` floors its kill budget because it is banking whole kills into a database. A
+     * bar redrawn ten times a second is not, and flooring here would step the enemy bar in
+     * whole bodies. The two disagree by less than one kill, and the next payload settles it.
+     */
+    killsInStage: number
+    killsRequired: number
+    atBossGate: boolean
+    /** The stage restarts rather than clearing: `killsBeforeWipe` is under `killsRequired`. */
+    walled: boolean
+    heroLevel: number
+    heroXp: Decimal
+    xpToNextLevel: Decimal
+    /** 0–1, for the XP bar. */
+    xpProgress: number
+    /** Since the payload — the "you earned this while watching" figures. */
+    goldEarned: number
+    killsLanded: number
+    levelsGained: number
+}
+
+/**
+ * A run walking off the end of World 10 is a super boss, which the boss branch stops at, so the
+ * loop cannot spin on `nextStage`'s fixed point. This guards the case anyway, because the loop
+ * runs on a 100ms ticker in the browser rather than once per settle: a content edit that made
+ * some stage requirement zero would otherwise hang the tab rather than fail a test.
+ */
+const MAX_STAGE_STEPS = 1000
+
+function isBossStage(stage: number): boolean {
+    const archetype = stageArchetype(stage)
+    return archetype === 'boss' || archetype === 'super_boss'
+}
+
+/**
+ * Walk the run forward by `elapsedSeconds` of presence.
+ *
+ * Deliberately the same branch order as `settle()`'s loop — boss gate, then wave wall, then
+ * ordinary progress — because those three are what decide whether the run moves at all, and a
+ * screen that advanced past a gate the server parks at would be lying about where the player is.
+ */
+export function projectRun(anchor: RunAnchor, elapsedSeconds: number): RunForecast {
+    const spk = anchor.secondsPerKill
+    const heroXp = D(anchor.heroXp)
+
+    const prestige = anchor.prestige
+    let world = anchor.world
+    let stage = anchor.stage
+    let killsInStage = Math.max(0, anchor.killCount)
+
+    let budget = spk !== null && spk > 0 ? Math.max(0, elapsedSeconds) / spk : 0
+    const goldMultiplier = 1 + anchor.goldBonusPct
+    const xpMultiplier = D(1 + anchor.xpBonusPct)
+    const wipeAt = anchor.killsBeforeWipe
+
+    let gold = 0
+    let xp = ZERO
+    let landed = 0
+    let atBossGate = isBossStage(stage)
+    let walled = false
+
+    const earn = (kills: number, atWorld: number, atStage: number) => {
+        gold += kills * goldPerKill(prestige, atWorld, atStage) * goldMultiplier
+        xp = xp.add(xpPerKill(prestige, atWorld, atStage).mul(kills).mul(xpMultiplier))
+        landed += kills
+    }
+
+    for (let step = 0; budget > 0 && step < MAX_STAGE_STEPS; step++) {
+        if (isBossStage(stage)) {
+            // The gate. Every remaining kill farms the preceding wave stage and position holds,
+            // so the player lands *at* the boss with the fight still to engage.
+            atBossGate = true
+            const farm = offlineFarmStage({ prestige, world, stage, killsInStage })
+            earn(budget, farm.world, farm.stage)
+            budget = 0
+            break
+        }
+
+        const required = killsRequired({ prestige, world, stage, killsInStage })
+
+        if (wipeAt !== null && wipeAt < required) {
+            // The party drops before the counter fills, so the attempt restarts from zero and
+            // the stage can never clear at this power level. Income continues at the same rate.
+            walled = true
+            if (wipeAt > 0) {
+                earn(budget, world, stage)
+                killsInStage = (killsInStage + budget) % wipeAt
+            } else {
+                // Dies faster than it kills: nothing lands, so nothing is earned.
+                killsInStage = 0
+            }
+            budget = 0
+            break
+        }
+
+        const applied = Math.min(budget, Math.max(0, required - killsInStage))
+        if (applied <= 0) {
+            ({ world, stage, killsInStage } = nextStage({ prestige, world, stage, killsInStage }))
+            continue
+        }
+
+        earn(applied, world, stage)
+        budget -= applied
+        killsInStage += applied
+
+        if (killsInStage >= required) {
+            ({ world, stage, killsInStage } = nextStage({ prestige, world, stage, killsInStage }))
+            atBossGate = isBossStage(stage)
+        }
+    }
+
+    const levelled = applyXp(anchor.heroLevel, heroXp, xp)
+    const needed = xpToNextLevel(levelled.level)
+
+    return {
+        prestige,
+        world,
+        stage,
+        killsInStage,
+        killsRequired: killsRequired({ prestige, world, stage, killsInStage }),
+        atBossGate,
+        walled,
+        heroLevel: levelled.level,
+        heroXp: levelled.xp,
+        xpToNextLevel: needed,
+        xpProgress: needed.lte(0) ? 0 : Math.min(1, levelled.xp.div(needed).toNumber()),
+        goldEarned: gold,
+        killsLanded: landed,
+        levelsGained: levelled.level - anchor.heroLevel
+    }
+}
+
+export interface BattleReadoutInput {
+    /** Straight from `projectRun` — fractional, and already past any stage rollover. */
+    killsInStage: number
     killsRequired: number
     /** Kills one attempt survives, or `null` when the server calls the party undying. */
     killsBeforeWipe: number | null
-    secondsPerKill: number | null
+    /** For the projected position, not the payload's — bodies change with the stage. */
     packSize: number
-    walled: boolean
     atBossGate: boolean
-    /** Seconds elapsed since the payload that supplied `killCount`. */
-    sincePayload: number
 }
 
 export interface BattleReadout {
-    /** Kills into the attempt, fractional and already clamped. Everything else derives from it. */
-    killsFloat: number
     /** The integer the stage counter shows. */
     displayKills: number
     /** Stage bar, 0–100. */
@@ -46,13 +234,13 @@ export interface BattleReadout {
 
 export function battleReadout(input: BattleReadoutInput): BattleReadout {
     const size = Math.max(0, Math.floor(input.packSize))
+    const kills = Math.max(0, input.killsInStage)
 
     if (input.atBossGate) {
         // A boss is a fight, not a counter. Nothing here is being worn down over time, and a
         // mixed boss pack has no single body size to divide by, so the bars sit full.
         return {
-            killsFloat: input.killCount,
-            displayKills: input.killCount,
+            displayKills: Math.floor(kills),
             killProgress: input.killsRequired <= 0 ? 100 : 0,
             packProgress: 0,
             enemiesStanding: size,
@@ -61,35 +249,28 @@ export function battleReadout(input: BattleReadoutInput): BattleReadout {
         }
     }
 
-    const spk = input.secondsPerKill
-    const predicted = spk !== null && spk > 0 ? Math.max(0, input.sincePayload) / spk : 0
-
-    /**
-     * A walled stage restarts rather than banking, so the ceiling is what one attempt survives
-     * — not what the stage asks for. Without this the bars sail past a line the run cannot cross.
-     */
-    const ceiling = input.walled && input.killsBeforeWipe !== null
-        ? input.killsBeforeWipe
-        : input.killsRequired
-    const killsFloat = Math.max(0, Math.min(ceiling, input.killCount + predicted))
-
-    const displayKills = Math.floor(killsFloat)
+    const displayKills = Math.floor(kills)
     const killProgress = input.killsRequired <= 0
         ? 100
         : Math.min(100, (displayKills / input.killsRequired) * 100)
 
     // A pack of identical bodies dies one at a time, so progress through it is the fractional
     // part of the kill count over the pack size.
-    const packProgress = size <= 1 ? killsFloat % 1 : (killsFloat % size) / size
-    const enemiesStanding = size <= 0 ? 0 : Math.max(1, size - Math.floor(killsFloat % size))
+    const packProgress = size <= 1 ? kills % 1 : (kills % size) / size
+    const enemiesStanding = size <= 0 ? 0 : Math.max(1, size - Math.floor(kills % size))
 
+    /**
+     * HP is one pool across a whole stage attempt, so the fraction spent is kills over
+     * `killsBeforeWipe`. On a walled stage `killsInStage` cycles as the attempt restarts, which
+     * is what makes this bar sawtooth rather than pin at empty — the restart is the thing the
+     * player needs to see happening.
+     */
     const wipeAt = input.killsBeforeWipe
     const heroHpPct = wipeAt === null || wipeAt <= 0
         ? 100
-        : Math.max(0, Math.min(100, (1 - killsFloat / wipeAt) * 100))
+        : Math.max(0, Math.min(100, (1 - kills / wipeAt) * 100))
 
     return {
-        killsFloat,
         displayKills,
         killProgress,
         packProgress,

@@ -6,6 +6,20 @@ const {
     initRun, engageBoss
 } = useHeroQuest()
 
+/**
+ * The battle screen draws the *projected* run, not the payload.
+ *
+ * The server settles lazily and this page polls it once a minute, so `run` and `hero` are a
+ * minute-old photograph. `useHqLiveRun` walks both forward at the server's own rate — position,
+ * kills, level and XP — so the stage counter rolls over into the next stage, the world changes,
+ * and the XP bar fills continuously instead of jumping once a minute. Server truth still lands
+ * every poll and overwrites all of it; nothing projected is ever sent back.
+ *
+ * `run`/`hero` stay in scope deliberately: `liveHero` is the right thing to *show* and the wrong
+ * thing to compare a payload against, so anything that needs the anchor still has it.
+ */
+const { liveRun, liveHero } = useHqLiveRun(run, hero)
+
 const fight = ref<Awaited<ReturnType<typeof engageBoss>>>(null)
 const engaging = ref(false)
 
@@ -26,7 +40,7 @@ async function onEngage() {
  * the stat that produces it.
  */
 const statTiles = computed(() => {
-    const stats = hero.value?.stats
+    const stats = liveHero.value?.stats
     if (!stats) return []
     return [
         { label: 'Power', value: formatHq(stats.pwr), doc: HQ_STAT_DOC_BY_KEY.pwr! },
@@ -81,7 +95,7 @@ const awayReport = computed(() => {
       </UButton>
     </div>
 
-    <template v-else-if="run && hero">
+    <template v-else-if="liveRun && liveHero">
       <UAlert
         v-if="awayReport"
         color="primary"
@@ -93,15 +107,15 @@ const awayReport = computed(() => {
           + (awayReport.blockedAtBoss ? '. Your run is parked at a boss.' : '.')"
       />
 
-      <HeroQuestRunPosition :run="run" />
+      <HeroQuestRunPosition :run="liveRun" />
 
       <HeroQuestBattleView
-        :run="run"
-        :hero="hero"
+        :run="liveRun"
+        :hero="liveHero"
       />
 
       <div
-        v-if="run.atBossGate"
+        v-if="liveRun.atBossGate"
         class="flex justify-center"
       >
         <UButton
@@ -111,23 +125,23 @@ const awayReport = computed(() => {
           :loading="engaging"
           @click="onEngage"
         >
-          Fight the {{ run.enemyName }}
+          Fight the {{ liveRun.enemyName }}
         </UButton>
       </div>
 
       <div class="rounded-lg border border-default bg-elevated/40 p-4">
         <div class="flex items-center justify-between mb-3">
-          <span class="font-medium text-highlighted">{{ hero.className }}</span>
-          <span class="text-sm text-muted">Level {{ hero.level }}</span>
+          <span class="font-medium text-highlighted">{{ liveHero.className }}</span>
+          <span class="text-sm text-muted">Level {{ liveHero.level }}</span>
         </div>
 
         <div class="mb-4">
           <div class="flex items-center justify-between text-xs text-muted mb-1">
             <span>Experience</span>
-            <span>{{ formatHq(hero.xp) }} / {{ formatHq(hero.xpToNextLevel) }}</span>
+            <span>{{ formatHq(liveHero.xp) }} / {{ formatHq(liveHero.xpToNextLevel) }}</span>
           </div>
           <UProgress
-            :model-value="hero.xpProgress * 100"
+            :model-value="liveHero.xpProgress * 100"
             size="sm"
           />
         </div>
@@ -170,7 +184,7 @@ const awayReport = computed(() => {
           </p>
           <div class="flex flex-wrap gap-1.5">
             <UBadge
-              v-for="skill in hero.skills"
+              v-for="skill in liveHero.skills"
               :key="skill.id"
               color="neutral"
               variant="subtle"
@@ -184,8 +198,8 @@ const awayReport = computed(() => {
 
     <HeroQuestBossFightModal
       :fight="fight"
-      :enemy-name="run?.enemyName ?? 'Boss'"
-      :boss-timer-seconds="run?.bossTimerSeconds ?? 30"
+      :enemy-name="liveRun?.enemyName ?? 'Boss'"
+      :boss-timer-seconds="liveRun?.bossTimerSeconds ?? 30"
       @close="fight = null"
     />
   </div>
