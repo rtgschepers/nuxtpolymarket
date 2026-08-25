@@ -35,6 +35,7 @@ const anchor: RunAnchor = {
     world: 1,
     stage: 1,
     killCount: 0,
+    killFraction: 0,
     secondsPerKill: 2,
     killsBeforeWipe: 60,
     goldBonusPct: 0,
@@ -55,6 +56,19 @@ describe('walking the run forward between payloads', () => {
 
     it('starts from the served count rather than from zero', () => {
         expect(project({ killCount: 10 }, 4).killsInStage).toBe(12)
+    })
+
+    it('starts from the served part-kill too, so the current body is not rewound', () => {
+        // The settle banks whole kills and carries the rest; anchoring at the whole count alone
+        // would step the enemy's HP bar backwards by up to one body every time a payload landed.
+        expect(project({ killCount: 10, killFraction: 0.5 }, 0).killsInStage).toBe(10.5)
+        expect(project({ killCount: 10, killFraction: 0.5 }, 3).killsInStage).toBe(12)
+    })
+
+    it('ignores a part-kill outside [0, 1), exactly as the settle does', () => {
+        expect(project({ killCount: 10, killFraction: 1 }, 0).killsInStage).toBe(10)
+        expect(project({ killCount: 10, killFraction: -1 }, 0).killsInStage).toBe(10)
+        expect(project({ killCount: 10, killFraction: Number.NaN }, 0).killsInStage).toBe(10)
     })
 
     it('stands still when the server reports no rate', () => {

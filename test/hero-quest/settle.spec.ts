@@ -521,6 +521,123 @@ describe('hero-quest settle', () => {
             expect(result.kills).toBe(Math.floor(result.effectiveSeconds / result.secondsPerKill))
         })
 
+        /**
+         * The lossless-window group.
+         *
+         * Every state read settles and there is no floor on how often one happens — the client
+         * polls once a minute, every mutation refreshes, and a page reload is another. A settle
+         * that dropped the part of its budget which did not add up to a whole kill therefore
+         * charged the player up to one kill for the privilege of looking at the screen, and the
+         * loss compounded with the refresh rate rather than the play time.
+         */
+        describe('the carried part-kill', () => {
+            it('splits the budget into whole kills and a remainder under one', () => {
+                const result = settle(input({ position: at(1, 1), elapsedSeconds: 3600 }))
+                const budget = result.effectiveSeconds / result.secondsPerKill
+
+                expect(result.kills).toBe(Math.floor(budget))
+                expect(result.killFraction).toBeCloseTo(budget - result.kills, 10)
+                expect(result.killFraction).toBeGreaterThanOrEqual(0)
+                expect(result.killFraction).toBeLessThan(1)
+            })
+
+            it('lands the kill a carried remainder completes', () => {
+                const spk = rateAt(hero, at(1, 1)).secondsPerKill
+                // Nine tenths of a kill in hand, a tenth of one elapsed: that is a kill.
+                const result = settle(input({
+                    position: at(1, 1),
+                    elapsedSeconds: spk * 0.1,
+                    online: true,
+                    killFraction: 0.9
+                }))
+
+                expect(result.kills).toBe(1)
+                expect(result.killFraction).toBeCloseTo(0, 10)
+            })
+
+            it('holds the carry across a window too short to bank anything', () => {
+                const spk = rateAt(hero, at(1, 1)).secondsPerKill
+                const result = settle(input({
+                    position: at(1, 1),
+                    elapsedSeconds: spk * 0.25,
+                    online: true,
+                    killFraction: 0.5
+                }))
+
+                expect(result.kills).toBe(0)
+                expect(result.killFraction).toBeCloseTo(0.75, 10)
+            })
+
+            it('holds it even when the window itself is empty', () => {
+                // A no-op settle must not *cost* the player what they had already banked.
+                expect(settle(input({ elapsedSeconds: 0, killFraction: 0.4 })).killFraction).toBe(0.4)
+            })
+
+            it('refuses a carry outside [0, 1), whatever the row says', () => {
+                // Dropped rather than clamped into range: a carry of 1 nudged to just under one
+                // would pay out a free kill on every read, and every read settles.
+                const spk = rateAt(hero, at(1, 1)).secondsPerKill
+                const short = { position: at(1, 1), elapsedSeconds: spk * 0.1, online: true }
+
+                expect(settle(input({ ...short, killFraction: 1 })).kills).toBe(0)
+                expect(settle(input({ ...short, killFraction: 5 })).kills).toBe(0)
+                expect(settle(input({ ...short, killFraction: -3 })).kills).toBe(0)
+                expect(settle(input({ ...short, killFraction: Number.NaN })).killFraction).toBeCloseTo(0.1, 6)
+            })
+
+            /**
+             * The regression itself, stated as the property that was violated: an hour of
+             * presence is an hour of presence, however the client chose to cut it up.
+             *
+             * Held to one stage attempt with a static hero, so `secondsPerKill` is identical in
+             * every chunk and the only variable left is how often the settle ran. Over longer
+             * windows the totals legitimately differ — a settle prices the whole window at its
+             * departure stage's rate and chunking re-prices at each new stage — so a longer
+             * horizon would be measuring that instead.
+             *
+             * Measured before the carry existed, at this stage's ~1.88s/kill: one hour paid 1918
+             * kills settled in a single window, 1680 across sixty one-minute polls, and **zero**
+             * across 3600 one-second reloads, since `floor()` of a sub-1 budget is zero every
+             * time. The last is the reported bug — a player refreshing faster than they killed
+             * never progressed at all.
+             */
+            it('adds up the same however the presence is cut', () => {
+                const spk = rateAt(hero, at(1, 1)).secondsPerKill
+                // Short of the stage's requirement, and off any kill boundary, so no chunking
+                // can round its way across either one.
+                const totalSeconds = spk * (BASE_KILL_COUNT - 5.5)
+
+                const walk = (steps: number) => {
+                    let position = at(1, 1)
+                    let killFraction = 0
+                    let kills = 0
+                    for (let step = 0; step < steps; step++) {
+                        const result = settle(input({
+                            position,
+                            elapsedSeconds: totalSeconds / steps,
+                            online: true,
+                            killFraction
+                        }))
+                        position = result.position
+                        killFraction = result.killFraction
+                        kills += result.kills
+                    }
+                    return { kills, position }
+                }
+
+                const whole = walk(1)
+                expect(whole.kills).toBe(BASE_KILL_COUNT - 6)
+
+                // The last of these settles roughly fifty times per kill — the shape of a player
+                // reloading the page, which used to earn nothing whatsoever.
+                for (const steps of [2, 10, 60, BASE_KILL_COUNT * 50]) {
+                    const chunked = walk(steps)
+                    expect(chunked.kills).toBe(whole.kills)
+                    expect(chunked.position).toEqual(whole.position)
+                }
+            })
+        })
+
         it('values Gold at the stage each kill actually landed in', () => {
             // 30 kills clears Stage 1; the rest are worth more, so the average beats Stage 1's rate.
             const result = settle(input({ position: at(1, 1), elapsedSeconds: 8 * 3600 }))

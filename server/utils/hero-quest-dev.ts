@@ -413,7 +413,11 @@ export async function devSet(userId: string, patch: DevSet) {
                 stage,
                 atBossGate: isBossStage(stage),
                 ...(patch.prestige === undefined ? {} : { prestige: Math.max(0, Math.floor(patch.prestige)) }),
-                ...(patch.killCount === undefined ? {} : { killCount: Math.max(0, Math.floor(patch.killCount)) }),
+                // The carried part-kill belongs to the counter being overwritten, so it goes
+                // with it — a harness that moves the run to 12/30 means 12, not 12 and a bit.
+                ...(patch.killCount === undefined
+                    ? {}
+                    : { killCount: Math.max(0, Math.floor(patch.killCount)), killFraction: 0 }),
                 ...(patch.heroLevel === undefined
                     ? {}
                     : { heroLevel: Math.max(1, Math.floor(patch.heroLevel)), heroXp: '0' }),

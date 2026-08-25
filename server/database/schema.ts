@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm'
-import { pgTable, text, timestamp, boolean, index, numeric, integer, unique, jsonb, bigint } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, boolean, index, numeric, integer, unique, jsonb, bigint, doublePrecision } from 'drizzle-orm/pg-core'
 import type {
   PathwardenGameState,
   PathwardenMapPlan
@@ -853,6 +853,21 @@ export const hqState = pgTable('hq_state', {
   stage: integer('stage').notNull().default(1),
   /** Kills banked toward the current stage's requirement. */
   killCount: integer('kill_count').notNull().default(0),
+  /**
+   * Progress toward the *next* kill, in kills — always `[0, 1)`. The remainder a settle could
+   * not bank as a whole kill, carried so the next one can.
+   *
+   * Load-bearing, not a rounding nicety. Every state read settles, and a settle without this
+   * discards up to one kill each time: an hour of presence settled in sixty polls paid 12%
+   * less than the same hour settled in one window, and a player reloading faster than their
+   * `secondsPerKill` progressed *never*, since `floor()` of a sub-1 budget is zero every time.
+   *
+   * Kills and not seconds, deliberately. Banked seconds are only worth kills at the rate that
+   * measured them, so a player stalled at a wall would pile up hours of unspent time and cash
+   * it all the instant an upgrade cut the rate. A fraction of a kill is worth the same
+   * fraction at any rate, and is bounded by one by construction.
+   */
+  killFraction: doublePrecision('kill_fraction').notNull().default(0),
   /** Parked at an unengaged Stage 5/10, waiting for the player to start the fight. */
   atBossGate: boolean('at_boss_gate').notNull().default(false),
   /**

@@ -101,6 +101,9 @@ export default defineEventHandler(async (event) => {
                 world: landing.world,
                 stage: landing.stage,
                 killCount: 0,
+                // Cleared with the kill counter it belongs to — the fight was resolved on its
+                // own terms, so nothing is owed toward the first body of wherever the run lands.
+                killFraction: 0,
                 atBossGate: isBossStage(landing.stage),
                 runCleared: state.runCleared || clearedTheRun,
                 ...(sealsEarned > 0 ? sealGrantSet(sealsEarned) : {})

@@ -338,6 +338,23 @@ export interface SettleInput {
      * offline window is paid at the price the account had when it went away.
      */
     tenureDays: number
+    /**
+     * Progress toward the *next* kill carried in from the previous window, in kills — always
+     * in `[0, 1)`.
+     *
+     * Without it a settle is lossy by up to one whole kill, and every read is a settle: the
+     * client polls once a minute, every mutation refreshes, and a page reload is another one.
+     * Measured, at World 1 Stage 1's 1.88s/kill, one hour of presence paid 1918 kills settled
+     * in a single window and 1680 settled in sixty — and a player refreshing every second
+     * earned *nothing at all*, forever, because `floor(1 / 1.88)` is zero every time.
+     *
+     * Carried in **kills rather than seconds**, which is what makes it safe to bank. Seconds
+     * are only worth kills at the rate that measured them, so a player parked at a wall
+     * (`secondsPerKill` is unbounded — see `firstStallingPosition` in the settle spec) would
+     * accumulate hours of unspent time and cash all of it the moment an upgrade cut the rate.
+     * A fraction of a kill is a fraction of a kill at any rate, and can never exceed one.
+     */
+    killFraction?: number
     /** Battle Speed — Phase 4. Callers pass `undefined` until then. */
     speedBoost?: { multiplier: number; overlapSeconds: number }
 }
@@ -365,4 +382,9 @@ export interface SettleResult {
      */
     wipedOnWave: boolean
     effectiveSeconds: number
+    /**
+     * What is left over toward the next kill, in `[0, 1)` — persist it and hand it back as the
+     * next window's `killFraction` or the window is lossy. See that field for why.
+     */
+    killFraction: number
 }

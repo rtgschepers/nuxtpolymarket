@@ -728,6 +728,11 @@ export function offlineFarmStage(pos: RunPosition): RunPosition {
  * Wave stages have a second, softer stop: if the party dies before the stage's kill counter
  * fills (`killsBeforeWipe`), that stage restarts rather than advancing. Income continues at
  * the same rate, so the wall unsticks itself as the Hero levels.
+ *
+ * **A window is lossless.** Kills bank as integers, so the leftover fraction of a kill comes in
+ * as `input.killFraction` and goes back out as `result.killFraction` for the caller to persist.
+ * Dropping it made every settle cost up to one kill, and every read is a settle — see that
+ * field for the measurements.
  */
 export function settle(input: SettleInput): SettleResult {
     /**
@@ -743,6 +748,17 @@ export function settle(input: SettleInput): SettleResult {
         ? applyBoost(Math.max(0, input.elapsedSeconds), input)
         : effectiveOfflineSeconds(input)
 
+    /**
+     * Kills carried in from the previous window.
+     *
+     * Anything outside `[0, 1)` is a corrupted or hand-edited row rather than a rounding
+     * artefact, and is dropped rather than clamped into range: a carry of `1` clamped to just
+     * under one would hand out a free kill on every read, which is the direction this must not
+     * fail in. Nothing but this function is supposed to write the column.
+     */
+    const carried = input.killFraction ?? 0
+    const carriedIn = Number.isFinite(carried) && carried > 0 && carried < 1 ? carried : 0
+
     const empty: SettleResult = {
         position: { ...input.position },
         kills: 0,
@@ -753,12 +769,22 @@ export function settle(input: SettleInput): SettleResult {
         secondsPerKill: spk,
         blockedAtBoss: isBossStage(input.position.stage),
         wipedOnWave: false,
-        effectiveSeconds
+        effectiveSeconds,
+        // Held, not dropped: a window that earns nothing must not also *cost* the player the
+        // progress they had already banked toward the next kill.
+        killFraction: carriedIn
     }
     if (!Number.isFinite(spk) || spk <= 0 || effectiveSeconds <= 0) return empty
 
-    const totalKills = Math.floor(effectiveSeconds / spk)
-    if (totalKills <= 0) return empty
+    /**
+     * The window's kill budget, carry included, split into whole kills and the remainder that
+     * rides to the next window. Flooring without the carry is what made a settle lossy — see
+     * `SettleInput.killFraction`.
+     */
+    const budget = effectiveSeconds / spk + carriedIn
+    const totalKills = Math.floor(budget)
+    const killFraction = budget - totalKills
+    if (totalKills <= 0) return { ...empty, killFraction }
 
     /**
      * Two channels into one multiplier each, and they compose differently by design.
@@ -851,7 +877,8 @@ export function settle(input: SettleInput): SettleResult {
         secondsPerKill: spk,
         blockedAtBoss,
         wipedOnWave,
-        effectiveSeconds
+        effectiveSeconds,
+        killFraction
     }
 }
 

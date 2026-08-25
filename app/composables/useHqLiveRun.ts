@@ -49,7 +49,8 @@ export function useHqLiveRun(
      * pinned to their ceilings — a stage bar reading 30/30 forever while the real count was
      * elsewhere. Watching `killCount` alone is not enough now that the projection advances
      * stages: a payload that lands exactly as the counter rolls over reports the same 0 it did a
-     * tick ago, so the world and stage are watched with it.
+     * tick ago, so the world and stage are watched with it — and `killFraction` too, which is
+     * the only field that moves at all on a window too short to bank a whole kill.
      */
     const sincePayload = ref(0)
     let ticker: ReturnType<typeof setInterval> | null = null
@@ -57,7 +58,7 @@ export function useHqLiveRun(
     watch(
         () => {
             const value = run.value
-            return value ? `${value.world}:${value.stage}:${value.killCount}` : ''
+            return value ? `${value.world}:${value.stage}:${value.killCount}:${value.killFraction}` : ''
         },
         () => { sincePayload.value = 0 }
     )
@@ -71,6 +72,7 @@ export function useHqLiveRun(
             world: anchor.world,
             stage: anchor.stage,
             killCount: anchor.killCount,
+            killFraction: anchor.killFraction,
             secondsPerKill: anchor.secondsPerKill,
             killsBeforeWipe: anchor.killsBeforeWipe,
             goldBonusPct: anchor.goldBonusPct,
@@ -94,7 +96,7 @@ export function useHqLiveRun(
         if (!anchor) return null
         // No forecast means no hero yet, which is a frame or two on first load. Same shape
         // either way, so the components never see two contracts.
-        if (!ahead) return { ...anchor, killsFloat: anchor.killCount }
+        if (!ahead) return { ...anchor, killsFloat: anchor.killCount + anchor.killFraction }
 
         const position = {
             prestige: ahead.prestige,

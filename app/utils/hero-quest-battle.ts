@@ -56,6 +56,14 @@ export interface RunAnchor {
     stage: number
     /** Server truth: kills banked into this stage attempt. */
     killCount: number
+    /**
+     * Server truth as well: the part-kill banked toward the next body, in `[0, 1)`.
+     *
+     * The settle carries this across windows, so the projection has to start from it too —
+     * anchoring at the whole `killCount` alone would rewind the current enemy's HP bar by up
+     * to one body every time a payload landed.
+     */
+    killFraction: number
     /** Held for the whole projection. `null` when the party cannot kill anything. */
     secondsPerKill: number | null
     /** Held likewise. `null` when the server calls the party undying. */
@@ -130,7 +138,12 @@ export function projectRun(anchor: RunAnchor, elapsedSeconds: number): RunForeca
     const prestige = anchor.prestige
     let world = anchor.world
     let stage = anchor.stage
-    let killsInStage = Math.max(0, anchor.killCount)
+    // The carried part-kill rides along with the whole ones, dropped outside `[0, 1)` on the
+    // same rule `settle()` applies — the two have to land on the same body, and a payload is
+    // not a thing to trust unchecked.
+    const carry = anchor.killFraction
+    const carried = Number.isFinite(carry) && carry > 0 && carry < 1 ? carry : 0
+    let killsInStage = Math.max(0, anchor.killCount) + carried
 
     let budget = spk !== null && spk > 0 ? Math.max(0, elapsedSeconds) / spk : 0
     const goldMultiplier = 1 + anchor.goldBonusPct

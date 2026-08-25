@@ -503,7 +503,16 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
         const collections = await getCollections(userId, tx)
         const hero = heroSnapshotOf(state, shopLevels, collections, bankedGold)
         // Read off the pre-update row, so the window is priced at the tenure it opened with.
-        const result = settle({ hero, position: positionOf(state), elapsedSeconds, online, tenureDays: tenureDaysOf(state) })
+        const result = settle({
+            hero,
+            position: positionOf(state),
+            elapsedSeconds,
+            online,
+            tenureDays: tenureDaysOf(state),
+            // Carried in and written back below. Without it every settle silently drops the
+            // part of the window that did not add up to a whole kill, and every read settles.
+            killFraction: state.killFraction
+        })
 
         // The free time-gated Seal grant rides the settle rather than a route of its own:
         // settle is the one thing every read and every mutation already goes through, and a
@@ -516,6 +525,7 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
                 world: result.position.world,
                 stage: result.position.stage,
                 killCount: result.position.killsInStage,
+                killFraction: result.killFraction,
                 atBossGate: isBossStage(result.position.stage),
                 heroLevel: result.heroLevel,
                 heroXp: toStore(result.heroXp),
@@ -559,6 +569,9 @@ export function prestigeResetValues(state: HqStateRow) {
         world: 1,
         stage: 1,
         killCount: 0,
+        // Part of the run-position group: a fresh run starts from a standing enemy, not from
+        // whatever fraction of a kill the last one happened to end on.
+        killFraction: 0,
         atBossGate: false
     }
 }
@@ -607,6 +620,11 @@ export function serializeRun(state: HqStateRow, hero: HeroSnapshot) {
         enemyName,
         archetype,
         killCount: position.killsInStage,
+        /**
+         * The banked part of the next kill, so the client's between-poll projection resumes
+         * exactly where the settle stopped instead of restarting the current body's HP bar.
+         */
+        killFraction: state.killFraction,
         killsRequired: killsNeeded,
         atBossGate: atBoss,
         /** The World 10 super boss is down — prestige is available. */
