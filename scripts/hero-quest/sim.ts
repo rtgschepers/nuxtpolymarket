@@ -426,7 +426,21 @@ export interface CampaignReport {
 export const SIM_MATURE_TENURE_DAYS = 3650
 
 export const DEFAULT_CAMPAIGN_MAX_PRESTIGE = 10
-export const DEFAULT_GRIND_BUDGET_SECONDS = 24 * 3600
+
+/**
+ * How long a single blocked stage may be farmed before the walk calls it a wall.
+ *
+ * Raised 24h → 72h with the one-week-per-prestige retune. It is a **threshold for "this has
+ * stopped being progress"**, so it has to be read against how long a prestige loop is meant to
+ * take: against a 20-minute loop a day of farming was obviously a wall, and against a
+ * seven-day one it is an ordinary evening. The intended shape now puts a real gate in front of
+ * each Stage 10 — 17h at World 7, 2d 4h at World 10 — and at 24h the walk reported those as
+ * walls while the run was in fact pacing exactly as designed.
+ *
+ * Still a genuine ceiling rather than a rubber stamp: `FIGHT_LENGTH_DRIFT` above 0.35 blows
+ * straight through it.
+ */
+export const DEFAULT_GRIND_BUDGET_SECONDS = 72 * 3600
 export const DEFAULT_CAMPAIGN_MAX_LEVEL = 5000
 
 /** A boss is a single kill; a wave stage is `BASE_KILL_COUNT` of them. */
@@ -435,25 +449,49 @@ function killsFor(row: StageReport): number {
 }
 
 /**
- * Deepest stage behind the run that the hero can actually farm.
+ * Whether a stage pays XP and Gold, which is a weaker question than whether it can be cleared.
+ *
+ * **A wave stage the party cannot survive is still a farm.** `settle.killsBeforeWipe` banks
+ * every kill landed before the party drops, and the wipe restarts *that same stage* rather
+ * than falling the run back — so income continues at `secondsPerKill` and, as `settle`'s own
+ * comment puts it, "the Hero levels its way out". Only three things actually stop the income:
+ * a gate, which is one fight on a one-way door rather than a kill counter; a stalled stage,
+ * where damage has floored and `secondsPerKill` is infinite; and a stage so lethal that the
+ * party drops before the first kill lands.
+ */
+function banksKills(row: StageReport): boolean {
+    if (row.isGate) return false
+    if (!Number.isFinite(row.secondsPerKill) || row.secondsPerKill <= 0) return false
+    return Math.floor(row.secondsToDie / row.secondsPerKill) >= 1
+}
+
+/**
+ * Deepest stage the hero can actually farm — **starting with the blocked stage itself**.
  *
  * Mirrors `fallbackStage` — a lost fight sends the run back one stage — but keeps walking
- * when that stage is also unclearable, crossing world boundaries if it has to. Gates are
+ * when that stage is also unfarmable, crossing world boundaries if it has to. Gates are
  * skipped: a boss is one kill on a one-way door, not a farm.
  *
- * Note this is the *deepest* clearable stage, not the XP-optimal one. Under the current
+ * ⚠ **The blocked stage is the first candidate, not the first stage skipped.** Requiring a
+ * `clear` verdict here made the walker model a game nobody plays: a party that wipes at kill
+ * 21 of 30 was reported as earning nothing at all, so a lethal World 1 came back `unfarmable`
+ * — "nowhere left to earn XP" — when the real answer is a few minutes of wiping. Farming in
+ * place is also what a player would actually do, and the *fastest* way out, since XP per kill
+ * rises with depth.
+ *
+ * Note this is the *deepest* farmable stage, not the XP-optimal one. Under the current
  * curve XP/second actually falls with depth (XP rides 1.05^stage, enemy HP 1.15^stage), so
  * a player min-maxing would farm shallower and grind faster than this reports.
  */
 function farmStageFor(hero: HeroSnapshot, prestige: number, world: number, stage: number, tenureDays: number): StageReport | null {
     let w = world
-    let s = stage - 1
+    let s = stage
     while (w >= 1) {
         while (s >= 1) {
             const archetype = stageArchetype(s)
             if (archetype !== 'boss' && archetype !== 'super_boss') {
                 const row = analyzeStage(hero, prestige, w, s, tenureDays)
-                if (row.verdict === 'clear' && Number.isFinite(row.secondsPerKill)) return row
+                if (banksKills(row)) return row
             }
             s--
         }

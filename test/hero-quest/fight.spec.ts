@@ -89,14 +89,25 @@ describe('hero-quest seeded fights', () => {
         })
 
         it('times out at exactly the boss timer, never past it', () => {
-            // Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s —
-            // and now also enough HP to still be standing at 30s, which is the narrow part.
-            // The band moves whenever either side of that moves: the session-2 enemy cut put it
-            // at W3S10 levels 56–60, and the crit retune (LCK off the level curve,
-            // `CRIT_DAMAGE_PER_POINT` 0.05 → 0.02) widened it to **59–73** by taking DPS out of
-            // the Hero without touching its HP. 66 is its middle. If this goes red, re-find the
-            // band rather than nudging the level.
-            const result = runFight({ hero: hero(66), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+            /*
+             * Enough DPS to scratch the super boss, nowhere near enough to fell it in 30s — and
+             * enough HP to still be standing at 30s, which is the narrow part.
+             *
+             * ⚠ **The band is now two levels wide, and that is structural rather than unlucky.**
+             * At a fixed stage, survival time rides the stat curve once (HP over a fixed
+             * incoming stream) while DPS rides it twice (`DPS_STAT_EXPONENT`), so a timeout
+             * needs `(30·incoming / hp₁)² < bossHp / (30·dps₁)`. Both sides ride the enemy
+             * curve, but the left one squares it — so the window *shrinks* with depth and only
+             * survives at the shallowest gate. A scan of prestige 0–4 × every world × both gate
+             * stages × levels 1–600 finds exactly one cell: **W1S10, levels 4–5**.
+             *
+             * ✅ **Longer fights reopened it.** `BASE_ENEMY_HP` 10 → 60 and enemy HP getting its
+             * own exponent moved the same scan from one two-level cell to a 119-level band at
+             * **P0 W10S10, levels 378–496** — 437 is its middle. Deeper cells are wider still
+             * (P1 W2S10 runs 133 levels); this is the widest inside the opening loop, which
+             * keeps the fixture cheap. Re-find the cell rather than nudging the level.
+             */
+            const result = runFight({ hero: hero(437), position: at(10, SUPER_BOSS_STAGE), seed: 7 })
             expect(result.outcome).toBe('timeout')
             expect(result.secondsElapsed).toBe(BOSS_TIMER_SECONDS)
             expect(D(result.enemyHpRemaining).gt(0)).toBe(true)
@@ -202,18 +213,20 @@ describe('hero-quest seeded fights', () => {
          * Abilities sit on a shared cooldown, so a fixture the party one-shots proves nothing
          * about effects — no kit ever gets to fire.
          *
-         * W4/60 → W3/15 with the session-2 enemy cut. Two things moved at once: at the old
-         * fixture the pack no longer survived to the first cast (Meteor Shower never landed a
-         * burn), and a level-60 Hero's cooldowns are short enough that the whole kit fires in
-         * one 2.4s volley, which is not "a real fight" in any sense this block cares about.
-         * W3/15 restores a ~5s fight with all three bodies standing when the first AoE lands.
+         * W4/60 → W3/15 with the session-2 enemy cut, then W3/15 → W10/192 across the
+         * constant-pressure retune (`K` 2 → 4, then `BASE_HP` 1500 → 150). The two moves pulled
+         * in opposite directions and both mattered: more `K` meant the party felled a body
+         * before the first AoE volley resolved, and less `BASE_HP` meant it died before casting
+         * at all. What satisfies both at once is a *deep* encounter, where the enemy pool is
+         * large enough that nothing dies early and the party's own pool has grown into it.
          *
-         * The band that satisfies every spec below is **W3, levels 10–19** — 15 is its middle.
-         * Levels 20+ let the Hero fell a minion before Arrow Rain resolves, and below 10 the
-         * Frostbind stacks never reach their threshold. Re-find the band rather than nudging.
+         * The band that satisfies every spec below is now **W10S10, levels 148–236** — 192 is
+         * its middle, and 89 levels wide is by far the roomiest this fixture has ever been
+         * (scanned across every world × both gate stages × levels 1–250; W8S5 is the narrowest
+         * viable cell at 14). Re-find the band rather than nudging.
          */
-        const fight = (classId: ClassId, level = 15) =>
-            runFight({ hero: hero(level, classId), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+        const fight = (classId: ClassId, level = 192) =>
+            runFight({ hero: hero(level, classId), position: at(10, SUPER_BOSS_STAGE), seed: 7 })
 
         it('lands an AoE on every living body at once', () => {
             // Marksman's Arrow Rain hits every spot; a boss encounter holds three.
@@ -293,10 +306,15 @@ describe('hero-quest seeded fights', () => {
         it('escalates a stacking debuff into its threshold effect', () => {
             // Frostbind: the slow builds, and the freeze lands on whichever cast carries the
             // target to `FROSTBIND_FREEZE_STACKS`. A Mythic Control Champion brings it.
+            //
+            // Level 60 → 181 with the longer-fight retune: the encounter has to survive long
+            // enough for the Champion to land `FROSTBIND_FREEZE_STACKS` casts, and at 60 the
+            // party now dies first. The band at this position is levels **63–300** — 181 is its
+            // middle, and it is the widest cell scanned, so this is a plateau not a point.
             const frostbinder = CHAMPIONS.find(champion =>
                 champion.abilities.some(ability => ability.name === 'Frostbind'))!
             const result = runFight({
-                hero: withParty(hero(60, 'class_beginner'), [snapshotOf(frostbinder)]),
+                hero: withParty(hero(181, 'class_beginner'), [snapshotOf(frostbinder)]),
                 position: at(4, SUPER_BOSS_STAGE),
                 seed: 7
             })
@@ -318,8 +336,19 @@ describe('hero-quest seeded fights', () => {
     })
 
     describe('the kit', () => {
+        /**
+         * A fight long enough for all four Berserker skills to come round, and slow enough that
+         * a non-crit autoattack and a non-crit skill hit both land to be compared.
+         *
+         * W5S5/60 → W9S10/224 across the constant-pressure retune: the `BASE_HP` cut means the
+         * party has to be deep enough for its own pool to have grown into the encounter, or it
+         * dies before the later skills fire. The band here is **W9S10, levels 148–300** — 224 is
+         * its middle, and the widest of any world × gate cell scanned. Re-find rather than nudge.
+         */
+        const BERSERKER_KIT = { level: 224, position: at(9, SUPER_BOSS_STAGE) }
+
         it('fires every skill the class path owns, not just the deepest node\'s', () => {
-            const result = runFight({ hero: hero(60, 'class_berserker'), position: at(5, BOSS_STAGE), seed: 7 })
+            const result = runFight({ hero: hero(BERSERKER_KIT.level, 'class_berserker'), position: BERSERKER_KIT.position, seed: 7 })
             const fired = new Set(result.events.filter(event => event.kind === 'skill').map(event => event.skillId))
             for (const skill of kitFor('class_berserker')) {
                 expect(fired.has(skill.id), skill.id).toBe(true)
@@ -332,7 +361,7 @@ describe('hero-quest seeded fights', () => {
         })
 
         it('hits harder than autoattacks alone, since skills carry a multiplier', () => {
-            const result = runFight({ hero: hero(60, 'class_berserker'), position: at(5, BOSS_STAGE), seed: 7 })
+            const result = runFight({ hero: hero(BERSERKER_KIT.level, 'class_berserker'), position: BERSERKER_KIT.position, seed: 7 })
             const uncrit = (kind: string) => result.events
                 .filter(event => event.kind === kind && event.crit === false)
                 .map(event => D(event.damage!))
@@ -359,15 +388,20 @@ describe('hero-quest seeded fights', () => {
          * would be a property of the fixture rather than of the kit. At this depth the Hero's
          * four skills and a Mythic's three all come off cooldown at least once.
          *
-         * W6/80 → W4/18 with the session-2 enemy cut: at the old depth the party now wipes on
-         * the boss's first swing at 2.4s, before the Hero's later skills come round. The crit
-         * retune then slowed the party down again, which *lengthens* these fights rather than
-         * shortening them — the band at W4 where every Berserker skill and every Kaira and Rask
-         * ability fires moved from levels 10–25 up to **19–48**. 33 is its middle.
+         * W6/80 → W4/33 with the session-2 enemy cut and the crit retune, then W4/33 → W10/224
+         * across the constant-pressure retune. Same cause as every other fixture move in this
+         * file: with `BASE_HP` at 150 the party has to be deep enough that its own pool has
+         * grown into the encounter, or it dies before the Hero's later skills come round.
+         *
+         * The longest *contiguous* band where every Berserker skill and every Kaira **and** Rask
+         * ability fires is **W10S10, levels 246–300** — 273 is its middle. Contiguity is the
+         * part worth measuring: casts batch onto the tick grid, so a viable level can sit next
+         * to a dead one, and a min–max reading of a sparse set picks a middle that does not
+         * work. W9S10 is the only other cell of any width (24 levels). Re-find rather than nudge.
          */
         const deepFight = (champions: ChampionSnapshot[]) => runFight({
-            hero: withParty(hero(33, 'class_berserker'), champions),
-            position: at(4, SUPER_BOSS_STAGE),
+            hero: withParty(hero(273, 'class_berserker'), champions),
+            position: at(10, SUPER_BOSS_STAGE),
             seed: 7
         })
 

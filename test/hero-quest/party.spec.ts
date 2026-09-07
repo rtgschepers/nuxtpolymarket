@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { championStatBlock, heroStatBlock, partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { partyDps } from '#shared/utils/hero-quest/combat'
-import { CHAMPION_INVESTMENT_PER_POINT } from '#shared/utils/hero-quest/constants'
+import { CHAMPION_INVESTMENT_PER_POINT, K } from '#shared/utils/hero-quest/constants'
 import { D, ZERO } from '#shared/utils/hero-quest/numbers'
 import type { ChampionSnapshot, HeroSnapshot } from '#shared/utils/hero-quest/types'
 
@@ -79,7 +79,9 @@ describe('party composition', () => {
         // A DEF that pins the solo Hero to the damage floor is still genuinely cut by a
         // party — the property the whole pooling change exists to produce.
         const solo = partyUnitStats(hero(30))
-        const wall = solo[0]!.pwr.mul(2)
+        // Exactly the DEF at which `mitigation` clamps for one body — `PWR × K`, read from the
+        // constant so a retune of K moves the wall with it rather than silently unpinning it.
+        const wall = solo[0]!.pwr.mul(K)
         const trio = partyUnitStats(hero(30, [champion(), champion()]))
 
         // "Shut out" means pinned to MIN_DAMAGE since the floor landed, not zero. Measured

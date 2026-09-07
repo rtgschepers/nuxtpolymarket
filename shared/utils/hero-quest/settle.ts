@@ -22,6 +22,7 @@ import {
     ELITE_STAGE_MIN,
     ELITE_STAT_MULT,
     FORMATION_ROW_CAPACITY,
+    ENEMY_HP_STEP_EXPONENT,
     ENEMY_PRESTIGE_STEP_MULT,
     ENEMY_STEP_BASE,
     GOLD_BOUND_HORIZON_DAYS,
@@ -116,11 +117,27 @@ export function stageStatMultiplier(stage: number): { hp: number; atk: number; d
     }
 }
 
+/**
+ * Enemy HP's own multiplier — the shared curve index raised to `ENEMY_HP_STEP_EXPONENT`
+ * rather than to 1.
+ *
+ * **HP is the one enemy stat not in a matched pair.** PWR is read against the hero's DEF and
+ * DEF against the hero's PWR, one stat against one stat, so both track the hero one-for-one on
+ * the shared curve. HP is read against *DPS*, which is a product of two level-scaled stats and
+ * therefore grows at `DPS_COVERAGE_PER_STAGE` — nearly twice as fast. Sharing the plain curve
+ * meant the party outran enemy HP by nine tenths of a stage every stage, which is what pinned
+ * every wave stage in the game to `MIN_SECONDS_PER_KILL`.
+ */
+export function enemyHpMultiplier(prestige: number, world: number, stage: number): Decimal {
+    return decPow(ENEMY_STEP_BASE, curveIndex(prestige, world, stage) * ENEMY_HP_STEP_EXPONENT)
+        .mul(decPow(ENEMY_PRESTIGE_STEP_MULT, prestige))
+}
+
 export function enemyStatsAt(pos: RunPosition): EnemyStats {
     const mult = enemyMultiplier(pos.prestige, pos.world, pos.stage)
     const layer = stageStatMultiplier(pos.stage)
     return {
-        hp: D(BASE_ENEMY_HP).mul(mult).mul(layer.hp),
+        hp: D(BASE_ENEMY_HP).mul(enemyHpMultiplier(pos.prestige, pos.world, pos.stage)).mul(layer.hp),
         pwr: D(BASE_ENEMY_PWR).mul(mult).mul(layer.atk),
         def: D(BASE_ENEMY_DEF).mul(mult).mul(layer.def)
     }
@@ -152,7 +169,10 @@ export function packSizeFor(stage: number): number {
 function bossMinionStats(pos: RunPosition): EnemyStats {
     const mult = enemyMultiplier(pos.prestige, pos.world, pos.stage)
     return {
-        hp: D(BASE_ENEMY_HP).mul(mult),
+        // HP through its own multiplier, exactly as `enemyStatsAt` does — a minion is an
+        // ordinary mob of this depth, and "of this depth" has to mean the same thing for it
+        // as for the trash it is standing in for.
+        hp: D(BASE_ENEMY_HP).mul(enemyHpMultiplier(pos.prestige, pos.world, pos.stage)),
         pwr: D(BASE_ENEMY_PWR).mul(mult),
         def: D(BASE_ENEMY_DEF).mul(mult)
     }

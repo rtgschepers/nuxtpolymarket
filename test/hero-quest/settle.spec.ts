@@ -39,6 +39,7 @@ import {
     GOLD_TENURE_CEILING,
     GOLD_TENURE_CRAWL,
     GOLD_TENURE_DAYS,
+    LEVELS_PER_STAGE,
     MAX_OFFLINE_CAP_LEVEL,
     MAX_OFFLINE_EFFICIENCY,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
@@ -69,6 +70,26 @@ const hero: HeroSnapshot = {
 function at(world: number, stage: number, killsInStage = 0, prestige = 0): RunPosition {
     return { prestige, world, stage, killsInStage }
 }
+
+/**
+ * Lowest level at which a solo Hero outlasts every wave stage in World 1 — **found, not named.**
+ *
+ * The opening is lethal by design since `BASE_HP` came down to 150 (see "the opening is playable
+ * at all"), so a level-1 Hero wipes on the first screen and levels out of it. Specs about
+ * *advance* and *gate* logic need a Hero past that point, or they quietly measure the wave wipe
+ * instead of the rule they claim to test.
+ */
+const OPENING_CLEAR_LEVEL = (() => {
+    for (let heroLevel = 1; heroLevel <= 300; heroLevel++) {
+        const units = partyUnitStats({ ...hero, heroLevel })
+        const clearsWorldOne = [1, 2, 3, 4].every(stage => {
+            const pack = enemyPackAt(at(1, stage))
+            return killsBeforeWipe(units, pack, secondsPerKill(units, pack)) >= BASE_KILL_COUNT
+        })
+        if (clearsWorldOne) return heroLevel
+    }
+    throw new Error('no level within reach clears World 1 — the opening is unplayable')
+})()
 
 /**
  * First position along the play order where the hero cannot land a single kill inside the
@@ -305,32 +326,72 @@ describe('hero-quest settle', () => {
 
     describe('the opening is playable at all', () => {
         /**
-         * A level-1 solo Hero must be able to clear the very first stage.
+         * A level-1 solo Hero must be able to *make progress* on the very first stage — which
+         * is deliberately weaker than clearing it.
          *
-         * This is the floor the whole game stands on: below it a new account is walled on World
-         * 1 Stage 1 with no way forward, which the campaign sim reports as "unfarmable from the
-         * first screen". `BASE_HP` is the constant that decides it — the session-1 playtest set
-         * it to 2000 specifically because solo needs ≥2000, and party results are identical from
-         * 1000 to 8000, so nothing else in the suite is sensitive to it.
+         * `BASE_HP` came down to 150 so that VIT carries the HP pool from level 1 instead of a
+         * flat constant carrying it for twenty levels, and the price is a lethal opening: a
+         * level-1 Hero wipes partway through World 1 Stage 1. That is survivable as a *design*
+         * because a wave wipe banks the kills it landed and restarts the same stage, so income
+         * never stops and the Hero levels its way out (`killsBeforeWipe`).
          *
-         * Pinned deliberately rather than left to incidental coverage. That value silently
-         * reverted to its pre-playtest 100 twice during editing; the suite happened to catch it
-         * the second time only because an unrelated retune had made other specs sensitive to it.
+         * What must never happen is banking **zero** kills. That is the real "unfarmable from
+         * the first screen" failure — no XP, no Gold, no way forward, ever — and it is what
+         * this floor guards.
+         *
+         * Pinned deliberately rather than left to incidental coverage. `BASE_HP` silently
+         * reverted to a stale value twice during editing; the suite happened to catch it the
+         * second time only because an unrelated retune had made other specs sensitive to it.
          * "Happened to" is not a safety net.
          */
-        it('lets a level-1 Hero survive long enough to clear World 1 Stage 1', () => {
+        it('lets a level-1 Hero bank kills on World 1 Stage 1, so the wall unsticks itself', () => {
             const units = partyUnitStats({ ...hero, heroLevel: 1 })
-            const position = at(1, 1)
-            const pack = enemyPackAt(position)
-            const survives = killsBeforeWipe(units, pack, secondsPerKill(units, pack))
+            const pack = enemyPackAt(at(1, 1))
 
-            expect(survives).toBeGreaterThanOrEqual(BASE_KILL_COUNT)
+            expect(killsBeforeWipe(units, pack, secondsPerKill(units, pack))).toBeGreaterThan(0)
+        })
+
+        /**
+         * And the wall it unsticks itself from has to be a short one. Banking a single kill per
+         * attempt would satisfy the floor above while taking days to clear the first screen, so
+         * this bounds how much of the opening is spent wiping.
+         *
+         * The bound is **two worlds' worth of levels to clear the first world** — derived from
+         * `LEVELS_PER_STAGE` rather than pinned, because the honest quantity is "how far behind
+         * the natural pace does the opening put you", and a flat number stops meaning that the
+         * moment fight length or the XP curve moves. It did: `BASE_ENEMY_HP` 10 → 60 made every
+         * fight six times longer, so the opening costs 50 levels where it used to cost 24.
+         */
+        it('levels out of the opening quickly rather than grinding the first screen', () => {
+            const twoWorldsOfLevels = 1 + LEVELS_PER_STAGE * STAGES_PER_WORLD * 2
+            expect(OPENING_CLEAR_LEVEL).toBeLessThanOrEqual(twoWorldsOfLevels)
         })
     })
 
     describe('the wave wipe', () => {
-        /** Deep enough that a level-1 Beginner still deals damage but cannot outlast a stage. */
-        const unsurvivable = at(2, 2)
+        /**
+         * Deep enough that a level-1 Beginner still deals damage and still banks kills, but
+         * cannot outlast a whole stage — **found, not named**, for the same reason
+         * `firstStallingPosition` is.
+         *
+         * The band it has to land inside is `0 < killsBeforeWipe < BASE_KILL_COUNT`, and it is
+         * narrow: below it the stage clears outright, above it the party dies before its first
+         * kill and the specs about *banking progress while walled* have nothing to measure.
+         * `BASE_ENEMY_HP` 10 → 60 walked the old W2S2 fixture straight past the top of it.
+         */
+        const unsurvivable = (() => {
+            for (let world = 1; world <= WORLD_COUNT; world++) {
+                for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+                    if (stage === BOSS_STAGE || stage === SUPER_BOSS_STAGE) continue
+                    const position = at(world, stage)
+                    const units = partyUnitStats(hero)
+                    const pack = enemyPackAt(position)
+                    const kills = killsBeforeWipe(units, pack, secondsPerKill(units, pack))
+                    if (kills > 0 && kills < BASE_KILL_COUNT) return position
+                }
+            }
+            throw new Error('no stage in the opening loop wipes a level-1 Hero mid-stage')
+        })()
 
         function secondsPerKillAt(position: RunPosition, heroLevel = 1) {
             const units = partyUnitStats({ ...hero, heroLevel })
@@ -340,6 +401,23 @@ describe('hero-quest settle', () => {
         function wipeCount(position: RunPosition, heroLevel = 1) {
             const units = partyUnitStats({ ...hero, heroLevel })
             return killsBeforeWipe(units, enemyPackAt(position), secondsPerKillAt(position, heroLevel))
+        }
+
+        /**
+         * The first wave stage where the Hero still scratches the enemy but one kill outlasts
+         * it — **found, not named**, for the same reason `firstStallingPosition` is. It moved
+         * W2S6 → W2S9 on the session-2 enemy cut and again when `BASE_HP` went to 1500, since a
+         * deeper level-1 pool is precisely what buys the extra kills before the drop.
+         */
+        function firstNoKillWipe(): RunPosition {
+            for (let world = 1; world <= WORLD_COUNT; world++) {
+                for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
+                    if (stage === BOSS_STAGE || stage === SUPER_BOSS_STAGE) continue
+                    const position = at(world, stage)
+                    if (Number.isFinite(secondsPerKillAt(position)) && wipeCount(position) === 0) return position
+                }
+            }
+            throw new Error('no stage in the opening loop wipes the party before its first kill')
         }
 
         it('is effectively unreachable for a party the enemy can barely scratch', () => {
@@ -394,10 +472,8 @@ describe('hero-quest settle', () => {
 
         it('earns nothing when the party dies before landing a single kill', () => {
             // The narrow band where the hero still scratches the enemy but one kill outlasts
-            // it — past this the hero deals literally 0 and `stalls` instead (below). Moved
-            // W2S6 → W2S9 by the session-2 enemy cut: with base HP at 10 the hero now kills
-            // fast enough at S6 to bank a kill before dropping, so the band starts later.
-            const position = at(2, 9)
+            // it — past this the hero deals literally 0 and `stalls` instead (below).
+            const position = firstNoKillWipe()
             expect(secondsPerKillAt(position)).toBeLessThan(Number.POSITIVE_INFINITY)
             expect(wipeCount(position)).toBe(0)
 
@@ -409,9 +485,13 @@ describe('hero-quest settle', () => {
         })
 
         it('clears normally once the party outlasts the kill requirement', () => {
-            expect(wipeCount(at(1, 1))).toBeGreaterThanOrEqual(BASE_KILL_COUNT)
+            expect(wipeCount(at(1, 1), OPENING_CLEAR_LEVEL)).toBeGreaterThanOrEqual(BASE_KILL_COUNT)
 
-            const result = settle(input({ position: at(1, 1), elapsedSeconds: 8 * 3600 }))
+            const result = settle(input({
+                hero: { ...hero, heroLevel: OPENING_CLEAR_LEVEL },
+                position: at(1, 1),
+                elapsedSeconds: 8 * 3600
+            }))
             expect(result.wipedOnWave).toBe(false)
             expect(result.position.stage).toBeGreaterThan(1)
         })
@@ -419,7 +499,11 @@ describe('hero-quest settle', () => {
 
     describe('the boss wall', () => {
         it('never advances past Stage 5, however long the window', () => {
-            const result = settle(input({ position: at(1, 1), elapsedSeconds: 72 * 3600 }))
+            const result = settle(input({
+                hero: { ...hero, heroLevel: OPENING_CLEAR_LEVEL },
+                position: at(1, 1),
+                elapsedSeconds: 72 * 3600
+            }))
             expect(result.position.stage).toBe(5)
             expect(result.blockedAtBoss).toBe(true)
         })
@@ -428,9 +512,11 @@ describe('hero-quest settle', () => {
             // Levelled enough to outlast a Stage 4 attempt: this is a spec about the *gate*,
             // and a hero that wipes on the wave before it never reaches the gate to be gated.
             // The threshold rose with `WAVE_PACK_SIZE` — six attackers per encounter is a
-            // real survivability cost, and the wave-wipe rule is tested on its own elsewhere.
+            // real survivability cost — and again with the `BASE_HP` cut, which is why it now
+            // reads the derived level rather than a number. The wave-wipe rule is tested on
+            // its own elsewhere.
             const result = settle(input({
-                hero: { ...hero, heroLevel: 10 },
+                hero: { ...hero, heroLevel: OPENING_CLEAR_LEVEL },
                 position: at(1, 4, BASE_KILL_COUNT - 1),
                 elapsedSeconds: 8 * 3600
             }))
@@ -498,16 +584,16 @@ describe('hero-quest settle', () => {
 
     describe('one-rate offline accrual', () => {
         it('holds the departure stage rate across a multi-stage advance', () => {
+            // Past the lethal opening, or the run never advances a stage to hold a rate across.
+            const advancing = { ...hero, heroLevel: OPENING_CLEAR_LEVEL }
             const start = at(1, 1)
-            const result = settle(input({ position: start, elapsedSeconds: 8 * 3600 }))
-
-            const units = partyUnitStats(hero)
+            const result = settle(input({ hero: advancing, position: start, elapsedSeconds: 8 * 3600 }))
             // Through `rateAt`, the same helper `settle()` uses — it applies the ability
             // projection (buffed party, debuffed pack) before pricing the rate. Rebuilding
             // that here by hand is how this spec would silently start measuring a party the
             // game does not field.
-            const departureRate = rateAt(hero, start).secondsPerKill
-            const arrivalRate = rateAt(hero, result.position).secondsPerKill
+            const departureRate = rateAt(advancing, start).secondsPerKill
+            const arrivalRate = rateAt(advancing, result.position).secondsPerKill
 
             expect(result.position.stage).toBeGreaterThan(start.stage)
             expect(result.secondsPerKill).toBeCloseTo(departureRate, 10)
@@ -640,7 +726,11 @@ describe('hero-quest settle', () => {
 
         it('values Gold at the stage each kill actually landed in', () => {
             // 30 kills clears Stage 1; the rest are worth more, so the average beats Stage 1's rate.
-            const result = settle(input({ position: at(1, 1), elapsedSeconds: 8 * 3600 }))
+            const result = settle(input({
+                hero: { ...hero, heroLevel: OPENING_CLEAR_LEVEL },
+                position: at(1, 1),
+                elapsedSeconds: 8 * 3600
+            }))
             expect(result.kills).toBeGreaterThan(BASE_KILL_COUNT)
             expect(result.goldEarned / result.kills).toBeGreaterThan(goldPerKill(0, 1, 1, SPEC_TENURE_DAYS))
         })

@@ -17,6 +17,17 @@
  *     rg '╧' shared/utils/hero-quest/constants.ts
  *
  * lists the complete fill-in set.
+ *
+ * ── TUNED ✓ ────────────────────────────────────────────────────────────────────────────
+ * A `✓` marks the opposite: a value **derived from measurement and confirmed in playtest**,
+ * not a placeholder. Changing one is a design decision with a known cost, and the cost is
+ * written into the constant's own comment — sweeps, campaign-walk timings, the shape that
+ * broke at the neighbouring values. Read that before moving it.
+ *
+ *     rg '✓' shared/utils/hero-quest/constants.ts
+ *
+ * A **derived** constant carries no marker of its own; it inherits the status of whatever it
+ * is computed from, and is never set directly.
  */
 
 import type { HqStatKey, StatTier } from './types'
@@ -80,7 +91,7 @@ export const BOSS_MINION_COUNT = 2
  * (every member swinging for the whole attempt). Whatever it holds, N = 1 yields exactly one
  * stream, so bosses and every pre-pack number stay bit-identical.
  */
-export const PACK_LIVE_STREAM_FRACTION = 0.5 // UNTUNED ╧
+export const PACK_LIVE_STREAM_FRACTION = 0.5 // TUNED ✓
 
 // ── Enemy curve ────────────────────────────────────  core-progression-and-prestige.md §1
 
@@ -124,7 +135,7 @@ export const PRESTIGE_INDEX_STEPS = WORLD_COUNT * STAGES_PER_WORLD
  * worth only 14 stages. **Steepening to force the gacha earlier also shrinks what the gacha
  * is worth when it arrives.**
  */
-export const ENEMY_STEP_BASE = 1.08 // UNTUNED ╧
+export const ENEMY_STEP_BASE = 1.08 // TUNED ✓
 
 /**
  * Enemy multiplier across one full 100-stage loop, i.e. what one prestige costs you. Derived
@@ -156,17 +167,40 @@ export const ENEMY_PRESTIGE_STEP_MULT = 1
  * from. Because they wash out, the campaign end state is nearly identical at DEF 2 and DEF 3
  * (same wall, same level, ~2% apart on total time), so do not reach for DEF expecting depth.
  *
- * `BASE_ENEMY_PWR` is the one that moves the campaign, and it is **not a survivability dial
- * in the opening** — see `BASE_HP` for why. At level 1 the Beginner's DEF puts the mitigation
- * clamp at enemy PWR 7: anywhere below that the Hero takes `MIN_DAMAGE` per hit regardless,
- * so PWR 2 and PWR 6 are byte-identical on the first screen. Where 3 versus 5 shows up is
- * depth, once levels have pushed the clamp behind the curve — the solo campaign runs 2
- * prestiges / 3d 8h at 3, against 1 prestige / 4d 14h at 5 and 0 prestiges at the old 10.
+ * `BASE_ENEMY_PWR` is the one that moves the campaign, and since `ENEMY_PACE_RATIO` holds
+ * `enemyPwr / heroDef` fixed for the life of a run, **it is now the single dial that sets how
+ * dangerous the whole game is** — not just the opening. Pick it once against the level-1 class
+ * spread and every depth inherits the same answer.
+ *
+ * Raised 3 → 7 for exactly that reason. At `K` 4 the Beginner's DEF 10 puts the mitigation
+ * clamp at enemy PWR 2.5, so 7 lands 64% of each hit at level 1 and holds that share forever;
+ * at the old 3 the clamp swallowed the first ~130 stages whole. Measured on the party the
+ * campaign walk fields, at every depth from World 1 to prestige 3:
+ *
+ *     wave stages    ~3.3x survival — a stage attempt costs about 30% of the party's pool
+ *     elite stages   ~2.3x          — about 43%
+ *     boss stages    ~50x           — a gate is a DPS check, not an endurance one
+ *
+ * The old three-values-of-PWR comparison this replaced is no longer meaningful: it measured
+ * where the clamp broke, and the clamp no longer moves.
+ *
+ * `BASE_ENEMY_HP` is **how long a fight is**, and with `ENEMY_HP_STEP_EXPONENT` covering the
+ * party's DPS growth it is that at every depth rather than just on the first screen. Raised
+ * 10 → 60 for the one-week first prestige: a wave stage goes from 15 seconds — the
+ * `MIN_SECONDS_PER_KILL` floor, which is where every stage in the game used to sit — to about
+ * three and a half minutes, and a whole prestige loop from 20 minutes of fighting to just
+ * under five hours.
+ *
+ * ⚠ **It is bounded above by `BOSS_TIMER_SECONDS`, which is fixed.** A gate is `packSize`
+ * bodies inside 30 seconds, so `secondsPerKill` at a gate cannot exceed 10s however deep the
+ * run goes. Past roughly 60 the early gates stop being passable at any level a fresh account
+ * can reach, and the wall arrives before the content does — measured, W8S10 at 60 becomes
+ * W5S10 at 175. Raising this further means raising the timer with it.
  */
-export const BASE_ENEMY_HP = 10 // UNTUNED ╧
-export const BASE_ENEMY_PWR = 3 // UNTUNED ╧
-export const BASE_ENEMY_DEF = 2 // UNTUNED ╧
-export const ELITE_STAT_MULT = 1.2 // UNTUNED ╧
+export const BASE_ENEMY_HP = 60 // TUNED ✓
+export const BASE_ENEMY_PWR = 7 // TUNED ✓
+export const BASE_ENEMY_DEF = 2 // TUNED ✓
+export const ELITE_STAT_MULT = 1.2 // TUNED ✓
 
 /**
  * Boss and super-boss HP, both relative to that stage's *trash-mob* HP so the two numbers
@@ -178,19 +212,39 @@ export const ELITE_STAT_MULT = 1.2 // UNTUNED ╧
  * Making the *gate* the wall — rather than the wave ramp — is what turns "this got slow"
  * into "this needs a party", which is the thing a player can act on.
  */
-export const BOSS_HP_MULT = 3 // UNTUNED ╧
-export const SUPER_BOSS_HP_MULT = 6 // UNTUNED ╧
+export const BOSS_HP_MULT = 3 // TUNED ✓
+export const SUPER_BOSS_HP_MULT = 6 // TUNED ✓
 
-export const BOSS_ATK_MULT = 1.2 // UNTUNED ╧
-export const SUPER_BOSS_ATK_MULT = 1.5 // UNTUNED ╧
+export const BOSS_ATK_MULT = 1.2 // TUNED ✓
+export const SUPER_BOSS_ATK_MULT = 1.5 // TUNED ✓
 
 // ── Combat ─────────────────────────────────────────  classes-and-combat.md §7
 
 /**
  * Mitigation ratio threshold: once a defender's DEF reaches `K` times the attacker's PWR,
  * mitigation is 100% — and damage floors at `MIN_DAMAGE`, not at 0.
+ *
+ * ## Why 4 rather than 2
+ *
+ * **`K` sets how wide the band between "immune" and "dead" is**, and 2 made it too narrow to
+ * play inside. Damage taken is `PWR − DEF/K`, so `DEF/K` is the whole of what the enemy has to
+ * out-scale; the smaller `K` is, the larger that subtrahend, and the smaller the *share* of a
+ * hit that ever lands. Measured at World 9 on the party the campaign walk fields, holding the
+ * stage fixed and moving only hero level:
+ *
+ *     K = 2     on trajectory 3.4x survival → +20 levels and the party is untouchable
+ *     K = 4     on trajectory 3.2x survival → +40 levels, and the ramp between is smooth
+ *
+ * Twenty levels is four or five stages of grinding — an ordinary thing to do at a wall — so at
+ * 2 the reward for grinding was the `MIN_DAMAGE` readout coming back.
+ *
+ * **It is close to a defence-only dial, despite being shared.** Offence goes through
+ * `partyMitigation`, which pools the party's PWR before dividing, and pooled PWR runs orders of
+ * magnitude above enemy DEF at every depth — mitigation on that side is already ~0 and halving
+ * it again changes nothing that shows up in a clear time. The defensive side is pairwise and
+ * sits right on the clamp, which is where the whole effect lands.
  */
-export const K = 2 // UNTUNED ╧
+export const K = 4 // TUNED ✓
 
 /**
  * The damage floor. **A hit never deals less than this, however far DEF outruns PWR.**
@@ -212,8 +266,14 @@ export const K = 2 // UNTUNED ╧
  *
  * Applied in `rawHitDamage`, which is the one place pairwise damage is derived, and mirrored
  * in `partyDps` and `fight.rollDamage` where the pooled path computes damage directly.
+ *
+ * ⚠ **This used to be the number the party actually took, for a third of a run.** With DEF at
+ * `STAT_PACE_RATIO` and `K` at 2 the mitigation clamp bound for the first ~130 stages, so every
+ * incoming hit read exactly 1 whatever the enemy's PWR was. `ENEMY_PACE_RATIO` and `K` 4
+ * between them push the clamp off the trajectory entirely, and this is back to being what it
+ * was designed as: the reading on the far side of a wall, not the reading during normal play.
  */
-export const MIN_DAMAGE = 1 // UNTUNED ╧
+export const MIN_DAMAGE = 1 // TUNED ✓
 
 /** Locked at 60%, leaving headroom for EVA sources added after Traits. */
 export const MAX_EVASION = 0.60
@@ -230,7 +290,7 @@ export const MAX_EVASION = 0.60
  * Reapplication refreshes duration *and* adds a stack, so without a cap a maintained DoT grows
  * without bound — and Frostbind's "at max stacks, fully disables" needs a max to point at.
  */
-export const STATUS_MAX_STACKS = 5 // UNTUNED ╧
+export const STATUS_MAX_STACKS = 5 // TUNED ✓
 
 /**
  * The grid periodic effects pay out on.
@@ -239,7 +299,7 @@ export const STATUS_MAX_STACKS = 5 // UNTUNED ╧
  * strength to the sim's resolution, so halving the tick would halve every burn. A fixed grid
  * keeps "damage per second" a property of the effect rather than of the simulator.
  */
-export const STATUS_TICK_SECONDS = 1 // UNTUNED ╧
+export const STATUS_TICK_SECONDS = 1 // TUNED ✓
 
 /**
  * Threat weight of a unit with no aggro identity — the baseline every multiplier is against.
@@ -271,7 +331,7 @@ export const TAUNT_THREAT_MULTIPLIER = 10 // UNTUNED ╧
  * LCK 3.75 → 3.8%. Those are also the numbers they *keep*: LCK is off the level curve, so
  * nothing but the collection passive and equipment lines moves them again.
  */
-export const CRIT_CHANCE_PER_POINT = 0.01 // UNTUNED ╧
+export const CRIT_CHANCE_PER_POINT = 0.01 // TUNED ✓
 
 /**
  * Crit damage per point of IMP: IMP 10 → ×1.2.
@@ -285,7 +345,7 @@ export const CRIT_CHANCE_PER_POINT = 0.01 // UNTUNED ╧
  * The *shape* — linear and unbounded in IMP — is load-bearing and was left alone deliberately;
  * see `STAT_SCALES_WITH_LEVEL` for why it is what makes `DPS_STAT_EXPONENT` 2.
  */
-export const CRIT_DAMAGE_PER_POINT = 0.02 // UNTUNED ╧
+export const CRIT_DAMAGE_PER_POINT = 0.02 // TUNED ✓
 
 /**
  * LCK past 100% crit chance converts to crit damage at this rate. Must sit well below
@@ -307,30 +367,43 @@ export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
  * now exactly why it is load-bearing. It carries the level-1 solo opening on its own, freeing
  * `HP_PER_VIT` to be tuned for how a *levelled party* feels without breaking a fresh account.
  *
- * Raised 100 → 2000 in the session-1 playtest pass, alongside the `HP_PER_VIT` cut below,
- * because at 2000 a level-1 Hero could clear World 1 Stage 1 and at 1000 it could not.
+ * 100 → 2000 in the session-1 playtest, back to 100 in session 2 when `BASE_ENEMY_PWR` fell to
+ * 3 and the mitigation clamp — not the pool — was what carried the opening. Now 150.
  *
- * ## Back to 100 in session 2, and why that is not a revert
+ * ## Why it is small, and why that is the point
  *
- * The session-1 derivation was measured against `BASE_ENEMY_PWR` at 10. That is the value the
- * ≥2000 floor was a floor *of*: the enemy hit hard enough to matter, so the opening needed a
- * pool deep enough to eat thirty of those hits in a row. Cutting `BASE_ENEMY_PWR` to 3 moved
- * the thing being defended against, and the floor moved with it.
+ * A first pass at the constant-pressure retune put this at 1500: the pool that holds a **solo,
+ * level-1** Hero at roughly the survival ratio it sees for the rest of the run, so nothing in
+ * the opening ever wipes. It worked, and it was the wrong shape. Flat 1500 against a level-1
+ * VIT contribution of 100 meant **the flat term was 93% of the pool**, so for the first twenty
+ * levels VIT was decorative — the stat that is supposed to be the survivability dial bought
+ * nothing a player could feel, and the game's own stat breakdown said so in as many words.
  *
- * ⚠ **In the opening this constant is not really a survivability dial, and neither is enemy
- * PWR.** Mitigation clamps: below enemy PWR 7 a level-1 Beginner takes `MIN_DAMAGE` per hit
- * flat, so incoming DPS is 1.46 at PWR 2 and 1.46 at PWR 6, then 4.38 at PWR 8. There is no
- * gradient across the cliff — only which side of it you are on. At 100 the Hero carries 200
- * EHP against that floor, which is 2.5× what World 1 Stage 1 asks and holds 2.1×–2.9× across
- * every wave and elite stage of the world (bosses clear with 26×+). So "survives to the Stage
- * 10 super boss" is bought by standing on the safe side of the clamp, not by the size of the
- * pool. Raising this number does not buy a margin the clamp has not already given.
+ * At 150 the flat term is 60% of a level-1 pool and under half by level 20, so VIT carries the
+ * pool almost immediately. **The trade is that the opening is now lethal**, and deliberately:
+ * a level-1 Beginner sits at 0.6x–0.7x on World 1's wave stages and 0.3x on its elites.
  *
- * The trade is that the opening is *deliberately* not lethal. If a session wants real early
- * pressure back, the lever is `BASE_ENEMY_PWR` crossing 7 — and then this needs re-deriving
- * upward again, because past the clamp damage scales normally and 200 EHP evaporates.
+ * ## Why a lethal opening is not a broken one
+ *
+ * `settle.killsBeforeWipe` banks every kill landed before the party drops and restarts *that
+ * same stage*, so a wipe costs no ground and pays full XP and Gold. A level-1 Hero banks 21 of
+ * the 30 kills World 1 Stage 1 asks for, wipes, and levels out of it in a few minutes. What
+ * used to be a two-minute walk through World 1 is now **1h 5m across 8 blocked stages**, and
+ * World 2 another 38m, before the curve settles — an opening that is actually played rather
+ * than watched, and the first honest step toward a first prestige measured in days.
+ *
+ * The run's end state is untouched: solo still walls at P4 W9S6 after 3d 17h, because this
+ * term is arithmetic noise long before then.
+ *
+ * ## If the opening proves too punishing
+ *
+ * Raise `HP_PER_VIT`, not this. That keeps VIT carrying the pool instead of handing the job
+ * back to a flat constant — but note it is multiplicative, so it lifts survivability at *every*
+ * depth and `BASE_ENEMY_PWR` has to rise with it to hold the steady-state ratio. Doing that as
+ * a pair also shrinks `DEF / K` as a share of each hit, which quietly makes DEF a weaker stat;
+ * scale the class DEF spread by the same factor if that matters.
  */
-export const BASE_HP = 100 // UNTUNED ╧
+export const BASE_HP = 150 // TUNED ✓
 
 /**
  * **The levelled-party survivability dial.** Cut 200 → 10 by the session-1 playtest.
@@ -357,18 +430,34 @@ export const BASE_HP = 100 // UNTUNED ╧
  * opening; this carries everything after. Phase 1 lacked that split because it was tuning a
  * solo Hero, where the two are the same number.
  *
- * ## What it cost
+ * ## What it does now, and why it stayed at 10
  *
- * Damage is now a real constraint, and the campaign is correspondingly shorter: a party of 3
- * falls from P4 W3S6 / 4 prestiges to **P2 W2S6 / 2 prestiges**, and grind time rises from
- * 4d 0h to 4d 13h. Chosen deliberately over 25 (3 prestiges, 3d 7h) and 50 (3 prestiges,
- * 2d 22h), both of which are also safe at `BASE_HP` 2000 if this proves too punishing.
+ * Two things retired the old reasoning. VIT paces the enemy exactly (`ENEMY_PACE_RATIO`), so
+ * this no longer sets a *depth* — the party's margin is the same at World 1 and at prestige 6,
+ * and halving this halves that margin everywhere at once rather than moving a wall. And walls
+ * are `FIGHT_LENGTH_DRIFT`'s job now: every blocker in the campaign walk is a boss timer, which
+ * no amount of HP answers.
  *
- * Note `BASE_ENEMY_PWR` remains the wrong lever for this: mitigation clamps to 100% the moment
- * enemy PWR drops under `heroDef / K`, flipping the party from fragile to immortal with nothing
- * in between.
+ * So what is left is almost entirely the **opening**, where `BASE_HP` is still most of the pool
+ * and this is the part that grows. Swept against the one-week campaign, party of 3, and against
+ * a level-1 solo Hero on World 1 Stage 1 (which must bank kills to be farmable at all):
+ *
+ *      5    6d 8h    lvl-1 pool 200, dies at 30.5s — banks 2 of 30 kills
+ *     10    6d 9h    lvl-1 pool 250, dies at 38.1s — banks 3 of 30 kills   ← here
+ *     25    6d 11h   lvl-1 pool 400, dies at 1m 1s
+ *     60    6d 13h   lvl-1 pool 750, dies at 1m 54s
+ *
+ * **The campaign barely moves across a 12× range** — five hours out of six days — because the
+ * run is paced by boss gates and those are a DPS check. Left at 10 for the reason the session-2
+ * cut chose it: it is the value that keeps `BASE_HP` a *small* share of the level-1 pool (60%
+ * here, against 93% when this was last raised), so VIT is carrying the pool almost from the
+ * start instead of a flat constant carrying it for twenty levels.
+ *
+ * ⚠ **It is coupled to fight length, not to depth.** `BASE_ENEMY_HP` 10 → 60 made every stage
+ * attempt six times longer and so cost six times more HP; that is the change that would force
+ * this one, and the pair has to be re-derived together if fight length moves again.
  */
-export const HP_PER_VIT = 10 // UNTUNED ╧
+export const HP_PER_VIT = 10 // TUNED ✓
 
 // ── Attack rate ────────────────────────────────────  basic attacks only
 
@@ -385,7 +474,7 @@ export const HP_PER_VIT = 10 // UNTUNED ╧
  * it speeds up the party. It shortens fights rather than tilting them; see the playtest notes
  * for the measured effect on survivability.
  */
-export const BASE_ATTACK_INTERVAL_SECONDS = 2.4 // UNTUNED ╧
+export const BASE_ATTACK_INTERVAL_SECONDS = 2.4 // TUNED ✓
 
 /**
  * Hard ceiling of **5 attacks per second**, however high SPD climbs.
@@ -395,7 +484,7 @@ export const BASE_ATTACK_INTERVAL_SECONDS = 2.4 // UNTUNED ╧
  * just make every build reach the same wall four times sooner, turning SPD into a stat that
  * stops mattering early instead of one that scales.
  */
-export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 5 // UNTUNED ╧
+export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 5 // TUNED ✓
 
 /**
  * Reaches the 5/sec ceiling at SPD 550.
@@ -405,7 +494,7 @@ export const MIN_ATTACK_INTERVAL_SECONDS = 1 / 5 // UNTUNED ╧
  * and a fat per-point rate hands that progression away at level 1. The opening speed came from
  * `BASE_ATTACK_INTERVAL_SECONDS` instead, which is the flat term rather than the scaling one.
  */
-export const SPD_ATTACK_RATE_PER_POINT = 0.02 // UNTUNED ╧
+export const SPD_ATTACK_RATE_PER_POINT = 0.02 // TUNED ✓
 
 // ── Skill cooldowns ────────────────────────────────  classes-and-combat.md §3
 
@@ -421,7 +510,7 @@ export const SPD_ATTACK_RATE_PER_POINT = 0.02 // UNTUNED ╧
  * identical `1 / (1 + SPD × SPD_ATTACK_RATE_PER_POINT)` curve: one stat, one shape, two
  * consumers. §3 should be amended to say so.
  */
-export const MIN_COOLDOWN_SECONDS = 0.5 // UNTUNED ╧
+export const MIN_COOLDOWN_SECONDS = 0.5 // TUNED ✓
 
 /**
  * The starting cooldown and damage multiplier **every one of the 16 class skills** uses.
@@ -447,8 +536,8 @@ export const MIN_COOLDOWN_SECONDS = 0.5 // UNTUNED ╧
  * two specs pass again untouched. **If one of these moves, the other moves with it** — that
  * invariant matters more than either value.
  */
-export const SKILL_BASE_COOLDOWN_SECONDS = 6.4 // UNTUNED ╧
-export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // UNTUNED ╧
+export const SKILL_BASE_COOLDOWN_SECONDS = 6.4 // TUNED ✓
+export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // TUNED ✓
 
 // ── Ability effect magnitudes ──────────────────────  classes-and-combat.md §7, §3
 //
@@ -459,6 +548,19 @@ export const SKILL_BASE_ABILITY_MULTIPLIER = 2 // UNTUNED ╧
 //
 // The relative *ordering* is the design content and is deliberate: wide AoE pays for its
 // reach, a pierce beats a basic attack by a little, and single-target burst beats both.
+//
+// ⚠ **This block stayed UNTUNED through the pass that marked the combat progression TUNED,
+// deliberately.** Everything the campaign walk measures — seconds per stage, survival ratios,
+// where the boss gates bite — was measured on a Beginner, whose whole kit is one self-buff,
+// plus un-invested Common stand-in Champions carrying one ability each. So the run that paces
+// at 6d 9h barely touches these numbers, and a playtest that confirms the *progression* says
+// almost nothing about whether Arrow Rain is correctly priced against Piercing Arrow.
+//
+// What would settle them is a different measurement than the campaign walk: `fight.ts` seeded
+// fights across the class roster at a fixed depth, comparing damage per cooldown-second
+// between kits. Note `projection.ts` only has to agree with that within ±30%/+70%
+// (`test/hero-quest/projection.spec.ts`), so the idle model cannot resolve differences finer
+// than that either.
 
 /** Wide AoE trades magnitude for reach — it is hitting up to six bodies. */
 export const SKILL_AOE_MULTIPLIER = 1.0 // UNTUNED ╧
@@ -536,7 +638,7 @@ export const FROSTBIND_FREEZE_STACKS = 3 // UNTUNED ╧
  * to zero and become immortal, restoring exactly what `MIN_DAMAGE` was introduced to remove,
  * in the one place no fight would ever contradict it.
  */
-export const MAX_SUSTAIN_MITIGATION = 0.9 // UNTUNED ╧
+export const MAX_SUSTAIN_MITIGATION = 0.9 // TUNED ✓
 
 /**
  * Tick granularity of the seeded boss simulation (`fight.ts`).
@@ -545,7 +647,7 @@ export const MAX_SUSTAIN_MITIGATION = 0.9 // UNTUNED ╧
  * of party strength or depth. Finer ticks resolve cooldowns and attack intervals more
  * exactly at the cost of a longer replay log the client has to animate.
  */
-export const FIGHT_TICK_SECONDS = 0.1 // UNTUNED ╧
+export const FIGHT_TICK_SECONDS = 0.1 // TUNED ✓
 
 // ── Hero stats ─────────────────────────────────────  classes-and-combat.md §2
 
@@ -553,7 +655,7 @@ export const FIGHT_TICK_SECONDS = 0.1 // UNTUNED ╧
  * The class spread table is qualitative — `high`, `mid`, `low`. These are the numbers
  * those words map to, and the single highest-leverage entry in this file.
  */
-export const STAT_TIER_VALUES: Record<StatTier, number> = { // UNTUNED ╧
+export const STAT_TIER_VALUES: Record<StatTier, number> = { // TUNED ✓
     low: 5,
     mid: 10,
     mid_high: 13,
@@ -561,9 +663,9 @@ export const STAT_TIER_VALUES: Record<StatTier, number> = { // UNTUNED ╧
 }
 
 /** §2's delta table gives directions and qualifiers ("modest", "extreme"), not magnitudes. */
-export const DELTA_MODEST = 2 // UNTUNED ╧
-export const DELTA_NORMAL = 4 // UNTUNED ╧
-export const DELTA_EXTREME = 8 // UNTUNED ╧
+export const DELTA_MODEST = 2 // TUNED ✓
+export const DELTA_NORMAL = 4 // TUNED ✓
+export const DELTA_EXTREME = 8 // TUNED ✓
 
 /**
  * What every class's and archetype's **accumulated** LCK base is multiplied by.
@@ -585,7 +687,7 @@ export const DELTA_EXTREME = 8 // UNTUNED ╧
  * gacha.md` §4 allows, spent on one stat. That is the intended "crit is a build, not a
  * birthright" shape. Cutting this much further turns it into an unreachable one.
  */
-export const LCK_BASE_SCALE = 0.75 // UNTUNED ╧
+export const LCK_BASE_SCALE = 0.75 // TUNED ✓
 
 /** Floor for any derived stat. Sorcerer lands here on VIT/DEF, which is the design intent. */
 export const MIN_STAT_VALUE = 1
@@ -605,7 +707,7 @@ export const MIN_STAT_VALUE = 1
  * dozen levels and never gives the lead back. Pure geometric growth is what makes the pacing
  * math below actually hold at every level rather than only asymptotically.
  */
-export const STAT_PER_LEVEL_FLAT = 0 // UNTUNED ╧
+export const STAT_PER_LEVEL_FLAT = 0 // TUNED ✓
 
 /**
  * How many factors of the stat curve one point of DPS carries.
@@ -643,16 +745,22 @@ export const DPS_STAT_EXPONENT = 2
  * the design: levels carry most of the curve, and the remainder is the reason to engage with
  * everything else. Measured at 0.5, which is where the party earns its keep:
  *
- *     solo Hero        walls at prestige 2, World 8      (3d 14h)
- *     + 2 Champions    walls at prestige 4, World 3      (5d 8h)
- *     + 5 Champions    no wall inside five prestiges
+ *     solo Hero        walls at prestige 4, World 9      (3d 17h)
+ *     + 2 Champions    walls at prestige 6, World 1      (1d 8h)
+ *     + 5 Champions    walls at prestige 7, World 1      (1d 18h)
+ *
+ * ⚠ Those walls are **grind walls now, not wipes.** Every blocker the campaign walk used to
+ * report was a wipe, produced by defensive stats falling behind the enemy; `ENEMY_PACE_RATIO`
+ * stops them falling behind, so what remains is income against level cost. This ratio, the XP
+ * curve and `MIN_SECONDS_PER_KILL` are therefore the *only* things gating a run — which is a
+ * much larger share of the job than they carried before.
  *
  * ⚠ **1.0 removes gating entirely.** If the Hero tracks the curve exactly then "can I beat
  * World N's super boss" has the same answer for every N, and progression is purely time-
  * gated — the gacha becomes a speed multiplier rather than a gate. That may well be the
  * better game; it is a deliberate choice, not a safe default, so it is not the value here.
  */
-export const STAT_PACE_RATIO = 0.5 // UNTUNED ╧
+export const STAT_PACE_RATIO = 0.5 // TUNED ✓
 
 /** Derived, never set directly — move `STAT_PACE_RATIO`. */
 export const STAT_PER_LEVEL_GROWTH = Math.pow(ENEMY_STEP_BASE, STAT_PACE_RATIO / DPS_STAT_EXPONENT)
@@ -688,6 +796,42 @@ export const STAT_SCALES_WITH_LEVEL: Readonly<Record<HqStatKey, boolean>> = {
 }
 
 /**
+ * Which stats ride the **enemy-paced** curve rather than `STAT_PER_LEVEL_GROWTH`.
+ *
+ * The rule is not offence versus defence. It is **whether the stat is read against an enemy
+ * stat of its own kind**, because those are the pairs a clamp can close on:
+ *
+ *     hero PWR      vs enemy DEF     `mitigation` — clamps at DEF ≥ PWR × K
+ *     hero DEF      vs enemy PWR     the same clamp, from the other side
+ *     hero VIT      vs enemy PWR     the pool that survives what mitigation lets through
+ *
+ * A stat in a matched pair that grows even slightly slower than its opposite number does not
+ * "fall behind and catch up later" — the ratio drifts one way forever, the clamp closes, and
+ * damage collapses to `MIN_DAMAGE`. So all three pace the enemy exactly; see
+ * `ENEMY_PACE_RATIO`, declared after the XP block because it derives from `LEVELS_PER_STAGE`.
+ *
+ * SPD and IMP are **not** in matched pairs — they are pure multipliers with no enemy stat
+ * opposing them (attack rate, crit damage), so a shortfall there is an honest "you are behind,
+ * grind or pull" rather than a cliff. They stay on `STAT_PACE_RATIO`.
+ *
+ * ⚠ **PWR was the last one to move here, and its shortfall was live for a long time.** DEF and
+ * VIT were paced first, on the reasoning that the clamp was a survivability problem; that fixed
+ * one side of the same equation and left the other. PWR coverage was exactly `XP_PACE_SLACK`
+ * (0.9), so pooled party PWR fell a tenth of a stage behind enemy DEF every stage, and the
+ * offensive clamp closed around prestige 4–5 — which is what every late grind wall the campaign
+ * walk reported actually was. Lowering `XP_PACE_SLACK` to slow the game down pulled that cliff
+ * all the way in to P1 W2, where one world cost nearly two days of fighting.
+ */
+export const STAT_PACES_ENEMY_CURVE: Readonly<Record<HqStatKey, boolean>> = { // TUNED ✓
+    pwr: true,
+    spd: false,
+    lck: false,
+    imp: false,
+    vit: true,
+    def: true
+}
+
+/**
  * What one point of a Champion's `(star × 10 + level)` scalar is worth as a stat multiplier.
  * The scalar runs 1 → 60, so this sets the span between an unstarred pull and a maxed one:
  * at 0.05 that is ×1.0 → ×3.95 on top of the rarity multiplier.
@@ -695,6 +839,13 @@ export const STAT_SCALES_WITH_LEVEL: Readonly<Record<HqStatKey, boolean>> = {
  * Phase 2 owns the real value — `champions-guild-gacha.md` §2 never states how the scalar
  * converts to stats for a Champion's own block, unlike Gear and Artifacts which both have
  * explicit formulas. Placeholder so the shape is testable.
+ *
+ * ⚠ **No measurement in the repo exercises this at all.** Both the campaign walk and every
+ * party fixture field Champions at `investment: 1`, which is the identity end of the scalar —
+ * so every pacing number ever quoted for a party is the value of *slots*, never the value of
+ * investment. It is also the widest unmeasured lever left in combat: the scalar runs 1 → 60,
+ * so this sets a ×1.0 → ×3.95 span on every fielded Champion's whole stat block, on top of
+ * rarity. Deciding it will move the gacha gradient more than any constant marked TUNED did.
  */
 export const CHAMPION_INVESTMENT_PER_POINT = 0.05 // UNTUNED ╧
 
@@ -723,25 +874,45 @@ export const XP_BASE_PER_KILL = 1 // UNTUNED ╧
 export const XP_TO_LEVEL_BASE = 10 // UNTUNED ╧
 
 /**
- * ⚠ **Not the lever for "XP numbers are too big", despite being the obvious candidate.**
+ * **This is the dial for "XP numbers are too big", and very nearly *only* that.**
  *
- * The session-1 playtest asked for smaller XP numbers and this looks like the dial, since it is
- * what makes them climb. It is the wrong one: cheaper levels mean *more* levels, so lowering it
- * makes the displayed **level** larger while lengthening the run. Swept on the campaign report:
+ * An earlier note said the opposite — that lowering this would mean more levels and a longer
+ * run, with a sweep table showing 1.16 buying 2 prestiges against 1.06's 4. That table is
+ * stale: it was measured before defensive stats were put on their own curve, when every wall
+ * in the game was a wipe. Re-swept on the campaign walk, prestige 0 solo:
  *
- *     1.16 (here)   P2 W8S6   level 1,025   2 prestiges   3d 11h grind
- *     1.12          P3 W2S6   level 1,185   3 prestiges   5d 9h
- *     1.08          P3 W10S6  level 1,505   3 prestiges   9d 17h
- *     1.06          P4 W7S6   level 1,785   4 prestiges   11d 9h
+ *     1.16   2h 36m total — 26m 49s fighting, 2h 9m grinding    ends level 362
+ *     1.12   1h 52m total — 26m 49s fighting, 1h 25m grinding   ends level 363
+ *     1.08   1h 22m total — 26m 47s fighting, 55m grinding      ends level 363
+ *     1.05   1h 5m  total — 26m 43s fighting, 39m grinding      ends level 364   ← here
  *
- * `XP_STEP_EXPONENT` below is derived from this and does compensate — but for XP *income*, not
- * for the level count, which is why the pace does not simply self-preserve. The re-denomination
- * on `XP_TO_LEVEL_BASE` is what addresses the legibility complaint; this stays put.
+ * **Fighting time and the end level are invariant.** That is not a coincidence, it is an
+ * identity: `XP_STEP_BASE === XP_TO_LEVEL_GROWTH ^ LEVELS_PER_STAGE`, so income and cost scale
+ * by exactly the same factor at every depth, and `LEVELS_PER_STAGE` has no dependence on this
+ * constant at all. What is left is a second-order effect on *grinding* — clearing a Δ-level
+ * deficit at a blocker costs `growth^Δ`, so a shallower curve makes catching up cheaper.
  *
- * Worth keeping in view for a different question: the same sweep shows lower growth buys 4
- * prestiges instead of 2 out of the identical curve, so this **is** the dial for *run length*.
+ * ## Why 1.05
+ *
+ * `XP_TO_LEVEL_BASE` and `XP_BASE_PER_KILL` are already 10 and 1, so re-denomination is spent;
+ * the magnitude comes entirely from compounding across the ~3.6 levels a stage hands out.
+ * Measured on `xpToNextLevel`:
+ *
+ *                     level ~101    level ~361    level ~721
+ *                     (P0 W3)       (P0 end)      (P2 end)
+ *     1.16            3.1e7         1.6e24        2.6e47
+ *     1.08            2.3e4         1.1e13        1.2e25
+ *     1.05            1.4e3         4.2e8         1.8e16     ← here
+ *
+ * At 1.16 a level-300 Hero is looking at 1.9e20 XP for its next level. At 1.05 it is 22M, and
+ * the whole of the first three prestiges stays inside `formatHq`'s named-suffix ladder rather
+ * than falling off into scientific notation.
+ *
+ * Going shallower still is available and costs nothing structural — 1.04 puts the first
+ * prestige's ceiling at 14M — but each step also shaves the grind, which is the one thing this
+ * game is currently short of.
  */
-export const XP_TO_LEVEL_GROWTH = 1.16 // UNTUNED ╧
+export const XP_TO_LEVEL_GROWTH = 1.05 // TUNED ✓
 
 /**
  * How XP income tracks difficulty, as an exponent on the enemy curve's own step:
@@ -761,18 +932,38 @@ export const XP_TO_LEVEL_GROWTH = 1.16 // UNTUNED ╧
  * XP, so the run never walls at any ratio. Measured — at ratio 0.9 with no slack a solo Hero
  * clears four prestiges in 93 minutes without grinding once.
  *
- * So the slack has to be its own dial. It is the only thing that decides whether the game
- * has a wall at all:
+ * So the slack has to be its own dial — and what that dial *does* has changed twice since the
+ * paragraph above was written. It no longer decides whether the game has a wall (nothing here
+ * walls any more; `FIGHT_LENGTH_DRIFT` owns gating), and it does not make seconds-per-stage
+ * climb. It sets exactly three things:
  *
- *     1.0   income exactly matches the break-even — constant seconds per stage, forever,
- *           and no wall ever. The gacha becomes a speed multiplier, not a gate.
- *     0.9   income falls 10% short of break-even, so seconds-per-stage climbs geometrically
- *           and the run eventually stops being worth grinding.
+ *     LEVELS_PER_STAGE            = slack × DPS_STAT_EXPONENT / STAT_PACE_RATIO   → 3.6
+ *     coverage of SPD and IMP     = slack                                         → 0.9
+ *     DPS_COVERAGE_PER_STAGE      = ENEMY_PACE_RATIO + slack                      → 1.9
  *
- * Everything else — party pooling, gacha multipliers, prestige upgrades — then reads as
- * "how much further before the slack catches up with you."
+ * ## What it is, measured: the grind dial
+ *
+ * Swept on the one-week campaign walk, prestige 0 with a party of 3:
+ *
+ *     0.9    6d 9h  — 3h 44m fighting, 6d 5h grinding    ends level 447   ← here
+ *     0.7    2d 20h — 3h 39m fighting, 2d 17h grinding   ends level 355
+ *     0.5    23h 11m— 3h 29m fighting, 19h 42m grinding  ends level 257
+ *     0.35   8h 51m — 3h 3m fighting, 5h 48m grinding    ends level 181
+ *
+ * **Fighting time is invariant and nothing walls.** Both follow from the structure rather than
+ * from luck: `ENEMY_HP_STEP_EXPONENT` is set against `DPS_COVERAGE_PER_STAGE`, which contains
+ * this constant, so lowering it slows the party and the enemy's HP curve by the same amount and
+ * fight length does not move. What is left is how far behind the natural pace a gate leaves
+ * you, and therefore how long you sit in front of it — **this is the dial for how much of the
+ * week is idle waiting**, and 0.9 is what makes that week a week.
+ *
+ * ⚠ **It used to be far more dangerous than that.** Before PWR joined `STAT_PACES_ENEMY_CURVE`,
+ * PWR coverage was exactly this number, so anything under 1.0 walked pooled party PWR into the
+ * offensive mitigation clamp — and lowering it to slow the game down pulled that cliff from
+ * prestige 4 in to P1 W2, where a single world cost nearly two days of fighting. The sweep
+ * above is only safe because that coupling is gone.
  */
-export const XP_PACE_SLACK = 0.9 // UNTUNED ╧
+export const XP_PACE_SLACK = 0.9 // TUNED ✓
 
 /** Derived. Move `XP_PACE_SLACK`, or the two curves it is measured against. */
 export const XP_STEP_EXPONENT =
@@ -780,6 +971,129 @@ export const XP_STEP_EXPONENT =
 
 /** Per-step XP base. Derived from the exponent above. */
 export const XP_STEP_BASE = Math.pow(ENEMY_STEP_BASE, XP_STEP_EXPONENT)
+
+// ── Defensive pacing ───────────────────────────────  the constant-pressure curve
+//
+// Declared here rather than beside `STAT_PER_LEVEL_GROWTH` because it is derived from the
+// XP curve above: how fast a defensive stat must grow *per level* depends on how many levels
+// a stage hands out.
+
+/**
+ * Hero levels earned per stage of enemy curve, in steady state. **Derived, and exact.**
+ *
+ *     income per stage  ∝ XP_STEP_BASE^n          (kills per stage is constant)
+ *     cost of level L   ∝ XP_TO_LEVEL_GROWTH^L
+ *
+ * Levels advance at a constant rate exactly when those two track, i.e. when
+ * `L × ln(XP_TO_LEVEL_GROWTH) = n × ln(XP_STEP_BASE)`. Substituting `XP_STEP_EXPONENT` and
+ * `STAT_PER_LEVEL_GROWTH` collapses every log away and leaves the ratio below — 3.6 at the
+ * values here, which is what the campaign walk measures at every world past the first.
+ *
+ * The useful corollary: a level-scaled stat covers `LEVELS_PER_STAGE × STAT_PACE_RATIO /
+ * DPS_STAT_EXPONENT = XP_PACE_SLACK` of a stage's enemy growth per stage. So *every* stat on
+ * the ordinary curve — DEF and VIT included — has always fallen 10% of a stage behind the
+ * enemy per stage. On the offensive side that is intended and `DPS_STAT_EXPONENT` more than
+ * makes up for it. On the defensive side it was never priced, and it is the whole reason
+ * survivability was the only thing that ever walled a run.
+ */
+export const LEVELS_PER_STAGE = XP_PACE_SLACK * DPS_STAT_EXPONENT / STAT_PACE_RATIO
+
+/**
+ * **How much of one stage's enemy growth a stage's worth of levels buys the matched stats** —
+ * PWR, DEF and VIT (`STAT_PACES_ENEMY_CURVE`). Read against the same scale as
+ * `STAT_PACE_RATIO`:
+ *
+ *     1.0   they track the enemy exactly, so every clamped ratio in the game — mitigation
+ *           in both directions, and HP against incoming — is the *same number at every
+ *           depth*                                                                  ← here
+ *     0.9   what they used to get, by falling out of `XP_PACE_SLACK` rather than by
+ *           anyone choosing it
+ *
+ * ## Why 1.0, and why anything less is not a difficulty dial
+ *
+ * `mitigation` is a hard clamp, so a matched pair that drifts does not get gradually harder —
+ * it stays identical until the clamp closes and then collapses. Both sides showed it:
+ *
+ *     defensive   DEF started 2.67× above `enemyPwr × K` and converged at 1.08^0.1 per stage,
+ *                 so the first ~130 stages took exactly `MIN_DAMAGE` per hit (World 5 measured
+ *                 survival ratios of 155×–3785×) and then went unsurvivable within a few dozen
+ *     offensive   pooled PWR fell 0.1 stages/stage behind enemy DEF, so damage dealt collapsed
+ *                 to `MIN_DAMAGE` around prestige 4–5 — every late grind wall in the walk
+ *
+ * At 1.0 there is no drift to accumulate. `enemyPwr / heroDef` and `heroPwr / enemyDef` are
+ * both fixed for the life of a run, so mitigation is fixed at both ends and the fraction of the
+ * party's pool a stage attempt costs is fixed — set once, by `BASE_ENEMY_PWR` against the class
+ * spread, and held forever.
+ *
+ * ⚠ **This deliberately removes the clamp as a source of walls, at both ends.** Gating is not
+ * gone; it moved somewhere it can be tuned continuously — `FIGHT_LENGTH_DRIFT`, which lets
+ * enemy HP outrun party DPS a little each stage. A ratio that clamps makes a cliff; a ratio
+ * that never clamps makes a slope. Walls belong on the slope.
+ */
+export const ENEMY_PACE_RATIO = 1.0 // TUNED ✓
+
+/** Derived, never set directly — move `ENEMY_PACE_RATIO`. */
+export const STAT_PER_LEVEL_GROWTH_PACED =
+    Math.pow(ENEMY_STEP_BASE, ENEMY_PACE_RATIO / LEVELS_PER_STAGE)
+
+/**
+ * **How fast the party's damage per second grows**, in stages of enemy curve per stage
+ * advanced. Derived, and the number the enemy's HP curve has to be set against.
+ *
+ * `DPS = PWR × critMultiplier × attacksPerSecond × strikes`, and two of those ride the level
+ * curve — PWR on the paced one, `critMultiplier` through IMP on the lagging one. (SPD rides it
+ * too but `MIN_ATTACK_INTERVAL_SECONDS` caps attack rate, so it drops out asymptotically and
+ * only makes early levels worth a little more than this says.)
+ *
+ *     DPS coverage = ENEMY_PACE_RATIO + XP_PACE_SLACK = 1.9
+ *
+ * Against enemy HP growing at 1.0, that is the whole reason every wave stage in the game sat
+ * pinned at `MIN_SECONDS_PER_KILL`: the party outran the content by nine tenths of a stage
+ * every stage, so a fight that started slow was back at the floor within a couple of worlds.
+ * Note it cannot be tuned away through `STAT_PACE_RATIO` — IMP's share works out to exactly
+ * `XP_PACE_SLACK` whatever that ratio is, and `XP_PACE_SLACK` also sets `LEVELS_PER_STAGE`.
+ */
+export const DPS_COVERAGE_PER_STAGE = ENEMY_PACE_RATIO + XP_PACE_SLACK
+
+/**
+ * **How much faster enemy HP grows than the party's DPS, per stage.** The one dial that
+ * decides how long fights are, whether they stay that long, and where the run walls.
+ *
+ *     0     enemy HP tracks DPS exactly — every fight takes the same number of seconds at
+ *           every depth, forever, and the game is purely time-gated with no wall ever
+ *     0.35  a stage's fight is 1.08^0.35 ≈ +2.7% longer than the one before it   ← here
+ *
+ * At 0.35 the walls land on the **super bosses**, and only on them: `BOSS_TIMER_SECONDS` is a
+ * fixed 30s, so a gate is the one place the drift is read as pass/fail rather than as a slower
+ * grind. Measured on the campaign walk, prestige 0 with a party of 3 — every blocker is a
+ * TIMER FAIL on a Stage 10, and the grind in front of each one runs 46m at World 2, 18h at
+ * World 7, and 2d 11h at World 10, which is the point the run is asking for Champions rather
+ * than levels.
+ *
+ * ⚠ **Above ~0.35 the run gets *shorter*, not longer.** The last gate of a loop has to make up
+ * `drift × 100` stages of curve, and past this the level that needs is more than farming can
+ * deliver — so the walk stops at World 8 or 9 instead of finishing. Measured: 0.40 walls at
+ * W9S10, 0.45 and 0.50 at W8S10, 0.55 at W7S10.
+ *
+ * This is where gating lives now that no clamped ratio drifts (`ENEMY_PACE_RATIO`). It is a
+ * *slope*, not a cliff: seconds-per-kill climbs geometrically but gently, so a stage is always
+ * beatable given enough levels, boss gates tighten against `BOSS_TIMER_SECONDS` a little at a
+ * time, and "grind or pull" is a continuous judgement rather than a wall you hit at full speed.
+ *
+ * ⚠ **Read it against `DPS_COVERAGE_PER_STAGE`, not against 1.0.** Enemy HP has to cover the
+ * party's *whole* DPS growth before any of this is drift at all — HP rising at the same 1.0 the
+ * rest of the enemy block rides is what pinned every wave stage to `MIN_SECONDS_PER_KILL`.
+ * That is why this is the only enemy stat with its own exponent: PWR and DEF are in matched
+ * pairs and pace the hero one-for-one, HP is matched against a *product* of two stats.
+ */
+export const FIGHT_LENGTH_DRIFT = 0.35 // TUNED ✓
+
+/**
+ * The exponent enemy HP rides on the shared curve index, against `ENEMY_STEP_BASE`.
+ *
+ * Derived — move `FIGHT_LENGTH_DRIFT`, or the coverage it is measured against.
+ */
+export const ENEMY_HP_STEP_EXPONENT = DPS_COVERAGE_PER_STAGE + FIGHT_LENGTH_DRIFT
 
 // ── Gold ───────────────────────────────────────────  gold-economy.md §3–4
 
@@ -913,7 +1227,7 @@ export const GOLD_BOUND_HORIZON_DAYS = 3650
  * an unbounded kill rate is still unbounded income. Also the pacing floor the Pixi battle
  * scene needs. Live and offline use the identical function so the two always agree.
  */
-export const MIN_SECONDS_PER_KILL = 0.5 // UNTUNED ╧
+export const MIN_SECONDS_PER_KILL = 0.5 // TUNED ✓
 
 // ── Offline ────────────────────────────────────────  idle-mechanics.md §4
 

@@ -23,7 +23,8 @@ import {
     type BattleReadoutInput,
     type RunAnchor
 } from '../../app/utils/hero-quest-battle'
-import { settle, totalXpForLevel } from '#shared/utils/hero-quest/settle'
+import { enemyPackAt, killsBeforeWipe, settle, totalXpForLevel } from '#shared/utils/hero-quest/settle'
+import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { BASE_KILL_COUNT, BOSS_STAGE, STAGES_PER_WORLD } from '#shared/utils/hero-quest/constants'
 import { ZERO } from '#shared/utils/hero-quest/numbers'
 
@@ -162,9 +163,18 @@ describe('agreement with the settle it is drawing', () => {
                 tenureDays: SPEC_TENURE_DAYS
             })
 
+            // The same bound the server puts in the payload (`server/utils/hero-quest.ts`),
+            // not `null`. Passing `null` asserted "this stage never wipes", which stopped being
+            // true for a level-1 Hero when `BASE_HP` came down to 150 — and then the two walks
+            // disagreed because they were walking different stages, not because the projection
+            // was wrong.
+            const units = partyUnitStats(hero)
+            const pack = enemyPackAt(served.position)
+            const wipeAt = killsBeforeWipe(units, pack, served.secondsPerKill)
+
             const projected = project({
                 secondsPerKill: served.secondsPerKill,
-                killsBeforeWipe: null
+                killsBeforeWipe: Number.isFinite(wipeAt) ? wipeAt : null
             }, seconds)
 
             expect(projected.world).toBe(served.position.world)

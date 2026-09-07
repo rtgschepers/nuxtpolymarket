@@ -16,11 +16,14 @@ import { explainStats, levelsToCover, stagesOfCurve } from '#shared/utils/hero-q
 import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { maxHpFor } from '#shared/utils/hero-quest/combat'
 import {
+    BASE_HP,
     DPS_STAT_EXPONENT,
     ENEMY_STEP_BASE,
+    HP_PER_VIT,
     LCK_BASE_SCALE,
     STAT_PACE_RATIO,
     STAT_PER_LEVEL_GROWTH,
+    STAT_PER_LEVEL_GROWTH_PACED,
     STAT_SCALES_WITH_LEVEL
 } from '#shared/utils/hero-quest/constants'
 import { CHAMPIONS, RARITY_STAT_MULTIPLIER, getChampion } from '#shared/utils/hero-quest/content/champions'
@@ -241,10 +244,19 @@ describe('the derived values', () => {
         // `BASE_HP` is the one flat term meeting a compounding curve, and at level 1 it is most
         // of the pool. That is a scaling fact, so the breakdown states it rather than leaving it
         // to be inferred from the arithmetic.
-        const early = explainStats(hero()).units[0]!.derived.find(d => d.key === 'maxHp')!
+        const opening = explainStats(hero()).units[0]!
+        const early = opening.derived.find(d => d.key === 'maxHp')!
         expect(early.note).toMatch(/BASE_HP/)
 
-        const late = explainStats(hero({ heroLevel: 120 })).units[0]!.derived.find(d => d.key === 'maxHp')!
+        // The level at which the compounding half of the pool — VIT on the defensive curve —
+        // overtakes the flat half. Derived rather than pinned, because it is precisely what a
+        // retune of `BASE_HP` moves, and it moved from ~20 to ~128 when BASE_HP went to 1500.
+        const baseVit = opening.stats.find(stat => stat.key === 'vit')!.final.toNumber()
+        const parityLevel = 1 + Math.ceil(
+            Math.log(BASE_HP / (baseVit * HP_PER_VIT)) / Math.log(STAT_PER_LEVEL_GROWTH_PACED)
+        )
+
+        const late = explainStats(hero({ heroLevel: parityLevel })).units[0]!.derived.find(d => d.key === 'maxHp')!
         expect(late.note).toBeUndefined()
     })
 

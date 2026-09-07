@@ -133,26 +133,22 @@ describe('the settle projection', () => {
         const MAX_OVER_PROMISE = 0.7
 
         /**
-         * The fixture every spec in this block measures against. W4/60 → W3/13 in session 2.
+         * The fixture every spec in this block measures against. W4/60 → W3/13 in session 2,
+         * then W3/13 → W10/204 when `K` went to 4 and every fight got shorter.
          *
-         * The old fixture stopped being a fight: with `BASE_HP` at 100 a level-60 Hero dies to
-         * the World 4 super boss's *first* volley at 2.4s, before any ability comes off
-         * cooldown. The sorcerer then reads projected-600 against measured-129 — the projection
-         * pricing a full kit against a fight that cast nothing. That is the degenerate case the
-         * band was never meant to cover, not a modelling error.
+         * Re-found the way the last one was: scan prestige 0–1 × every world × boss, super-boss
+         * and representative wave and elite stages × levels 1–250, keep the cells where the cast
+         * spec holds and all four classes land inside the band, and take the widest joint
+         * margin. 766 cells qualify; this is the best of them.
          *
-         * W3S10 at level 13 is the best-conditioned cell in the whole space: a real ~4.8s fight
-         * for all four classes, every ratio inside the band, and the widest joint margin found
-         * by scanning prestige 0–1 × every world × every stage × levels 1–250.
-         *
-         * ⚠ **The margin is genuinely thin — the worst ratio is the marksman at 1.62 against a
-         * 1.70 ceiling.** That is not new (it was 1.55 at the old fixture) and it is not the
-         * finite-window artifact either: the hunter's measured first-cast shortfall here is
-         * 1.49, so the rest is the coverage model over-pricing a wide AoE. Levels 7–13 all sit
-         * in 1.62–1.72 and 14 breaks the cast spec, so if this ever goes red, treat it as the
-         * AoE coverage model needing a look rather than as a level to nudge.
+         * **It is a much better-conditioned fixture than the one it replaces.** The old cell
+         * ran the marksman at 1.62 against a 1.70 ceiling — a knife edge that the comment
+         * flagged as such. Here the four ratios are 1.02 / 1.03 / 1.04 / 0.92, and the whole
+         * level band 195–250 stays inside the tolerance, so this is a plateau rather than a
+         * point. A deeper stage is what buys that: the enemy pool is large enough that the
+         * fight runs its full timer, which is the regime the projection is actually modelling.
          */
-        const FIXTURE = { level: 13, position: at(3, SUPER_BOSS_STAGE) }
+        const FIXTURE = { level: 204, position: at(10, SUPER_BOSS_STAGE) }
 
         const withinTolerance = (snapshot: HeroSnapshot, position: RunPosition, label: string) => {
             const projected = projectedDps(snapshot, position)

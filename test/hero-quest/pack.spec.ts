@@ -33,6 +33,7 @@ import {
     BOSS_MINION_COUNT,
     BOSS_STAGE,
     ELITE_PACK_SIZE,
+    ENEMY_HP_STEP_EXPONENT,
     ENEMY_STEP_BASE,
     MIN_SECONDS_PER_KILL,
     PACK_LIVE_STREAM_FRACTION,
@@ -153,8 +154,12 @@ describe('enemy packs', () => {
             // Same curve index, wave stat layer — exactly an ordinary mob of that depth.
             const trash = enemyStatsAt(at(2, 1))
             const ratio = minion.hp.div(trash.hp).toNumber()
-            // Stage 5 sits four steps deeper than stage 1 on the same curve.
-            expect(ratio).toBeCloseTo(Math.pow(ENEMY_STEP_BASE, 4), 6)
+            // Stage 5 sits four steps deeper than stage 1 on the same curve — read through
+            // `ENEMY_HP_STEP_EXPONENT`, because HP is the one enemy stat with its own exponent
+            // (it is matched against DPS, a product of two level-scaled stats, rather than
+            // against a single hero stat). The claim under test is unchanged: a minion is an
+            // ordinary mob of the boss's own depth.
+            expect(ratio).toBeCloseTo(Math.pow(ENEMY_STEP_BASE, 4 * ENEMY_HP_STEP_EXPONENT), 6)
         })
 
         it('is a genuinely mixed pack — the first in the game', () => {

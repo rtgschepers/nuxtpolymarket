@@ -54,13 +54,17 @@ describe('analyzeCampaign', () => {
         }
     })
 
-    it('farms behind the blocked stage, never a boss', () => {
+    it('never farms ahead of the blocked stage, and never on a boss', () => {
         const result = analyzeCampaign(hero, 0, PAST_A_BLOCKER)
 
         for (const event of result.grinds) {
-            const behind = event.farmWorld < event.world
-                || (event.farmWorld === event.world && event.farmStage < event.stage)
-            expect(behind).toBe(true)
+            // Not *behind*: `farmStageFor` starts with the blocked stage itself, because a wave
+            // stage the party cannot survive still banks the kills it lands and restarts, so it
+            // is a farm (`settle.killsBeforeWipe`). What must never happen is farming a stage
+            // the run has not reached, or a gate — a boss is one fight on a one-way door.
+            const ahead = event.farmWorld > event.world
+                || (event.farmWorld === event.world && event.farmStage > event.stage)
+            expect(ahead).toBe(false)
             expect([5, 10]).not.toContain(event.farmStage)
         }
     })
@@ -84,8 +88,12 @@ describe('analyzeCampaign', () => {
         const depth = (report: ReturnType<typeof analyzeCampaign>) =>
             (report.wall.prestige * WORLD_COUNT + report.wall.world) * STAGES_PER_WORLD + report.wall.stage
 
-        const tight = analyzeCampaign(hero, 0, { ...PAST_A_BLOCKER, grindBudgetSeconds: 3600 })
-        const loose = analyzeCampaign(hero, 0, { ...PAST_A_BLOCKER, grindBudgetSeconds: 3.2e10, maxLevel: 100000 })
+        // `TO_THE_WALL`, not `PAST_A_BLOCKER`: this spec needs the tight budget to be what
+        // actually stops the walk, and one prestige of road no longer contains a grind an hour
+        // cannot pay for. `ENEMY_PACE_RATIO` is why — the walk used to end on a wipe, and now
+        // ends on income, so the wall sits deeper.
+        const tight = analyzeCampaign(hero, 0, { ...TO_THE_WALL, grindBudgetSeconds: 3600 })
+        const loose = analyzeCampaign(hero, 0, { ...TO_THE_WALL, grindBudgetSeconds: 3.2e10, maxLevel: 100000 })
 
         expect(tight.wall.reason).toBe('grind_budget')
         expect(depth(loose)).toBeGreaterThan(depth(tight))

@@ -43,6 +43,7 @@ import {
     SPD_ATTACK_RATE_PER_POINT,
     STAT_PER_LEVEL_FLAT,
     STAT_PER_LEVEL_GROWTH,
+    STAT_PER_LEVEL_GROWTH_PACED,
     STAT_SCALES_WITH_LEVEL
 } from './constants'
 import { classPath, getClass } from './content/classes'
@@ -57,6 +58,7 @@ import {
     heroModifierTotals,
     partyModifierTotals,
     partyUnitStats,
+    statGrowthFor,
     tierValue
 } from './stats'
 import { mergeTotals, sumModifiers } from './modifiers'
@@ -176,6 +178,8 @@ export interface StatsExplanation {
     /** Cross-cutting pacing facts, the same for every unit. */
     pacing: {
         statGrowthPerLevel: number
+        /** DEF and VIT only — the curve that paces the enemy exactly. */
+        defenceGrowthPerLevel: number
         enemyStepBase: number
         dpsStatExponent: number
         /** Stages of enemy curve one hero level buys. `STAT_PACE_RATIO` by construction. */
@@ -236,6 +240,10 @@ function baseStage(key: HqStatKey, tier: StatTier, deltaSources: readonly { name
  * omitting the stage. Keeping the stage list the same shape for every stat is what lets the
  * report be read as a table, and "Level 200 · ×1.0000" states the fact that levelling buys this
  * stat nothing far more plainly than a missing column would.
+ *
+ * DEF and VIT report a *different* base in the formula than the other three — they ride
+ * `STAT_PER_LEVEL_GROWTH_PACED` (`statGrowthFor`), which is the whole of why a stage attempt
+ * costs the same share of the party's HP at every depth.
  */
 function levelStage(key: HqStatKey, base: Decimal, heroLevel: number): StatStage {
     if (!STAT_SCALES_WITH_LEVEL[key]) {
@@ -250,9 +258,10 @@ function levelStage(key: HqStatKey, base: Decimal, heroLevel: number): StatStage
         }
     }
 
+    const growth = statGrowthFor(key)
     const steps = Math.max(0, heroLevel - 1)
     const additive = base.add(STAT_PER_LEVEL_FLAT * steps)
-    const factor = decPow(STAT_PER_LEVEL_GROWTH, steps)
+    const factor = decPow(growth, steps)
     return {
         id: 'level',
         label: `Level ${heroLevel}`,
@@ -262,7 +271,7 @@ function levelStage(key: HqStatKey, base: Decimal, heroLevel: number): StatStage
         parts: STAT_PER_LEVEL_FLAT === 0
             ? []
             : [{ label: `flat +${STAT_PER_LEVEL_FLAT}/level`, amount: STAT_PER_LEVEL_FLAT * steps }],
-        formula: `${STAT_PER_LEVEL_GROWTH.toFixed(6)}^${steps}`
+        formula: `${growth.toFixed(6)}^${steps}`
     }
 }
 
@@ -523,6 +532,7 @@ export function explainStats(hero: HeroSnapshot): StatsExplanation {
         units: out,
         pacing: {
             statGrowthPerLevel: STAT_PER_LEVEL_GROWTH,
+            defenceGrowthPerLevel: STAT_PER_LEVEL_GROWTH_PACED,
             enemyStepBase: ENEMY_STEP_BASE,
             dpsStatExponent: DPS_STAT_EXPONENT,
             stagesPerLevel,

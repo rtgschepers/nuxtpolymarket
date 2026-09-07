@@ -14,6 +14,8 @@ import {
     TANK_THREAT_MULTIPLIER,
     STAT_PER_LEVEL_FLAT,
     STAT_PER_LEVEL_GROWTH,
+    STAT_PER_LEVEL_GROWTH_PACED,
+    STAT_PACES_ENEMY_CURVE,
     STAT_SCALES_WITH_LEVEL,
     STAT_TIER_VALUES
 } from './constants'
@@ -87,36 +89,55 @@ export function baseSpreadFor(node: ClassNode): HqStatBlock {
 }
 
 /**
+ * Which per-level growth rate a stat rides.
+ *
+ * Two curves, not one. `STAT_PER_LEVEL_GROWTH` lags the enemy at `STAT_PACE_RATIO` — a
+ * deliberate shortfall the gacha and prestige multipliers are meant to fill. PWR, DEF and VIT
+ * ride `STAT_PER_LEVEL_GROWTH_PACED` instead, which tracks the enemy exactly, because each of
+ * them is read against an enemy stat through a *clamp*: a shortfall there does not read as
+ * "fall behind and catch up", it reads as a hundred identical stages followed by a cliff into
+ * `MIN_DAMAGE`. See `STAT_PACES_ENEMY_CURVE` and `ENEMY_PACE_RATIO`.
+ */
+export function statGrowthFor(key: HqStatKey): number {
+    return STAT_PACES_ENEMY_CURVE[key] ? STAT_PER_LEVEL_GROWTH_PACED : STAT_PER_LEVEL_GROWTH
+}
+
+/**
  * statAtLevel(base, level) = (base + FLAT × (level-1)) × GROWTH^(level-1)
  *
- * `GROWTH` is derived from `STAT_PACE_RATIO` and sits just above 1.0, which is what the
- * design docs now describe — geometric, expressed as a fraction of the enemy curve
+ * `GROWTH` is derived from a pace ratio and sits just above 1.0, which is what the design
+ * docs now describe — geometric, expressed as a fraction of the enemy curve
  * (`core-progression-and-prestige.md` §1). `FLAT` is 0 by design.
+ *
+ * `growth` defaults to the offensive curve so a caller with no stat in hand keeps the old
+ * answer; go through `statAtLevelFor` whenever the key is known, since DEF and VIT ride a
+ * different one.
  *
  * The flat-additive model this comment used to describe (GROWTH = 1.0) is not merely
  * out of date, it is provably unworkable: additive growth against a geometric ceiling
  * falls behind at any constant, and the campaign sim confirms it — a solo Hero stalls in
  * World 3 and never completes a prestige, at any XP rate.
  */
-export function statAtLevel(base: DecimalSource, level: number): Decimal {
+export function statAtLevel(base: DecimalSource, level: number, growth: number = STAT_PER_LEVEL_GROWTH): Decimal {
     const steps = Math.max(0, level - 1)
     const additive = D(base).add(STAT_PER_LEVEL_FLAT * steps)
-    return decMax(MIN_STAT_VALUE, additive.mul(decPow(STAT_PER_LEVEL_GROWTH, steps)))
+    return decMax(MIN_STAT_VALUE, additive.mul(decPow(growth, steps)))
 }
 
 /**
- * `statAtLevel`, gated on whether the stat is one the level curve is allowed to touch.
+ * `statAtLevel`, gated on whether the level curve touches this stat at all and, if it does,
+ * on which of the two curves it rides.
  *
- * **LCK is not** (`STAT_SCALES_WITH_LEVEL`), so it comes back at its base value however high the
- * Hero climbs. That is the whole of the mechanism: crit chance is `LCK × rate` clamped to 100%,
- * and a stat on a geometric curve feeding a clamped output means the clamp is reached on a
- * schedule rather than earned. Every other stat is unchanged.
+ * **LCK is not on either** (`STAT_SCALES_WITH_LEVEL`), so it comes back at its base value
+ * however high the Hero climbs. That is the whole of the mechanism: crit chance is
+ * `LCK × rate` clamped to 100%, and a stat on a geometric curve feeding a clamped output
+ * means the clamp is reached on a schedule rather than earned.
  *
  * The floor still applies on the frozen path — a scaled-down base can land below
  * `MIN_STAT_VALUE` where the unscaled tier value would not have.
  */
 export function statAtLevelFor(key: HqStatKey, base: DecimalSource, level: number): Decimal {
-    if (STAT_SCALES_WITH_LEVEL[key]) return statAtLevel(base, level)
+    if (STAT_SCALES_WITH_LEVEL[key]) return statAtLevel(base, level, statGrowthFor(key))
     return decMax(MIN_STAT_VALUE, D(base))
 }
 
