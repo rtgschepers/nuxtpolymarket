@@ -17,12 +17,14 @@ export type CallOfXenoWeaponId
       | 'mp40'
       | 'ak74'
       | 'bar'
+      | 'mosin'
       | 'rpk'
       | 'm60'
       | 'fnmag'
+      | 'bazooka'
       | 'xenoray'
 
-export type CallOfXenoPerkId = 'juggernog' | 'speedcola' | 'doubletap' | 'quickrevive'
+export type CallOfXenoPerkId = 'juggernog' | 'speedcola' | 'doubletap' | 'quickrevive' | 'deadshot' | 'phdflopper'
 
 export interface CallOfXenoWeapon {
     id: CallOfXenoWeaponId
@@ -52,9 +54,45 @@ export interface CallOfXenoWeapon {
     blastRadius?: number
     /**
      * Walking and sprint speed multiplier while held. Defaults to 1; heavier
-     * weapons pay a small tax — pistol fastest, LMGs slowest.
+     * weapons pay a tax — pistol and SMGs fastest, belt-feds slowest.
      */
     mobility?: number
+    /**
+     * How quickly the sight settles when aiming, in blend-units per second.
+     * Light weapons snap in, belt-feds lug the gun up. Defaults to 9.
+     */
+    aimSpeed?: number
+    /** Seconds the draw animation locks firing after a swap. Defaults to 0.22. */
+    swapTime?: number
+    /**
+     * Cone half-angle in radians once fully aimed. No gun is a laser —
+     * distant targets stay a real shot. Defaults to a third of hip spread.
+     */
+    adsSpread?: number
+    /**
+     * Radians the muzzle climbs per shot, plus a little random side wobble
+     * of the same order. Heavier calibres kick harder; rapid guns kick
+     * small but often. Aiming soaks up a quarter of it.
+     */
+    recoilKick?: number
+    /** Metres out to which a round deals full damage. Undefined = no falloff. */
+    falloffStart?: number
+    /** Damage multiplier left at the weapon's maximum range. */
+    falloffMin?: number
+    /**
+     * Per-weapon headshot damage multiplier. Undefined = the standard 1.5x
+     * (2x with Deadshot). The Pack-a-Punched Mosin sets this higher — its
+     * upgrade makes the rifle a proper headhunter.
+     */
+    headshotMult?: number
+    /**
+     * Cluster warheads: on detonation the shell splits into this many
+     * bomblets around the impact, each dealing `clusterDamageFraction` of
+     * the shell's damage in its own small blast. The Pack-a-Punched
+     * Bazooka's quirk.
+     */
+    clusterCount?: number
+    clusterDamageFraction?: number
 }
 
 /** The wonder weapon's bolt pops with a very small blast. */
@@ -75,7 +113,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         penetration: 1,
         automatic: false,
         cost: 0,
-        upgradedName: 'Sally'
+        upgradedName: 'Sally',
+        aimSpeed: 13,
+        swapTime: 0.16,
+        adsSpread: 0.010,
+        recoilKick: 0.02,
+        falloffStart: 22,
+        falloffMin: 0.65
     },
     skorpion: {
         id: 'skorpion',
@@ -92,7 +136,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         automatic: true,
         cost: 1000,
         upgradedName: 'Czech Bounce',
-        mobility: 0.985
+        mobility: 1,
+        aimSpeed: 13,
+        swapTime: 0.18,
+        adsSpread: 0.014,
+        recoilKick: 0.006,
+        falloffStart: 13,
+        falloffMin: 0.5
     },
     magnum: {
         id: 'magnum',
@@ -110,7 +160,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         // Box only — this one is not sold on any wall.
         cost: 0,
         upgradedName: '.44 Anaconda',
-        mobility: 0.99
+        mobility: 0.995,
+        aimSpeed: 10,
+        swapTime: 0.22,
+        adsSpread: 0.007,
+        recoilKick: 0.055,
+        falloffStart: 32,
+        falloffMin: 0.75
     },
     trench: {
         id: 'trench',
@@ -127,7 +183,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         automatic: false,
         cost: 1500,
         upgradedName: 'Gut Shot',
-        mobility: 0.965
+        mobility: 0.955,
+        aimSpeed: 11,
+        swapTime: 0.26,
+        adsSpread: 0.028,
+        recoilKick: 0.065,
+        falloffStart: 8,
+        falloffMin: 0.35
     },
     mp40: {
         id: 'mp40',
@@ -145,7 +207,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         // Box only — this one is not sold on any wall.
         cost: 0,
         upgradedName: 'The Afterburner',
-        mobility: 0.98
+        mobility: 0.99,
+        aimSpeed: 12.5,
+        swapTime: 0.2,
+        adsSpread: 0.012,
+        recoilKick: 0.009,
+        falloffStart: 18,
+        falloffMin: 0.6
     },
     ak74: {
         id: 'ak74',
@@ -162,7 +230,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         automatic: true,
         cost: 1800,
         upgradedName: 'AK-74fu2',
-        mobility: 0.97
+        mobility: 0.97,
+        aimSpeed: 10,
+        swapTime: 0.24,
+        adsSpread: 0.007,
+        recoilKick: 0.013,
+        falloffStart: 38,
+        falloffMin: 0.8
     },
     bar: {
         id: 'bar',
@@ -172,7 +246,7 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         fireDelay: 0.16,
         magSize: 24,
         reserveAmmo: 192,
-        reloadTime: 3.1,
+        reloadTime: 3.3,
         spread: 0.028,
         range: 65,
         penetration: 2,
@@ -180,7 +254,38 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         // Box only — this one is not sold on any wall.
         cost: 0,
         upgradedName: 'Browning M1918',
-        mobility: 0.96
+        mobility: 0.94,
+        aimSpeed: 7.5,
+        swapTime: 0.34,
+        adsSpread: 0.008,
+        recoilKick: 0.02,
+        falloffStart: 42,
+        falloffMin: 0.82
+    },
+    mosin: {
+        id: 'mosin',
+        name: 'Mosin-Nagant',
+        damage: 300,
+        pellets: 1,
+        fireDelay: 1.05,
+        magSize: 5,
+        reserveAmmo: 45,
+        reloadTime: 3,
+        spread: 0.01,
+        range: 80,
+        penetration: 4,
+        automatic: false,
+        // Box only — the bolt-action answer to the horde: one heavy round
+        // straight through a file of bodies, then work the bolt.
+        cost: 0,
+        upgradedName: 'Winter Howl',
+        mobility: 0.96,
+        aimSpeed: 9,
+        swapTime: 0.26,
+        adsSpread: 0.003,
+        recoilKick: 0.075,
+        falloffStart: 55,
+        falloffMin: 0.9
     },
     rpk: {
         id: 'rpk',
@@ -190,7 +295,7 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         fireDelay: 0.1,
         magSize: 75,
         reserveAmmo: 300,
-        reloadTime: 4,
+        reloadTime: 4.4,
         spread: 0.035,
         range: 70,
         penetration: 3,
@@ -198,7 +303,13 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         // Box only — this one is not sold on any wall.
         cost: 0,
         upgradedName: 'R115 Resonator',
-        mobility: 0.94
+        mobility: 0.91,
+        aimSpeed: 5.5,
+        swapTime: 0.42,
+        adsSpread: 0.012,
+        recoilKick: 0.014,
+        falloffStart: 40,
+        falloffMin: 0.8
     },
     m60: {
         id: 'm60',
@@ -208,15 +319,22 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         fireDelay: 0.095,
         magSize: 100,
         reserveAmmo: 400,
-        reloadTime: 5.6,
+        reloadTime: 6,
         spread: 0.042,
         range: 70,
         penetration: 3,
         automatic: true,
         // Box only — the belt-fed pig: the biggest magazine in the game and
-        // the slowest reload, plus the heaviest legs.
+        // the slowest reload, the heaviest legs and the slug-slow sights.
+        // The trade for all that sustained damage.
         cost: 0,
-        mobility: 0.93,
+        mobility: 0.88,
+        aimSpeed: 4.5,
+        swapTime: 0.5,
+        adsSpread: 0.014,
+        recoilKick: 0.016,
+        falloffStart: 40,
+        falloffMin: 0.78,
         upgradedName: 'The Chopper'
     },
     fnmag: {
@@ -227,15 +345,50 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         fireDelay: 0.115,
         magSize: 55,
         reserveAmmo: 300,
-        reloadTime: 5.2,
+        reloadTime: 5.6,
         spread: 0.036,
         range: 72,
         penetration: 3,
         automatic: true,
-        // Box only — the other belt-fed: slower cadence, harder hits.
+        // Box only — the other belt-fed: slower cadence, harder hits, and
+        // the same heavy-weapon handling tax as the M60.
         cost: 0,
-        mobility: 0.935,
+        mobility: 0.89,
+        aimSpeed: 5,
+        swapTime: 0.46,
+        adsSpread: 0.011,
+        recoilKick: 0.021,
+        falloffStart: 42,
+        falloffMin: 0.8,
         upgradedName: 'Magnetron'
+    },
+    bazooka: {
+        id: 'bazooka',
+        name: 'M1 Bazooka',
+        damage: 1000,
+        pellets: 1,
+        fireDelay: 1.35,
+        magSize: 1,
+        reserveAmmo: 10,
+        reloadTime: 3.4,
+        spread: 0.02,
+        range: 60,
+        penetration: 1,
+        automatic: false,
+        // Lobs a rocket that flies flat-ish and detonates on any impact.
+        explosive: true,
+        projectile: true,
+        blastRadius: 4.4,
+        // Box only — one shell in the tube, a pocket of spares, and a blast
+        // wide enough to clear a doorway of trouble. Or to hurt you: mind
+        // the wall you fire it at.
+        cost: 0,
+        mobility: 0.93,
+        aimSpeed: 7,
+        swapTime: 0.42,
+        adsSpread: 0.008,
+        recoilKick: 0.09,
+        upgradedName: 'Warhead Mk II'
     },
     xenoray: {
         id: 'xenoray',
@@ -257,6 +410,12 @@ export const CALL_OF_XENO_WEAPONS: Record<CallOfXenoWeaponId, CallOfXenoWeapon> 
         // Mystery box only — there is no wall that sells the wonder weapon.
         cost: 0,
         mobility: 0.97,
+        aimSpeed: 8,
+        swapTime: 0.3,
+        // Pinpoint sights are the wonder weapon's privilege; its damage
+        // already softens with the beam's own distance falloff.
+        adsSpread: 0,
+        recoilKick: 0.015,
         upgradedName: 'Porter\'s X2 Xeno Ray'
     }
 }
@@ -304,6 +463,20 @@ export const CALL_OF_XENO_PERKS: Record<CallOfXenoPerkId, CallOfXenoPerk> = {
         cost: 500,
         description: '3 per run. On death, get back up.',
         color: 0x33aadd
+    },
+    deadshot: {
+        id: 'deadshot',
+        name: 'Deadshot',
+        cost: 2500,
+        description: 'Headshots deal 2x damage instead of 1.5x.',
+        color: 0xda9167
+    },
+    phdflopper: {
+        id: 'phdflopper',
+        name: 'PhD Flopper',
+        cost: 2000,
+        description: 'Your blasts never hurt you. +35% blast radius.',
+        color: 0x77c3f2
     }
 }
 
@@ -395,6 +568,22 @@ export const CALL_OF_XENO_SALLY_BLAST_RADIUS = 3.2
 export const CALL_OF_XENO_BLAST_SELF_FRACTION = 0.2
 export const CALL_OF_XENO_BLAST_SELF_CAP = 35
 
+/** Blast radius of a fuel barrel going up. */
+export const CALL_OF_XENO_BARREL_BLAST_RADIUS = 3.8
+
+/**
+ * Damage the player takes for standing `distance` from the centre of a
+ * blast — their own launcher round, or a fuel barrel they set off. Zero
+ * once they are clear of it. The cap is what keeps a close detonation a
+ * hard lesson rather than the end of the run.
+ */
+export function blastSelfDamage(distance: number, damage: number, blastRadius: number): number {
+    const reach = blastRadius + 0.4
+    if (distance >= reach) return 0
+    const falloff = Math.max(0.25, 1 - distance / reach)
+    return Math.round(Math.min(CALL_OF_XENO_BLAST_SELF_CAP, damage * CALL_OF_XENO_BLAST_SELF_FRACTION * falloff))
+}
+
 /** Damage multiplier for a ray hit at `distance` for a weapon at `papTier`. */
 export function xenoRayFalloff(distance: number, papTier: number): number {
     const start = CALL_OF_XENO_RAY_FALLOFF_START + papTier * 6
@@ -404,6 +593,20 @@ export function xenoRayFalloff(distance: number, papTier: number): number {
     const t = (distance - start) / (end - start)
     const floor = CALL_OF_XENO_RAY_FALLOFF_FLOOR[Math.min(papTier, 3)]!
     return 1 - (1 - floor) * t
+}
+
+/**
+ * Damage multiplier for a conventional hitscan round at `distance` metres:
+ * full damage out to the weapon's falloffStart, then a linear slide down to
+ * falloffMin at maximum range. Room fights never notice it; cross-map spray
+ * does. Short-range guns (SMGs, the shotgun) fall hardest, rifles least.
+ */
+export function xenoDamageFalloff(weapon: CallOfXenoWeapon, distance: number): number {
+    if (weapon.falloffStart === undefined || weapon.falloffMin === undefined) return 1
+    if (distance <= weapon.falloffStart) return 1
+    const span = Math.max(1, weapon.range - weapon.falloffStart)
+    const t = Math.min(1, (distance - weapon.falloffStart) / span)
+    return 1 - (1 - weapon.falloffMin) * t
 }
 
 /** Price to go from `tier` to `tier + 1`, or null when the weapon is maxed. */
@@ -445,6 +648,22 @@ export function packAPunch(weapon: CallOfXenoWeapon, tier: number): CallOfXenoWe
     // 100 to 150 on the M60, 55 to 75 on the FNMAG, at every tier.
     if (weapon.id === 'm60') upgraded.magSize = 150
     if (weapon.id === 'fnmag') upgraded.magSize = 75
+    // The Bazooka's machine work splits the warhead: every tier adds a pair
+    // of bomblets that pop around the impact for a fraction of the shell's
+    // damage — crowd clearing is what the tube is for.
+    if (weapon.id === 'bazooka' && weapon.projectile) {
+        const t = Math.min(tier, CALL_OF_XENO_MAX_PAP_TIER)
+        upgraded.clusterCount = 1 + t * 2
+        upgraded.clusterDamageFraction = 0.35
+        upgraded.blastRadius = (weapon.blastRadius ?? 4) + 0.2 * t
+    }
+    // The Mosin's machine work re-cuts the chamber for match ammunition:
+    // headshots stop being a bonus and become the whole point of the rifle.
+    if (weapon.id === 'mosin') {
+        upgraded.headshotMult = 2.5
+        upgraded.falloffStart = weapon.range
+        upgraded.falloffMin = 1
+    }
     return upgraded
 }
 
@@ -462,7 +681,8 @@ export const CALL_OF_XENO_BOX_COST = 950
 /**
  * Every weapon that is not on a wall lives here, and so do the three that are
  * — the box stays worth spinning at every stage of a run, and it is the only
- * source of the Magnum, the MP-40, the BAR, the RPK and the wonder weapon.
+ * source of the Magnum, the MP-40, the BAR, the Mosin, both belt-feds, the
+ * Bazooka and the wonder weapon.
  */
 export const CALL_OF_XENO_BOX_POOL: { weapon: CallOfXenoWeaponId, weight: number }[] = [
     { weapon: 'mp40', weight: 7 },
@@ -473,7 +693,9 @@ export const CALL_OF_XENO_BOX_POOL: { weapon: CallOfXenoWeaponId, weight: number
     { weapon: 'fnmag', weight: 4 },
     { weapon: 'trench', weight: 4 },
     { weapon: 'ak74', weight: 4 },
+    { weapon: 'mosin', weight: 3 },
     { weapon: 'skorpion', weight: 3 },
+    { weapon: 'bazooka', weight: 2 },
     { weapon: 'xenoray', weight: 2 }
 ]
 
@@ -502,8 +724,6 @@ export interface CallOfXenoEnemy {
     /** Model scale, and the collision/hit radius scales with it. */
     scale: number
     color: number
-    /** Points multiplier on hits and kills. */
-    reward: number
     /** First round this type can appear. */
     minRound: number
     /** Relative spawn weight once unlocked. */
@@ -524,7 +744,6 @@ export const CALL_OF_XENO_ENEMIES: Record<CallOfXenoEnemyId, CallOfXenoEnemy> = 
         damageMultiplier: 1,
         scale: 1,
         color: 0x6f8a52,
-        reward: 1,
         minRound: 1,
         weight: 10
     },
@@ -536,7 +755,6 @@ export const CALL_OF_XENO_ENEMIES: Record<CallOfXenoEnemyId, CallOfXenoEnemy> = 
         damageMultiplier: 0.9,
         scale: 0.98,
         color: 0x2e2622,
-        reward: 1.3,
         minRound: 4,
         weight: 6
     },
@@ -548,7 +766,6 @@ export const CALL_OF_XENO_ENEMIES: Record<CallOfXenoEnemyId, CallOfXenoEnemy> = 
         damageMultiplier: 1,
         scale: 0.85,
         color: 0x4f7d8c,
-        reward: 1.8,
         minRound: 8,
         weight: 4,
         flies: true,
@@ -568,7 +785,6 @@ export const CALL_OF_XENO_ENEMIES: Record<CallOfXenoEnemyId, CallOfXenoEnemy> = 
         damageMultiplier: 2.2,
         scale: 1.5,
         color: 0x7a4a6a,
-        reward: 4,
         minRound: 10,
         weight: 2,
         weakPoint: 3
@@ -600,9 +816,6 @@ export function specialRoundEnemy(round: number): CallOfXenoEnemyId {
     return SPECIAL_CYCLE[Math.min(index, SPECIAL_CYCLE.length - 1)] ?? 'husk'
 }
 
-/** Points multiplier applied to everything killed during a special round. */
-export const CALL_OF_XENO_SPECIAL_ROUND_BONUS = 2
-
 // ---------------------------------------------------------------------------
 // Round modifiers
 // ---------------------------------------------------------------------------
@@ -620,6 +833,19 @@ export const CALL_OF_XENO_MODIFIERS: Record<CallOfXenoModifier, CallOfXenoModifi
     blackout: { id: 'blackout', name: 'Blackout', description: 'Power cuts out. Perks and Pack-a-Punch go dark.' },
     fog: { id: 'fog', name: 'Fog', description: 'Coolant vents. You cannot see them coming.' },
     frenzy: { id: 'frenzy', name: 'Frenzy', description: 'Everything moves faster.' }
+}
+
+/**
+ * Whether the grid is actually delivering: the switch has been thrown and
+ * the round is not blacking it out.
+ *
+ * The machines gate on this, not on the switch alone. Blackout used to be
+ * wired to the lighting and nothing else, so through the whole round the
+ * perk machines and the Pack-a-Punch stood dark and still sold — the one
+ * round that is supposed to take them away left them working.
+ */
+export function callOfXenoPowerLive(powered: boolean, modifier: CallOfXenoModifier): boolean {
+    return powered && modifier !== 'blackout'
 }
 
 const MODIFIER_CYCLE: CallOfXenoModifier[] = ['fog', 'frenzy', 'blackout']
@@ -641,7 +867,7 @@ export const CALL_OF_XENO_FRENZY_SPEED = 1.35
 // Power-ups
 // ---------------------------------------------------------------------------
 
-export type CallOfXenoPowerUpId = 'instakill' | 'doublepoints' | 'maxammo' | 'nuke'
+export type CallOfXenoPowerUpId = 'instakill' | 'doublepoints' | 'maxammo' | 'nuke' | 'deathmachine' | 'carpenter'
 
 export interface CallOfXenoPowerUp {
     id: CallOfXenoPowerUpId
@@ -656,8 +882,28 @@ export const CALL_OF_XENO_POWERUPS: Record<CallOfXenoPowerUpId, CallOfXenoPowerU
     instakill: { id: 'instakill', name: 'Insta-Kill', duration: 30, color: 0xff4444, weight: 3 },
     doublepoints: { id: 'doublepoints', name: 'Double Points', duration: 30, color: 0xffd23f, weight: 3 },
     maxammo: { id: 'maxammo', name: 'Max Ammo', duration: 0, color: 0x4fc3f7, weight: 3 },
-    nuke: { id: 'nuke', name: 'Nuke', duration: 0, color: 0x9ae66e, weight: 2 }
+    nuke: { id: 'nuke', name: 'Nuke', duration: 0, color: 0x9ae66e, weight: 2 },
+    deathmachine: { id: 'deathmachine', name: 'Death Machine', duration: 20, color: 0xff8c1a, weight: 1.5 },
+    carpenter: { id: 'carpenter', name: 'Carpenter', duration: 0, color: 0xc9a227, weight: 2 }
 }
+
+/**
+ * The Death Machine drop replaces your trigger for its duration: a belt-fed
+ * minigun with no magazine and no reload, paid for with a wide cone and
+ * heavy legs. Stats live here so tests can pin the feel.
+ */
+export const CALL_OF_XENO_DEATH_MACHINE = {
+    name: 'Death Machine',
+    damage: 160,
+    fireDelay: 0.055,
+    spread: 0.075,
+    adsSpread: 0.032,
+    mobility: 0.85,
+    range: 45
+}
+
+/** Points the Carpenter pays for re-boarding every window on the map. */
+export const CALL_OF_XENO_CARPENTER_POINTS = 200
 
 /** Chance a kill leaves a power-up behind. */
 export const CALL_OF_XENO_POWERUP_CHANCE = 0.04

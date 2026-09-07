@@ -14,14 +14,20 @@ import {
     packAPunchCost,
     ammoCost,
     xenoRayFalloff,
+    xenoDamageFalloff,
     CALL_OF_XENO_SALLY_DAMAGE,
     CALL_OF_XENO_SALLY_MAG,
     CALL_OF_XENO_SALLY_RESERVE,
     CALL_OF_XENO_SALLY_BLAST_RADIUS,
+    CALL_OF_XENO_RAY_BLAST_RADIUS,
+    CALL_OF_XENO_BARREL_BLAST_RADIUS,
+    CALL_OF_XENO_BLAST_SELF_CAP,
+    blastSelfDamage,
     roundComposition,
     isSpecialRound,
     specialRoundEnemy,
     roundModifier,
+    callOfXenoPowerLive,
     multiKillBonus,
     CALL_OF_XENO_EQUIPMENT,
     CALL_OF_XENO_BLACKHOLE_RADIUS,
@@ -36,6 +42,12 @@ import {
     maxAlive,
     CALL_OF_XENO_STARTING_POINTS,
     CALL_OF_XENO_BASE_HEALTH,
+    CALL_OF_XENO_HIT_POINTS,
+    CALL_OF_XENO_KILL_POINTS,
+    CALL_OF_XENO_HEADSHOT_POINTS,
+    CALL_OF_XENO_KNIFE_KILL_POINTS,
+    CALL_OF_XENO_DEATH_MACHINE,
+    CALL_OF_XENO_CARPENTER_POINTS,
     type CallOfXenoEnemyId,
     type CallOfXenoWeaponId
 } from '../../shared/utils/gamelogic/call-of-xeno'
@@ -50,14 +62,21 @@ import {
     CALL_OF_XENO_NODES,
     CALL_OF_XENO_EDGES,
     CALL_OF_XENO_WINDOWS,
+    CALL_OF_XENO_WINDOW_BARRIERS,
     CALL_OF_XENO_WINDOW_SILL,
     CALL_OF_XENO_WINDOW_HEAD,
     CALL_OF_XENO_WINDOW_WIDTH,
     CALL_OF_XENO_WINDOW_BOARDS,
+    CALL_OF_XENO_WINDOW_SLOT_SPACING,
+    CALL_OF_XENO_WINDOW_SLOT_RADIUS,
+    windowApproachSlot,
     CALL_OF_XENO_SHELL,
     CALL_OF_XENO_SHELL_WALLS,
     CALL_OF_XENO_DECOR,
+    CALL_OF_XENO_PROP_SOLIDS,
     CALL_OF_XENO_BARREL_SPOTS,
+    CALL_OF_XENO_BOX_SPOTS,
+    CALL_OF_XENO_BOX_SWAP_CHANCE,
     CALL_OF_XENO_INTERACTABLES,
     CALL_OF_XENO_PLAYER_START,
     CALL_OF_XENO_UPPER_Y,
@@ -75,14 +94,20 @@ import {
     regionAt,
     resolveCircle,
     bannedNodesFor,
-    zombieTarget
+    rampSurfaceAt,
+    rampUnderBody,
+    waypointFootingOk,
+    CALL_OF_XENO_STEP_UP,
+    zombieTarget,
+    type CallOfXenoBox
 } from '../../shared/utils/gamelogic/call-of-xeno-map'
 import {
     buildNavGrid,
     findNavPath,
     navLineClear,
     navCellPassable,
-    navLevelOf
+    navLevelOf,
+    CALL_OF_XENO_RAMP_LEVEL_BAND
 } from '../../shared/utils/gamelogic/call-of-xeno-nav'
 import {
     CALL_OF_XENO_DIFFICULTIES,
@@ -130,12 +155,15 @@ function penetration(x: number, z: number, feetY = groundHeight(x, z, 0)) {
 }
 
 describe('call of xeno weapons', () => {
-    it('ships ten conventional weapons plus one wonder weapon', () => {
+    it('ships twelve conventional weapons plus one wonder weapon', () => {
         const ids = Object.keys(CALL_OF_XENO_WEAPONS) as CallOfXenoWeaponId[]
-        expect(ids).toHaveLength(11)
+        expect(ids).toHaveLength(13)
         const conventional = ids.filter(id => id !== 'xenoray')
         const best = Math.max(...conventional.map(id => CALL_OF_XENO_WEAPONS[id].damage))
-        expect(CALL_OF_XENO_WEAPONS.xenoray.damage).toBeGreaterThan(best * 3)
+        // Well clear of every conventional gun — the bazooka's raw shell
+        // comes closest, and the ray more than doubles it while also
+        // piercing a dozen bodies.
+        expect(CALL_OF_XENO_WEAPONS.xenoray.damage).toBeGreaterThan(best * 1.5)
     })
 
     it('gives every weapon a self-consistent stat block', () => {
@@ -195,6 +223,84 @@ describe('call of xeno weapons', () => {
         }
         // The wall guns stay in the pool too, so an early spin is never a dud.
         for (const id of CALL_OF_XENO_WALL_WEAPONS) expect(boxed.has(id)).toBe(true)
+    })
+
+    it('makes the Mosin the slow single-shot heavy rifle', () => {
+        const mosin = CALL_OF_XENO_WEAPONS.mosin
+        expect(mosin.automatic).toBe(false)
+        expect(mosin.pellets).toBe(1)
+        // One deliberate shot, not a spray: slower than every other rifle.
+        expect(mosin.fireDelay).toBeGreaterThan(CALL_OF_XENO_WEAPONS.bar.fireDelay * 3)
+        // And the hardest conventional hitscan hit in the game.
+        const conventional = (Object.keys(CALL_OF_XENO_WEAPONS) as CallOfXenoWeaponId[])
+            .filter(id => id !== 'xenoray' && id !== 'bazooka' && !CALL_OF_XENO_WEAPONS[id]!.projectile)
+            .map(id => CALL_OF_XENO_WEAPONS[id]!.damage)
+        expect(mosin.damage).toBe(Math.max(...conventional))
+        expect(mosin.penetration).toBeGreaterThanOrEqual(2)
+        // Long-range tool: no falloff worth mentioning until far out.
+        expect(xenoDamageFalloff(mosin, 40)).toBeGreaterThan(0.9)
+        // Box only.
+        expect(mosin.cost).toBe(0)
+        expect(CALL_OF_XENO_BOX_POOL.map(e => e.weapon)).toContain('mosin')
+    })
+
+    it('makes the Bazooka a one-shell explosive launcher', () => {
+        const bazooka = CALL_OF_XENO_WEAPONS.bazooka
+        expect(bazooka.explosive).toBe(true)
+        expect(bazooka.projectile).toBe(true)
+        expect(bazooka.magSize).toBe(1)
+        expect(bazooka.fireDelay).toBeGreaterThan(1)
+        // The widest blast any player weapon carries — wider than Sally's.
+        expect(bazooka.blastRadius!).toBeGreaterThan(CALL_OF_XENO_SALLY_BLAST_RADIUS)
+        expect(bazooka.blastRadius!).toBeGreaterThan(CALL_OF_XENO_RAY_BLAST_RADIUS)
+        // Box only, and rare: a horde wipe should stay an event.
+        expect(bazooka.cost).toBe(0)
+        const pool = CALL_OF_XENO_BOX_POOL
+        expect(pool.map(e => e.weapon)).toContain('bazooka')
+        expect(pool.find(e => e.weapon === 'bazooka')!.weight).toBeLessThanOrEqual(
+            pool.find(e => e.weapon === 'xenoray')!.weight + 1
+        )
+    })
+
+    it('climbs both new weapons up the generic Pack-a-Punch ladder', () => {
+        for (const id of ['mosin', 'bazooka'] as CallOfXenoWeaponId[]) {
+            let previous = CALL_OF_XENO_WEAPONS[id]
+            for (const tier of [1, 2, 3]) {
+                const upgraded = packAPunch(previous, tier)
+                expect(upgraded.damage, `${id} tier ${tier}`).toBeGreaterThan(previous.damage)
+                expect(upgraded.reserveAmmo, `${id} tier ${tier}`).toBeGreaterThan(previous.reserveAmmo)
+                previous = upgraded
+            }
+            // Explosive/projectile traits survive the machine untouched.
+            if (CALL_OF_XENO_WEAPONS[id].projectile) expect(previous.projectile).toBe(true)
+            if (CALL_OF_XENO_WEAPONS[id].explosive) expect(previous.explosive).toBe(true)
+        }
+    })
+
+    it('gives the Pack-a-Punched Bazooka cluster warheads', () => {
+        expect(CALL_OF_XENO_WEAPONS.bazooka.clusterCount).toBeUndefined()
+        for (const tier of [1, 2, 3]) {
+            const upgraded = packAPunch(CALL_OF_XENO_WEAPONS.bazooka, tier)
+            // Two extra bomblets a tier: 3, 5, 7 — each a real fraction of
+            // the shell's damage in its own blast.
+            expect(upgraded.clusterCount, `tier ${tier}`).toBe(1 + tier * 2)
+            expect(upgraded.clusterDamageFraction, `tier ${tier}`).toBe(0.35)
+            expect(upgraded.blastRadius!, `tier ${tier}`).toBeGreaterThan(
+                CALL_OF_XENO_WEAPONS.bazooka.blastRadius!
+            )
+        }
+    })
+
+    it('turns the Pack-a-Punched Mosin into a headhunter with no falloff', () => {
+        const base = CALL_OF_XENO_WEAPONS.mosin
+        expect(base.headshotMult).toBeUndefined()
+        for (const tier of [1, 2, 3]) {
+            const upgraded = packAPunch(base, tier)
+            expect(upgraded.headshotMult, `tier ${tier}`).toBe(2.5)
+            // Match ammunition: full damage to the end of the barrel's reach.
+            expect(upgraded.falloffStart, `tier ${tier}`).toBe(upgraded.range)
+            expect(xenoDamageFalloff(upgraded, upgraded.range)).toBe(1)
+        }
     })
 })
 
@@ -290,8 +396,64 @@ describe('pack-a-punch ladder', () => {
         expect(m('mp40')).toBeGreaterThan(m('ak74'))
         expect(m('ak74')).toBeGreaterThan(m('rpk'))
         expect(Math.min(m('m60'), m('fnmag'))).toBeLessThan(m('rpk'))
-        // Small penalties only: nothing drops below a 8% cut.
-        expect(m('m60')).toBeGreaterThan(0.9)
+        // Real weight now: the belt-feds trudge, but nothing drops below a 12% cut.
+        expect(m('m60')).toBeGreaterThan(0.85)
+    })
+
+    it('makes the heavies shoulder like heavies — sights, swaps and reloads all pay', () => {
+        const w = (id: CallOfXenoWeaponId) => CALL_OF_XENO_WEAPONS[id]
+        // ADS settle: the SMG snaps in, every belt-fed lags well behind the AR.
+        expect(w('skorpion').aimSpeed!).toBeGreaterThan(w('ak74').aimSpeed!)
+        expect(Math.max(w('m60').aimSpeed!, w('fnmag').aimSpeed!, w('rpk').aimSpeed!)).toBeLessThan(w('ak74').aimSpeed!)
+        // Swap and reload follow the same weight order.
+        expect(w('m60').swapTime!).toBeGreaterThan(w('skorpion').swapTime!)
+        expect(w('m60').swapTime!).toBeGreaterThan(w('ak74').swapTime!)
+        expect(w('m60').reloadTime).toBeGreaterThan(w('rpk').reloadTime)
+        expect(w('rpk').reloadTime).toBeGreaterThan(w('ak74').reloadTime)
+    })
+
+    it('keeps fully-aimed sights honest — no conventional gun is a laser', () => {
+        const w = (id: CallOfXenoWeaponId) => CALL_OF_XENO_WEAPONS[id]
+        for (const weapon of Object.values(CALL_OF_XENO_WEAPONS)) {
+            if (weapon.id === 'xenoray') continue
+            expect(weapon.adsSpread, weapon.id).toBeGreaterThan(0)
+        }
+        // Precision ladder: the AR out-aims the SMG, the hand cannon out-aims the pig.
+        expect(w('ak74').adsSpread!).toBeLessThan(w('skorpion').adsSpread!)
+        expect(w('magnum').adsSpread!).toBeLessThan(w('m60').adsSpread!)
+    })
+
+    it('kicks hard enough that a spray climbs — no laser sprays', () => {
+        const w = (id: CallOfXenoWeaponId) => CALL_OF_XENO_WEAPONS[id]
+        // Sustained-fire climb rate (kick per second of full auto) decides,
+        // against the game's proportional recoil recovery, whether a spray
+        // drifts up or stays flat. Every automatic must clear a real floor.
+        for (const weapon of Object.values(CALL_OF_XENO_WEAPONS)) {
+            if (!weapon.automatic) continue
+            expect(weapon.recoilKick! / weapon.fireDelay, weapon.id).toBeGreaterThan(0.09)
+        }
+        // Heavy calibres slam per shot; the SMG buzzes small but often.
+        expect(w('magnum').recoilKick!).toBeGreaterThan(w('m1911').recoilKick!)
+        expect(w('trench').recoilKick!).toBeGreaterThan(w('ak74').recoilKick!)
+        expect(w('ak74').recoilKick!).toBeGreaterThan(w('skorpion').recoilKick!)
+    })
+
+    it('softens damage with distance, hardest for the short-range guns', () => {
+        const w = (id: CallOfXenoWeaponId) => CALL_OF_XENO_WEAPONS[id]
+        // Point blank is always full damage.
+        for (const weapon of Object.values(CALL_OF_XENO_WEAPONS)) {
+            if (weapon.falloffStart === undefined) continue
+            expect(xenoDamageFalloff(weapon, weapon.falloffStart), weapon.id).toBe(1)
+        }
+        // Mid-range: the Skorpion has bled hard, the AK barely at all.
+        expect(xenoDamageFalloff(w('skorpion'), 30)).toBeLessThan(0.7)
+        expect(xenoDamageFalloff(w('ak74'), 50)).toBeGreaterThan(0.85)
+        expect(xenoDamageFalloff(w('ak74'), 50)).toBeLessThan(1)
+        // The floor holds at — and past — max range, and never dips under it.
+        expect(xenoDamageFalloff(w('skorpion'), w('skorpion').range)).toBeCloseTo(w('skorpion').falloffMin!, 6)
+        expect(xenoDamageFalloff(w('skorpion'), 999)).toBe(w('skorpion').falloffMin!)
+        // The wonder weapon carries no generic falloff — its beam has its own.
+        expect(xenoDamageFalloff(w('xenoray'), 999)).toBe(1)
     })
 
     it('softens the wonder weapon with distance and lets Pack-a-Punch push it back out', () => {
@@ -312,6 +474,47 @@ describe('pack-a-punch ladder', () => {
     })
 })
 
+describe('blast self-damage', () => {
+    it('hurts whoever is stood in the blast, and not whoever is clear of it', () => {
+        const radius = CALL_OF_XENO_BARREL_BLAST_RADIUS
+        // Right on top of it: the worst it can do, which is the cap.
+        expect(blastSelfDamage(0, 500, radius)).toBe(CALL_OF_XENO_BLAST_SELF_CAP)
+        // Inside the radius: a real bite.
+        expect(blastSelfDamage(radius / 2, 500, radius)).toBeGreaterThan(0)
+        // Clear of it: nothing at all.
+        expect(blastSelfDamage(radius + 0.4, 500, radius)).toBe(0)
+        expect(blastSelfDamage(radius + 10, 500, radius)).toBe(0)
+    })
+
+    it('falls off with distance and never exceeds the cap', () => {
+        const radius = CALL_OF_XENO_BARREL_BLAST_RADIUS
+        let previous = Infinity
+        for (let d = 0; d < radius + 0.4; d += 0.25) {
+            const hurt = blastSelfDamage(d, 500, radius)
+            expect(hurt).toBeLessThanOrEqual(CALL_OF_XENO_BLAST_SELF_CAP)
+            expect(hurt).toBeLessThanOrEqual(previous)
+            previous = hurt
+        }
+    })
+
+    it('caps a barrel so a point-blank drum is a hard lesson, not the run', () => {
+        // A barrel at round 1 carries enough to gib a zombie; against the
+        // player it has to leave them standing.
+        const pointBlank = blastSelfDamage(0, 380 + 25, CALL_OF_XENO_BARREL_BLAST_RADIUS)
+        expect(pointBlank).toBeGreaterThan(0)
+        expect(pointBlank).toBeLessThan(CALL_OF_XENO_BASE_HEALTH)
+        // And a deep-round barrel hits the player no harder than an early
+        // one — the cap is flat, so this never becomes an instant death.
+        expect(blastSelfDamage(0, 380 + 50 * 25, CALL_OF_XENO_BARREL_BLAST_RADIUS)).toBe(pointBlank)
+    })
+
+    it('reaches further from a barrel than from the wonder weapon bolt', () => {
+        // The drum is the biggest blast on the map; the ray bolt is a pop.
+        expect(CALL_OF_XENO_BARREL_BLAST_RADIUS).toBeGreaterThan(CALL_OF_XENO_SALLY_BLAST_RADIUS)
+        expect(CALL_OF_XENO_BARREL_BLAST_RADIUS).toBeGreaterThan(CALL_OF_XENO_RAY_BLAST_RADIUS)
+    })
+})
+
 describe('enemy roster', () => {
     it('unlocks four types in escalating order', () => {
         const ids = Object.keys(CALL_OF_XENO_ENEMIES) as CallOfXenoEnemyId[]
@@ -328,8 +531,7 @@ describe('enemy roster', () => {
         expect(drone.ranged!.projectileSpeed).toBeGreaterThan(0)
     })
 
-    it('pays more for the types that are harder to kill', () => {
-        expect(CALL_OF_XENO_ENEMIES.brute.reward).toBeGreaterThan(CALL_OF_XENO_ENEMIES.shambler.reward)
+    it('exposes a weak point on the tankiest type', () => {
         expect(CALL_OF_XENO_ENEMIES.brute.weakPoint).toBeGreaterThan(1)
     })
 
@@ -373,6 +575,34 @@ describe('special rounds and modifiers', () => {
         expect(seen.size).toBeGreaterThanOrEqual(3)
     })
 
+    it('takes the machines away for the round a blackout runs', () => {
+        // The regression: blackout was wired to the lighting and nothing
+        // else, so the perk machines and the Pack-a-Punch stood dark and
+        // still sold all round — the one event meant to take them away left
+        // them working.
+        expect(callOfXenoPowerLive(true, 'blackout')).toBe(false)
+        // Every other round the thrown switch is all that matters.
+        expect(callOfXenoPowerLive(true, 'none')).toBe(true)
+        expect(callOfXenoPowerLive(true, 'fog')).toBe(true)
+        expect(callOfXenoPowerLive(true, 'frenzy')).toBe(true)
+        // And before the switch is thrown nothing is live, blackout or not.
+        for (const modifier of Object.keys(CALL_OF_XENO_MODIFIERS) as CallOfXenoModifier[]) {
+            expect(callOfXenoPowerLive(false, modifier)).toBe(false)
+        }
+    })
+
+    it('cuts the machines on every round the blackout actually comes round to', () => {
+        // Whatever the schedule does, a blackout round is always a dark one.
+        let seen = 0
+        for (let round = 1; round <= 120; round++) {
+            const modifier = roundModifier(round)
+            if (modifier !== 'blackout') continue
+            seen++
+            expect(callOfXenoPowerLive(true, modifier)).toBe(false)
+        }
+        expect(seen).toBeGreaterThan(0)
+    })
+
     it('leaves most rounds unmodified so the modifier still reads as an event', () => {
         let modified = 0
         for (let r = 8; r < 38; r++) if (roundModifier(r) !== 'none') modified++
@@ -381,6 +611,27 @@ describe('special rounds and modifiers', () => {
 })
 
 describe('point economy', () => {
+    it('pays every hostile the same flat rate, whatever it is', () => {
+        // The whole contract: hit/kill/headshot/knife pay one rate each and
+        // nothing about the enemy that took the shot changes it — no per-type
+        // multiplier, no bonus for the tough ones.
+        expect(CALL_OF_XENO_HIT_POINTS).toBe(10)
+        expect(CALL_OF_XENO_KILL_POINTS).toBe(100)
+        expect(CALL_OF_XENO_HEADSHOT_POINTS).toBe(120)
+        expect(CALL_OF_XENO_KNIFE_KILL_POINTS).toBe(130)
+        // Every roster entry stays within the known gameplay fields — a new
+        // points-shaped field would be exactly how a per-type bounty sneaks
+        // back in.
+        const KNOWN = new Set([
+            'id', 'name', 'healthMultiplier', 'speedMultiplier', 'damageMultiplier',
+            'scale', 'color', 'minRound', 'weight', 'ranged', 'weakPoint', 'flies'
+        ])
+        for (const enemy of Object.values(CALL_OF_XENO_ENEMIES)) {
+            const extra = Object.keys(enemy).filter(key => !KNOWN.has(key))
+            expect(extra, enemy.id).toEqual([])
+        }
+    })
+
     it('only pays a multi-kill bonus from three up', () => {
         expect(multiKillBonus(1)).toBe(0)
         expect(multiKillBonus(2)).toBe(0)
@@ -445,6 +696,160 @@ describe('point economy', () => {
         expect(total).toBeGreaterThan(0)
         expect(CALL_OF_XENO_POWERUPS.maxammo.duration).toBe(0)
         expect(CALL_OF_XENO_POWERUPS.instakill.duration).toBeGreaterThan(0)
+        expect(Object.keys(CALL_OF_XENO_POWERUPS)).toHaveLength(6)
+    })
+
+    it('fields a Death Machine drop with real minigun stats', () => {
+        const drop = CALL_OF_XENO_POWERUPS.deathmachine
+        expect(drop.duration).toBeGreaterThanOrEqual(15)
+        const dm = CALL_OF_XENO_DEATH_MACHINE
+        // Faster than the fastest belt-fed and hitting harder per shot,
+        // paid for with the worst legs in the game.
+        expect(dm.fireDelay).toBeLessThan(CALL_OF_XENO_WEAPONS.rpk.fireDelay)
+        expect(dm.damage).toBeGreaterThan(CALL_OF_XENO_WEAPONS.m60.damage)
+        expect(dm.mobility).toBeLessThan(CALL_OF_XENO_WEAPONS.m60.mobility!)
+        // Short reach: it shreds the room, not the map.
+        expect(dm.range).toBeLessThan(CALL_OF_XENO_WEAPONS.ak74.range)
+    })
+
+    it('pays a flat bounty for the Carpenter rebuild', () => {
+        expect(CALL_OF_XENO_POWERUPS.carpenter.duration).toBe(0)
+        expect(CALL_OF_XENO_CARPENTER_POINTS).toBeGreaterThan(100)
+        expect(CALL_OF_XENO_CARPENTER_POINTS).toBeLessThan(CALL_OF_XENO_KILL_POINTS * 4)
+    })
+})
+
+describe('mystery box anchors', () => {
+    it('keeps two distinct anchors far apart on the ground floor', () => {
+        expect(CALL_OF_XENO_BOX_SPOTS).toHaveLength(2)
+        const [a, b] = CALL_OF_XENO_BOX_SPOTS
+        const apart = Math.hypot(a.x - b.x, a.z - b.z)
+        expect(apart).toBeGreaterThan(25)
+        for (const spot of CALL_OF_XENO_BOX_SPOTS) {
+            expect(regionAt(spot.x, spot.z, spot.y)).toBeGreaterThanOrEqual(0)
+            expect(penetration(spot.x + 1.6, spot.z, spot.y)).toBeLessThan(1e-9)
+        }
+    })
+
+    it('keeps both anchor footprints solid whether or not the box is there', () => {
+        const [a, b] = CALL_OF_XENO_BOX_SPOTS
+        const covers = (solid: { box: { minX: number, maxX: number, minZ: number, maxZ: number } }, x: number, z: number) =>
+            solid.box.minX <= x && solid.box.maxX >= x && solid.box.minZ <= z && solid.box.maxZ >= z
+        // The interactable-derived prop covers spot A; the explicit plinth
+        // solid covers spot B.
+        expect(CALL_OF_XENO_PROP_SOLIDS.some(solid => covers(solid, a.x, a.z))).toBe(true)
+        expect(CALL_OF_XENO_PROP_SOLIDS.some(solid => covers(solid, b.x, b.z))).toBe(true)
+    })
+
+    it('moves the box rarely: fifteen percent at each round boundary', () => {
+        expect(CALL_OF_XENO_BOX_SWAP_CHANCE).toBeGreaterThan(0.05)
+        expect(CALL_OF_XENO_BOX_SWAP_CHANCE).toBeLessThan(0.3)
+    })
+})
+
+describe('upper window', () => {
+    const upstairs = CALL_OF_XENO_WINDOWS.filter(w => w.baseY > 0)
+
+    it('gives the second floor exactly one way in', () => {
+        expect(upstairs).toHaveLength(1)
+        const window = upstairs[0]!
+        expect(window.id).toBe('win-overwatch-s1')
+        expect(window.region).toBe(7)
+        expect(window.baseY).toBe(CALL_OF_XENO_UPPER_Y)
+        // It lands inside Overwatch's bounds, on the deck.
+        const region = CALL_OF_XENO_REGIONS.find(r => r.id === window.region)!
+        expect(region.bounds.minX).toBeLessThanOrEqual(window.inside.x)
+        expect(region.bounds.maxX).toBeGreaterThanOrEqual(window.inside.x)
+        expect(region.bounds.minZ).toBeLessThanOrEqual(window.inside.z)
+        expect(region.bounds.maxZ).toBeGreaterThanOrEqual(window.inside.z)
+    })
+
+    it('cuts its opening band into the shell at deck height', () => {
+        const window = upstairs[0]!
+        const dz = window.outward
+        const eye = window.baseY + (CALL_OF_XENO_WINDOW_SILL + CALL_OF_XENO_WINDOW_HEAD) / 2
+        const through = rayBlockDistance(window.inside.x, eye, window.inside.z, 0, 0, dz, OPEN_SOLIDS, 12)
+        expect(through.distance).toBe(12)
+        // Below its own sill there is wall again.
+        const low = rayBlockDistance(window.inside.x, window.baseY + 0.4, window.inside.z, 0, 0, dz, OPEN_SOLIDS, 12)
+        expect(low.distance).toBeLessThan(4)
+    })
+
+    it('is reachable through normal navigation once the map is open', () => {
+        const window = upstairs[0]!
+        const table = buildNavTable(ALL_DOORS_OPEN)
+        const reached = reachableNodes(table, nearestNode(window.inside.x, window.inside.z, window.baseY))
+        expect(reached.has(window.node)).toBe(true)
+        // And from the spawn side too — the stairs are free.
+        const fromSpawn = reachableNodes(table, nearestNode(CALL_OF_XENO_PLAYER_START.x, CALL_OF_XENO_PLAYER_START.z, 0))
+        expect(fromSpawn.has(window.node)).toBe(true)
+    })
+})
+
+describe('map cover', () => {
+    const coverBoxes = [...CALL_OF_XENO_CRATES.map(c => c.box), ...CALL_OF_XENO_DECOR.map(d => d.box)]
+
+    /** Shortest distance from a point to a box footprint (0 when inside). */
+    function clearance(point: { x: number, z: number }, box: CallOfXenoBox): number {
+        const dx = Math.max(box.minX - point.x, 0, point.x - box.maxX)
+        const dz = Math.max(box.minZ - point.z, 0, point.z - box.maxZ)
+        return Math.hypot(dx, dz)
+    }
+
+    it('keeps every navigation node clear of cover', () => {
+        for (const node of CALL_OF_XENO_NODES) {
+            for (const box of coverBoxes) {
+                expect(clearance(node, box), `node ${node.x},${node.z}`).toBeGreaterThan(1)
+            }
+        }
+    })
+
+    it('never parks cover in a doorway or on a flight of stairs', () => {
+        for (const box of coverBoxes) {
+            for (const door of CALL_OF_XENO_DOORS) {
+                const overlap = box.minX < door.box.maxX && box.maxX > door.box.minX
+                    && box.minZ < door.box.maxZ && box.maxZ > door.box.minZ
+                expect(overlap, door.id).toBe(false)
+            }
+            for (const ramp of CALL_OF_XENO_RAMPS) {
+                const overlap = box.minX < ramp.box.maxX && box.maxX > ramp.box.minX
+                    && box.minZ < ramp.box.maxZ && box.maxZ > ramp.box.minZ
+                expect(overlap, 'ramp').toBe(false)
+            }
+        }
+    })
+
+    it('leaves the window openings and queue slots clear', () => {
+        for (const window of CALL_OF_XENO_WINDOWS) {
+            const points = [window.inside, window.outside, window.centre]
+            for (let rank = 1; rank <= 6; rank++) points.push(windowApproachSlot(window, rank))
+            for (const point of points) {
+                for (const box of coverBoxes) {
+                    // Clear of the 0.45 slot radius with margin; the long-
+                    // standing Barracks pillar grazes one landing point at
+                    // ~0.78 diagonally and has never blocked a body.
+                    expect(clearance(point, box), `${window.id} @ ${point.x},${point.z}`).toBeGreaterThan(0.72)
+                }
+            }
+        }
+    })
+
+    it('keeps the player start and every interactable reachable', () => {
+        for (const item of [...CALL_OF_XENO_INTERACTABLES, { x: CALL_OF_XENO_PLAYER_START.x, z: CALL_OF_XENO_PLAYER_START.z }]) {
+            for (const box of coverBoxes) {
+                expect(clearance(item, box), `${item.kind ?? 'start'} ${item.id ?? ''}`).toBeGreaterThan(0.8)
+            }
+        }
+    })
+
+    it('leaves every barrel spot clear enough to shoot at', () => {
+        for (const spot of CALL_OF_XENO_BARREL_SPOTS) {
+            for (const box of coverBoxes) {
+                // The barrel itself is 0.38 wide; anything overlapping its
+                // footprint would fuse the two props together.
+                expect(clearance(spot, box), `${spot.x},${spot.z}`).toBeGreaterThan(0.4)
+            }
+        }
     })
 })
 
@@ -483,12 +888,17 @@ describe('round scaling', () => {
 })
 
 describe('perks', () => {
-    it('offers four machines, all power gated, spread across the map', () => {
-        expect(Object.keys(CALL_OF_XENO_PERKS)).toHaveLength(4)
+    it('offers six machines, all power gated, spread across the map', () => {
+        expect(Object.keys(CALL_OF_XENO_PERKS)).toHaveLength(6)
         const machines = CALL_OF_XENO_INTERACTABLES.filter(i => i.kind === 'perk')
-        expect(machines).toHaveLength(4)
+        expect(machines).toHaveLength(6)
         expect(machines.every(m => m.needsPower)).toBe(true)
-        expect(new Set(machines.map(m => m.region)).size).toBe(4)
+        expect(new Set(machines.map(m => m.region)).size).toBe(6)
+    })
+
+    it('prices every perk through the same ladder, new ones included', () => {
+        expect(perkPrice('deadshot', 0, 0)).toBe(2500)
+        expect(perkPrice('phdflopper', 2, 1)).toBe(3500)
     })
 
     it('prices perks at a flat base plus a step per perk already carried', () => {
@@ -502,10 +912,10 @@ describe('perks', () => {
         expect(perkPrice('quickrevive', 0, 2)).toBe(2500)
     })
 
-    it('puts a perk up on the second floor and one out in the Lab', () => {
+    it('puts two perks up on the second floor and one out in the Lab', () => {
         const elevated = CALL_OF_XENO_INTERACTABLES.filter(i => i.kind === 'perk' && i.y >= CALL_OF_XENO_UPPER_Y)
-        expect(elevated).toHaveLength(1)
-        expect(elevated[0]!.perk).toBe('juggernog')
+        expect(elevated).toHaveLength(2)
+        expect(new Set(elevated.map(i => i.perk))).toEqual(new Set(['juggernog', 'deadshot']))
         const lab = CALL_OF_XENO_INTERACTABLES.filter(i => i.kind === 'perk' && i.region === 5)
         expect(lab).toHaveLength(1)
     })
@@ -627,8 +1037,11 @@ describe('windows', () => {
 
     it('lands enemies on clear floor inside the room the window belongs to', () => {
         for (const window of CALL_OF_XENO_WINDOWS) {
-            expect(regionAt(window.inside.x, window.inside.z, 0), window.id).toBe(window.region)
-            expect(penetration(window.inside.x, window.inside.z), window.id).toBeLessThan(1e-9)
+            // Upper-floor windows are judged at their own storey.
+            expect(regionAt(window.inside.x, window.inside.z, window.baseY), window.id).toBe(window.region)
+            const feet = groundHeight(window.inside.x, window.inside.z, window.baseY)
+            expect(Math.abs(feet - window.baseY), window.id).toBeLessThan(1e-9)
+            expect(penetration(window.inside.x, window.inside.z, feet), window.id).toBeLessThan(1e-9)
             // And the queue outside has to be standing on the dirt, not inside
             // the shell it is about to break into.
             expect(regionAt(window.outside.x, window.outside.z, 0), window.id).toBe(-1)
@@ -638,7 +1051,9 @@ describe('windows', () => {
 
     it('names the navigation node an enemy actually arrives next to', () => {
         for (const window of CALL_OF_XENO_WINDOWS) {
-            const nearest = nearestNode(window.inside.x, window.inside.z, 0)
+            // Height is weighted hard in nearestNode, so an upstairs window
+            // is matched against nodes at its own storey.
+            const nearest = nearestNode(window.inside.x, window.inside.z, window.baseY)
             expect(nearest, window.id).toBe(window.node)
         }
     })
@@ -680,6 +1095,92 @@ describe('windows', () => {
         expect(CALL_OF_XENO_WINDOW_BOARDS).toBeGreaterThanOrEqual(4)
         expect(CALL_OF_XENO_WINDOW_SILL).toBeLessThan(CALL_OF_XENO_WINDOW_HEAD)
         expect(CALL_OF_XENO_WINDOW_HEAD).toBeLessThan(CALL_OF_XENO_WALL_HEIGHT)
+    })
+
+    it('plugs every opening with a player-only barrier that blocks a jump through', () => {
+        // One pane per window, spanning the full wall height: an
+        // opening-sized pane drops out of the collision band the moment a
+        // jump from nearby cover lifts the feet past its top, and the player
+        // sails through the gap — the map-leak this replaced.
+        expect(CALL_OF_XENO_WINDOW_BARRIERS).toHaveLength(CALL_OF_XENO_WINDOWS.length)
+        for (const barrier of CALL_OF_XENO_WINDOW_BARRIERS) {
+            expect(barrier.baseY).toBe(0)
+            expect(barrier.height).toBe(CALL_OF_XENO_ATRIUM_HEIGHT)
+            // The pane is invisible and player-only by construction; assert
+            // it never leaks into the shared set bullets and enemies use.
+            expect(OPEN_SOLIDS.includes(barrier)).toBe(false)
+        }
+        // The pane the game feeds the player stays in the band at every
+        // altitude the building allows — including mid-jump feet (~1.27 max
+        // hop) and crate-launched feet (~2.5), which is exactly how the old
+        // pane was cleared.
+        const panesAt = (feetY: number) => solidsInBand(CALL_OF_XENO_WINDOW_BARRIERS, feetY, ACTOR_HEIGHT)
+        for (const feetY of [0, 0.6, 1.27, 2.05, 2.5]) {
+            expect(panesAt(feetY).length, `feetY ${feetY}`).toBe(CALL_OF_XENO_WINDOWS.length)
+        }
+        expect(panesAt(CALL_OF_XENO_UPPER_Y).length).toBe(CALL_OF_XENO_WINDOWS.length)
+        // And it actually stops the body at crate-jump height: dropped into
+        // the middle of the opening band while airborne, shoved back out.
+        const window = CALL_OF_XENO_WINDOWS.find(w => w.id === 'win-barracks-s1')!
+        for (const feetY of [0, 1.2, 2.5]) {
+            const barrier = solidsInBand(CALL_OF_XENO_WINDOW_BARRIERS, feetY, ACTOR_HEIGHT).find(b =>
+                b.minX <= window.centre.x && b.maxX >= window.centre.x
+                && b.minZ <= window.centre.z && b.maxZ >= window.centre.z)!
+            const solved = resolveCircle(window.centre.x, window.centre.z, PLAYER_RADIUS, [barrier])
+            expect(Math.hypot(solved.x - window.centre.x, solved.z - window.centre.z), `feetY ${feetY}`).toBeGreaterThan(PLAYER_RADIUS / 2)
+        }
+    })
+
+    it('gives every body queued at a window its own place to stand', () => {
+        // The regression this guards: one shared approach point meant a
+        // second arrival landed on top of the first, the separation pass
+        // shoved both off it, and the barricade never got torn open.
+        for (const window of CALL_OF_XENO_WINDOWS) {
+            const slots = Array.from({ length: 8 }, (_, rank) => windowApproachSlot(window, rank))
+            // Rank 0 is the breach post itself — unchanged from before.
+            expect(slots[0]).toEqual({ x: window.outside.x, z: window.outside.z })
+            for (let i = 0; i < slots.length; i++) {
+                for (let j = i + 1; j < slots.length; j++) {
+                    const gap = Math.hypot(slots[i]!.x - slots[j]!.x, slots[i]!.z - slots[j]!.z)
+                    // Wider than the 1.35 the sim ever pushes two bodies
+                    // apart by, so separation never fights the approach.
+                    expect(gap).toBeGreaterThan(0.9 * 1.5)
+                    // And wider than two arrival discs, so holding one slot
+                    // cannot put you inside another.
+                    expect(gap).toBeGreaterThan(CALL_OF_XENO_WINDOW_SLOT_RADIUS * 2)
+                }
+            }
+        }
+    })
+
+    it('queues the waiting bodies away from the wall, never through it', () => {
+        for (const window of CALL_OF_XENO_WINDOWS) {
+            for (let rank = 1; rank < 8; rank++) {
+                const slot = windowApproachSlot(window, rank)
+                // Distance from the wall plane, measured outward.
+                const depth = window.axis === 'x'
+                    ? (slot.z - window.at) * window.outward
+                    : (slot.x - window.at) * window.outward
+                const frontDepth = window.axis === 'x'
+                    ? (window.outside.z - window.at) * window.outward
+                    : (window.outside.x - window.at) * window.outward
+                expect(depth).toBeGreaterThan(frontDepth)
+            }
+        }
+    })
+
+    it('fans the queue two abreast so it does not stretch into one long line', () => {
+        const window = CALL_OF_XENO_WINDOWS.find(w => w.id === 'win-barracks-s1')!
+        const lateral = (rank: number) => windowApproachSlot(window, rank).x - window.outside.x
+        // Ranks 1 and 2 share a row, on opposite sides of the breach post.
+        expect(lateral(1)).toBeCloseTo(-CALL_OF_XENO_WINDOW_SLOT_SPACING)
+        expect(lateral(2)).toBeCloseTo(CALL_OF_XENO_WINDOW_SLOT_SPACING)
+        // Rank 3 starts the next row back rather than widening this one.
+        expect(lateral(3)).toBeCloseTo(-CALL_OF_XENO_WINDOW_SLOT_SPACING)
+        const depthOf = (rank: number) =>
+            (windowApproachSlot(window, rank).z - window.at) * window.outward
+        expect(depthOf(3)).toBeGreaterThan(depthOf(1))
+        expect(depthOf(1)).toBeCloseTo(depthOf(2))
     })
 
     it('only offers the windows of rooms the player can be reached from', () => {
@@ -1007,6 +1508,134 @@ describe('nav grid', () => {
         expect(Math.hypot(last.x - 19, last.z - 8)).toBeLessThan(1.5)
     })
 
+    it('reports the true stair surface, not the one a body could step onto', () => {
+        const ramp = CALL_OF_XENO_RAMPS[0]!
+        expect(rampSurfaceAt(0, 0)).toBeNull()
+        // Low end sits on the floor, high end meets the deck.
+        expect(rampSurfaceAt(32, ramp.lowAt - 0.1)!).toBeLessThan(0.1)
+        expect(CALL_OF_XENO_UPPER_Y - rampSurfaceAt(32, ramp.highAt + 0.1)!).toBeLessThan(0.1)
+        // Unlike groundHeight it reports the slope overhead regardless of
+        // whether a body on the floor could reach it.
+        expect(rampSurfaceAt(32, 24)!).toBeGreaterThan(CALL_OF_XENO_STEP_UP)
+        expect(groundHeight(32, 24, 0)).toBe(0)
+    })
+
+    it('walks round to the foot of the stairs instead of climbing where it stands', () => {
+        // The regression: every ramp cell used to stand in for both storeys,
+        // so a route changed floor directly under the top of the flight — a
+        // 4.5m step the body can never make. The pack pressed into the spot
+        // below the landing and stalled there for the rest of the round.
+        const starts: [string, number, number][] = [
+            ['under the catwalk', 18, 20],
+            ['mid atrium', 18, 26],
+            ['beside the east flight', 30, 27],
+            ['under the east flight', 32.3, 23.5],
+            ['under the west flight', 3, 23.5]
+        ]
+        for (const [name, sx, sz] of starts) {
+            const path = findNavPath(OPEN_GRID, sx, sz, 0, 18, 19, CALL_OF_XENO_UPPER_Y, SHAMBLER)
+            expect(path, `${name}: no route upstairs`).not.toBeNull()
+            for (let i = 1; i < path!.length; i++) {
+                const from = path![i - 1]!
+                const to = path![i]!
+                if (from.level === to.level) continue
+                // Every storey change happens partway up a flight, where the
+                // stairs really do cross between the two floors.
+                const surface = rampSurfaceAt(from.x, from.z)
+                expect(surface, `${name}: changed storey off a flight`).not.toBeNull()
+                expect(
+                    Math.abs(surface! - CALL_OF_XENO_UPPER_Y / 2),
+                    `${name}: changed storey ${surface!.toFixed(2)}m up, not at the crossover`
+                ).toBeLessThanOrEqual(CALL_OF_XENO_RAMP_LEVEL_BAND)
+            }
+        }
+    })
+
+    it('never steps onto the side of a flight, only its ends', () => {
+        // The flights carry no side walls, so nothing but this rule stops a
+        // body walking up beside the stairs and stepping onto the middle of
+        // them, metres above the floor it is standing on.
+        const ramp = CALL_OF_XENO_RAMPS[0]!
+        const midZ = (ramp.box.minZ + ramp.box.maxZ) / 2
+        const midX = (ramp.box.minX + ramp.box.maxX) / 2
+        const beside = ramp.box.minX - 1
+
+        // Straight onto the middle of the flight from alongside it: the
+        // surface there is well over a step up, so the line is refused.
+        expect(rampSurfaceAt(midX, midZ)!).toBeGreaterThan(CALL_OF_XENO_STEP_UP)
+        expect(navLineClear(OPEN_GRID, 0, beside, midZ, midX, midZ, SHAMBLER)).toBe(false)
+
+        // Onto the foot of the same flight, where it meets the floor: fine.
+        const footZ = ramp.lowAt - 0.5
+        expect(rampSurfaceAt(midX, footZ)!).toBeLessThanOrEqual(CALL_OF_XENO_STEP_UP)
+        expect(navLineClear(OPEN_GRID, 0, beside, footZ, midX, footZ, SHAMBLER)).toBe(true)
+
+        // And walking up the flight itself never leaves it, so it is allowed.
+        expect(navLineClear(OPEN_GRID, 0, midX, footZ, midX, midZ, SHAMBLER)).toBe(true)
+
+        // The same from above: the deck may only join the flight at its head.
+        expect(navLineClear(OPEN_GRID, 1, midX, ramp.highAt - 1, midX, midZ, SHAMBLER)).toBe(true)
+    })
+
+    it('knows a body climbing a flight from one stood under it', () => {
+        const ramp = CALL_OF_XENO_RAMPS[0]!
+        const midZ = (ramp.box.minZ + ramp.box.maxZ) / 2
+        const midX = (ramp.box.minX + ramp.box.maxX) / 2
+        const surface = rampSurfaceAt(midX, midZ)!
+
+        // On the steps: recognised, so the sim can keep it there.
+        expect(rampUnderBody(midX, midZ, surface)).not.toBeNull()
+        // Same footprint, but down on the floor underneath: not on the stairs.
+        expect(rampUnderBody(midX, midZ, 0)).toBeNull()
+        // Shoved just off the edge mid-climb: still counts, and that is the
+        // whole point — otherwise it drops to the floor and walks round again.
+        expect(rampUnderBody(ramp.box.minX - 0.3, midZ, surface)).not.toBeNull()
+        // Well clear of the flight: nothing to hold it to.
+        expect(rampUnderBody(ramp.box.minX - 3, midZ, surface)).toBeNull()
+        // Nowhere near a flight at all.
+        expect(rampUnderBody(18, 26, 0)).toBeNull()
+    })
+
+    it('leaves the ends of a flight open so bodies can get on and off', () => {
+        const ramp = CALL_OF_XENO_RAMPS[0]!
+        const midX = (ramp.box.minX + ramp.box.maxX) / 2
+        // Past the foot and past the head the body is on flat floor, and must
+        // not be held to the flight or it could never step off it.
+        expect(rampUnderBody(midX, ramp.box.maxZ + 0.5, 0)).toBeNull()
+        expect(rampUnderBody(midX, ramp.box.minZ - 0.5, CALL_OF_XENO_UPPER_Y)).toBeNull()
+    })
+
+    it('only ticks off a step of the stairs once it is standing on them', () => {
+        // The regression: waypoints retire at arm's length, but a body
+        // walking to the foot of a flight is still out on the floor at that
+        // range — inside the footprint, where the steps are already too high
+        // to mount. It used to tick the waypoint off anyway and turn for the
+        // next one up the flight, walk into the dead ground under the stairs,
+        // get sent back to the foot by the next replan, and shuttle between
+        // the two forever without ever getting on the stairs.
+        const ramp = CALL_OF_XENO_RAMPS[0]!
+        const midX = (ramp.box.minX + ramp.box.maxX) / 2
+
+        // Where a body can still mount: the surface is within a step.
+        const mouthZ = ramp.lowAt - 0.6
+        expect(rampSurfaceAt(midX, mouthZ)!).toBeLessThanOrEqual(CALL_OF_XENO_STEP_UP)
+
+        // Half a metre short of it, on the floor, the steps are already out of
+        // reach — so that waypoint is not reached yet however close it looks.
+        const shortZ = mouthZ - 0.7
+        expect(rampSurfaceAt(midX, shortZ)!).toBeGreaterThan(CALL_OF_XENO_STEP_UP)
+        expect(waypointFootingOk(midX, shortZ, 0, midX, mouthZ)).toBe(false)
+
+        // Once up on the steps it counts, and the body moves on up.
+        const onStep = rampSurfaceAt(midX, mouthZ)!
+        expect(waypointFootingOk(midX, mouthZ, onStep, midX, mouthZ)).toBe(true)
+
+        // Waypoints that are not on a flight are unaffected — arriving is
+        // arriving everywhere else on the map.
+        expect(waypointFootingOk(18, 26, 0, 18, 26)).toBe(true)
+        expect(waypointFootingOk(midX, shortZ, 0, 18, 26)).toBe(true)
+    })
+
     it('changes storey only on a ramp', () => {
         const path = findNavPath(OPEN_GRID, 18, 26, 0, 9, 9, CALL_OF_XENO_UPPER_Y, SHAMBLER)
         expect(path).not.toBeNull()
@@ -1064,7 +1693,8 @@ describe('meta progression', () => {
         adrenaline: 10,
         scavenger: 5,
         contract: 9,
-        sidearm: 4
+        sidearm: 4,
+        rig: 2
     }
 
     it('prices the full upgrade ladder inside the 500-800M budget', () => {
@@ -1088,6 +1718,8 @@ describe('meta progression', () => {
         expect(base.maxHealth).toBe(CALL_OF_XENO_BASE_HEALTH)
         expect(base.payoutMult).toBe(1)
         expect(base.startWeapon).toBeNull()
+        // Bare accounts carry exactly one piece of equipment.
+        expect(base.equipmentSlots).toBe(1)
 
         const maxed = callOfXenoUpgradeEffects(maxedLevels)
         expect(maxed.startingPoints).toBe(CALL_OF_XENO_STARTING_POINTS + 10 * 1000)
@@ -1100,6 +1732,16 @@ describe('meta progression', () => {
         expect(maxed.costMult).toBeCloseTo(0.75, 6)
         expect(callOfXenoUpgradeEffects({ ...maxedLevels, scavenger: 20 }).costMult).toBeCloseTo(0.75, 6)
         expect(maxed.startWeapon).toBe('ak74')
+        expect(maxed.equipmentSlots).toBe(3)
+    })
+
+    it('prices the tool rig at 1M for two slots and 3M for three', () => {
+        const rig = CALL_OF_XENO_UPGRADES.find(def => def.id === 'rig')!
+        expect(rig.max).toBe(2)
+        expect(callOfXenoUpgradeCost(rig, 0)).toBe(1_000_000)
+        expect(callOfXenoUpgradeCost(rig, 1)).toBe(3_000_000)
+        expect(callOfXenoUpgradeCost(rig, 2)).toBeNull()
+        expect(callOfXenoUpgradeEffects({ ...CALL_OF_XENO_EMPTY_LEVELS, rig: 1 }).equipmentSlots).toBe(2)
     })
 
     it('gates the sidearm ladder level by level', () => {

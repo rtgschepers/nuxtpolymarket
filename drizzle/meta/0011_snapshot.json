@@ -1,6 +1,6 @@
 {
-  "id": "22ab961a-d031-432c-9ca0-cbaa763e4448",
-  "prevId": "4b83703f-bf54-47d2-a20d-3d05087bc881",
+  "id": "cf9173a4-f37c-42f4-98d7-11dbc62aa771",
+  "prevId": "5c0d04b2-8d4e-46a3-b833-c3a390eb571f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -607,6 +607,13 @@
         },
         "sidearm_level": {
           "name": "sidearm_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "rig_level": {
+          "name": "rig_level",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -2638,704 +2645,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.hq_collection": {
-      "name": "hq_collection",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "system": {
-          "name": "system",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content_id": {
-          "name": "content_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "star": {
-          "name": "star",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "level": {
-          "name": "level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "dupe_progress": {
-          "name": "dupe_progress",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "acquired_at": {
-          "name": "acquired_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "hq_collection_userId_system_idx": {
-          "name": "hq_collection_userId_system_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "system",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hq_collection_user_id_user_id_fk": {
-          "name": "hq_collection_user_id_user_id_fk",
-          "tableFrom": "hq_collection",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hq_collection_unique": {
-          "name": "hq_collection_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "system",
-            "content_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.hq_fights": {
-      "name": "hq_fights",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "seed": {
-          "name": "seed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "context": {
-          "name": "context",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "resolved_at": {
-          "name": "resolved_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "hq_fights_userId_idx": {
-          "name": "hq_fights_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hq_fights_user_id_user_id_fk": {
-          "name": "hq_fights_user_id_user_id_fk",
-          "tableFrom": "hq_fights",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.hq_loadouts": {
-      "name": "hq_loadouts",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slot_index": {
-          "name": "slot_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'Loadout'"
-        },
-        "party_champion_ids": {
-          "name": "party_champion_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "formation": {
-          "name": "formation",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "equipped_skill_ids": {
-          "name": "equipped_skill_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "equipped_artifact_ids": {
-          "name": "equipped_artifact_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "equipped_gear": {
-          "name": "equipped_gear",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "hq_loadouts_userId_idx": {
-          "name": "hq_loadouts_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hq_loadouts_user_id_user_id_fk": {
-          "name": "hq_loadouts_user_id_user_id_fk",
-          "tableFrom": "hq_loadouts",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hq_loadouts_unique": {
-          "name": "hq_loadouts_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "slot_index"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.hq_shop_upgrades": {
-      "name": "hq_shop_upgrades",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "upgrade_id": {
-          "name": "upgrade_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "level": {
-          "name": "level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "hq_shop_upgrades_userId_idx": {
-          "name": "hq_shop_upgrades_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hq_shop_upgrades_user_id_user_id_fk": {
-          "name": "hq_shop_upgrades_user_id_user_id_fk",
-          "tableFrom": "hq_shop_upgrades",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hq_shop_upgrades_unique": {
-          "name": "hq_shop_upgrades_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "upgrade_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.hq_state": {
-      "name": "hq_state",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_settled_at": {
-          "name": "last_settled_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "prestige": {
-          "name": "prestige",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "world": {
-          "name": "world",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "stage": {
-          "name": "stage",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "kill_count": {
-          "name": "kill_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "kill_fraction": {
-          "name": "kill_fraction",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "at_boss_gate": {
-          "name": "at_boss_gate",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "run_cleared": {
-          "name": "run_cleared",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "hero_node_id": {
-          "name": "hero_node_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'class_beginner'"
-        },
-        "hero_level": {
-          "name": "hero_level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "hero_xp": {
-          "name": "hero_xp",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'0'"
-        },
-        "seen_node_ids": {
-          "name": "seen_node_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[\"class_beginner\"]'::jsonb"
-        },
-        "void_shards": {
-          "name": "void_shards",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'0'"
-        },
-        "formation": {
-          "name": "formation",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "party_champion_ids": {
-          "name": "party_champion_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "equipped_skill_ids": {
-          "name": "equipped_skill_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "equipped_artifact_ids": {
-          "name": "equipped_artifact_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "equipped_gear": {
-          "name": "equipped_gear",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "forge_seals": {
-          "name": "forge_seals",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "guild_seals": {
-          "name": "guild_seals",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "skill_seals": {
-          "name": "skill_seals",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "excavation_seals": {
-          "name": "excavation_seals",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "gear_essence": {
-          "name": "gear_essence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "champion_essence": {
-          "name": "champion_essence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "skill_essence": {
-          "name": "skill_essence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "artifact_essence": {
-          "name": "artifact_essence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "gacha_levels": {
-          "name": "gacha_levels",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "gacha_progress": {
-          "name": "gacha_progress",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "seal_ladder_purchased_today": {
-          "name": "seal_ladder_purchased_today",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "seal_ladder_date": {
-          "name": "seal_ladder_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "free_pulls_used_today": {
-          "name": "free_pulls_used_today",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "free_pull_date": {
-          "name": "free_pull_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "free_pull_claimed_at": {
-          "name": "free_pull_claimed_at",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "last_seal_grant_at": {
-          "name": "last_seal_grant_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "hq_state_userId_idx": {
-          "name": "hq_state_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hq_state_user_id_user_id_fk": {
-          "name": "hq_state_user_id_user_id_fk",
-          "tableFrom": "hq_state",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hq_state_user_id_unique": {
-          "name": "hq_state_user_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.live_blackjack_wagers": {
       "name": "live_blackjack_wagers",
       "schema": "",
@@ -3425,6 +2734,301 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.meadowbrawl_runs": {
+      "name": "meadowbrawl_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weapon": {
+          "name": "weapon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pet": {
+          "name": "pet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waves_cleared": {
+          "name": "waves_cleared",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "won": {
+          "name": "won",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "coins": {
+          "name": "coins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "awarded": {
+          "name": "awarded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "capped": {
+          "name": "capped",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "kills": {
+          "name": "kills",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "meadowbrawl_runs_userId_createdAt_idx": {
+          "name": "meadowbrawl_runs_userId_createdAt_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "meadowbrawl_runs_user_id_user_id_fk": {
+          "name": "meadowbrawl_runs_user_id_user_id_fk",
+          "tableFrom": "meadowbrawl_runs",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.meadowbrawl_state": {
+      "name": "meadowbrawl_state",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prosperity_level": {
+          "name": "prosperity_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "pet_levels": {
+          "name": "pet_levels",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "active_pet": {
+          "name": "active_pet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unlocked_weapons": {
+          "name": "unlocked_weapons",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "best_wave_by_weapon": {
+          "name": "best_wave_by_weapon",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "runs_played": {
+          "name": "runs_played",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "victories": {
+          "name": "victories",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_earned": {
+          "name": "total_earned",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "best_earned": {
+          "name": "best_earned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "best_wave": {
+          "name": "best_wave",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "run_started_at": {
+          "name": "run_started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_weapon": {
+          "name": "run_weapon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_pet": {
+          "name": "run_pet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_pet_level": {
+          "name": "run_pet_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "run_coin_mult": {
+          "name": "run_coin_mult",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_save": {
+          "name": "run_save",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_save_revision": {
+          "name": "run_save_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_run_finished_at": {
+          "name": "last_run_finished_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meadowbrawl_state_user_id_user_id_fk": {
+          "name": "meadowbrawl_state_user_id_user_id_fk",
+          "tableFrom": "meadowbrawl_state",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meadowbrawl_state_user_id_unique": {
+          "name": "meadowbrawl_state_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -4827,6 +4431,3180 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.tcg_allowances": {
+      "name": "tcg_allowances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_key": {
+          "name": "date_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "packs_bought": {
+          "name": "packs_bought",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tcg_allowances_user_id_user_id_fk": {
+          "name": "tcg_allowances_user_id_user_id_fk",
+          "tableFrom": "tcg_allowances",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_allowances_user_date_unique": {
+          "name": "tcg_allowances_user_date_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "date_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_auctions": {
+      "name": "tcg_auctions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seller_id": {
+          "name": "seller_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pack_id": {
+          "name": "pack_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_price": {
+          "name": "start_price",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_bid": {
+          "name": "current_bid",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_bidder_id": {
+          "name": "current_bidder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_auctions_state_endsAt_idx": {
+          "name": "tcg_auctions_state_endsAt_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ends_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_auctions_sellerId_idx": {
+          "name": "tcg_auctions_sellerId_idx",
+          "columns": [
+            {
+              "expression": "seller_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_auctions_copyId_idx": {
+          "name": "tcg_auctions_copyId_idx",
+          "columns": [
+            {
+              "expression": "copy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_auctions_packId_idx": {
+          "name": "tcg_auctions_packId_idx",
+          "columns": [
+            {
+              "expression": "pack_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_auctions_seller_id_user_id_fk": {
+          "name": "tcg_auctions_seller_id_user_id_fk",
+          "tableFrom": "tcg_auctions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "seller_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_auctions_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_auctions_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_auctions",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_auctions_pack_id_tcg_packs_id_fk": {
+          "name": "tcg_auctions_pack_id_tcg_packs_id_fk",
+          "tableFrom": "tcg_auctions",
+          "tableTo": "tcg_packs",
+          "columnsFrom": [
+            "pack_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_auctions_current_bidder_id_user_id_fk": {
+          "name": "tcg_auctions_current_bidder_id_user_id_fk",
+          "tableFrom": "tcg_auctions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "current_bidder_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_auction_bids": {
+      "name": "tcg_auction_bids",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "auction_id": {
+          "name": "auction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bidder_id": {
+          "name": "bidder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_auction_bids_auctionId_idx": {
+          "name": "tcg_auction_bids_auctionId_idx",
+          "columns": [
+            {
+              "expression": "auction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_auction_bids_auction_id_tcg_auctions_id_fk": {
+          "name": "tcg_auction_bids_auction_id_tcg_auctions_id_fk",
+          "tableFrom": "tcg_auction_bids",
+          "tableTo": "tcg_auctions",
+          "columnsFrom": [
+            "auction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_auction_bids_bidder_id_user_id_fk": {
+          "name": "tcg_auction_bids_bidder_id_user_id_fk",
+          "tableFrom": "tcg_auction_bids",
+          "tableTo": "user",
+          "columnsFrom": [
+            "bidder_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_battler_decks": {
+      "name": "tcg_battler_decks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cards": {
+          "name": "cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_battler_decks_userId_idx": {
+          "name": "tcg_battler_decks_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_battler_decks_user_id_user_id_fk": {
+          "name": "tcg_battler_decks_user_id_user_id_fk",
+          "tableFrom": "tcg_battler_decks",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_battler_escrow": {
+      "name": "tcg_battler_escrow",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tcg_battler_escrow_runId_idx": {
+          "name": "tcg_battler_escrow_runId_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_battler_escrow_run_id_tcg_battler_runs_id_fk": {
+          "name": "tcg_battler_escrow_run_id_tcg_battler_runs_id_fk",
+          "tableFrom": "tcg_battler_escrow",
+          "tableTo": "tcg_battler_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_battler_escrow_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_battler_escrow_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_battler_escrow",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_battler_escrow_copy_id_unique": {
+          "name": "tcg_battler_escrow_copy_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "copy_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_battler_ratings": {
+      "name": "tcg_battler_ratings",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "fights": {
+          "name": "fights",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tcg_battler_ratings_user_id_user_id_fk": {
+          "name": "tcg_battler_ratings_user_id_user_id_fk",
+          "tableFrom": "tcg_battler_ratings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_battler_runs": {
+      "name": "tcg_battler_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "secret": {
+          "name": "secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "wins": {
+          "name": "wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "losses": {
+          "name": "losses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cash": {
+          "name": "cash",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "run_state": {
+          "name": "run_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deck_id": {
+          "name": "deck_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deck_name": {
+          "name": "deck_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_battler_runs_userId_idx": {
+          "name": "tcg_battler_runs_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_battler_runs_active_unique": {
+          "name": "tcg_battler_runs_active_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "state = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_battler_runs_user_id_user_id_fk": {
+          "name": "tcg_battler_runs_user_id_user_id_fk",
+          "tableFrom": "tcg_battler_runs",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_battler_runs_deck_id_tcg_battler_decks_id_fk": {
+          "name": "tcg_battler_runs_deck_id_tcg_battler_decks_id_fk",
+          "tableFrom": "tcg_battler_runs",
+          "tableTo": "tcg_battler_decks",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_battler_snapshots": {
+      "name": "tcg_battler_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "board": {
+          "name": "board",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_battler_snapshots_round_idx": {
+          "name": "tcg_battler_snapshots_round_idx",
+          "columns": [
+            {
+              "expression": "round",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_battler_snapshots_user_id_user_id_fk": {
+          "name": "tcg_battler_snapshots_user_id_user_id_fk",
+          "tableFrom": "tcg_battler_snapshots",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_battler_snapshots_run_id_tcg_battler_runs_id_fk": {
+          "name": "tcg_battler_snapshots_run_id_tcg_battler_runs_id_fk",
+          "tableFrom": "tcg_battler_snapshots",
+          "tableTo": "tcg_battler_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_bundles": {
+      "name": "tcg_bundles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "week_key": {
+          "name": "week_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tcg_bundles_set_id_tcg_sets_id_fk": {
+          "name": "tcg_bundles_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_bundles",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_bundles_owner_id_user_id_fk": {
+          "name": "tcg_bundles_owner_id_user_id_fk",
+          "tableFrom": "tcg_bundles",
+          "tableTo": "user",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_bundles_owner_week_unique": {
+          "name": "tcg_bundles_owner_week_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_id",
+            "week_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_buy_orders": {
+      "name": "tcg_buy_orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "printing_id": {
+          "name": "printing_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grade_service": {
+          "name": "grade_service",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grade": {
+          "name": "grade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grade_designation": {
+          "name": "grade_designation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filled": {
+          "name": "filled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_buy_orders_book_idx": {
+          "name": "tcg_buy_orders_book_idx",
+          "columns": [
+            {
+              "expression": "printing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "grade_service",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "grade",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_buy_orders_userId_idx": {
+          "name": "tcg_buy_orders_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_buy_orders_user_id_user_id_fk": {
+          "name": "tcg_buy_orders_user_id_user_id_fk",
+          "tableFrom": "tcg_buy_orders",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_buy_orders_printing_id_tcg_printings_id_fk": {
+          "name": "tcg_buy_orders_printing_id_tcg_printings_id_fk",
+          "tableFrom": "tcg_buy_orders",
+          "tableTo": "tcg_printings",
+          "columnsFrom": [
+            "printing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_cards": {
+      "name": "tcg_cards",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaatjes_base_id": {
+          "name": "plaatjes_base_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_total": {
+          "name": "set_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rarity": {
+          "name": "rarity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rarity_code": {
+          "name": "rarity_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "raw": {
+          "name": "raw",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tcg_cards_setId_sortOrder_idx": {
+          "name": "tcg_cards_setId_sortOrder_idx",
+          "columns": [
+            {
+              "expression": "set_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_cards_set_id_tcg_sets_id_fk": {
+          "name": "tcg_cards_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_cards",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_cards_setId_plaatjesBaseId_unique": {
+          "name": "tcg_cards_setId_plaatjesBaseId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "set_id",
+            "plaatjes_base_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_copies": {
+      "name": "tcg_copies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "printing_id": {
+          "name": "printing_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pack_id": {
+          "name": "pack_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sheet_id": {
+          "name": "sheet_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cut_index": {
+          "name": "cut_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot_offset": {
+          "name": "slot_offset",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lifecycle": {
+          "name": "lifecycle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'raw'"
+        },
+        "condition": {
+          "name": "condition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade_service": {
+          "name": "grade_service",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade": {
+          "name": "grade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade_score": {
+          "name": "grade_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade_designation": {
+          "name": "grade_designation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade_subs": {
+          "name": "grade_subs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grade_flaws": {
+          "name": "grade_flaws",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cert_number": {
+          "name": "cert_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "graded_at": {
+          "name": "graded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_copies_ownerId_idx": {
+          "name": "tcg_copies_ownerId_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_copies_printingId_idx": {
+          "name": "tcg_copies_printingId_idx",
+          "columns": [
+            {
+              "expression": "printing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_copies_printing_id_tcg_printings_id_fk": {
+          "name": "tcg_copies_printing_id_tcg_printings_id_fk",
+          "tableFrom": "tcg_copies",
+          "tableTo": "tcg_printings",
+          "columnsFrom": [
+            "printing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copies_set_id_tcg_sets_id_fk": {
+          "name": "tcg_copies_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_copies",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copies_owner_id_user_id_fk": {
+          "name": "tcg_copies_owner_id_user_id_fk",
+          "tableFrom": "tcg_copies",
+          "tableTo": "user",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copies_pack_id_tcg_packs_id_fk": {
+          "name": "tcg_copies_pack_id_tcg_packs_id_fk",
+          "tableFrom": "tcg_copies",
+          "tableTo": "tcg_packs",
+          "columnsFrom": [
+            "pack_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copies_sheet_id_tcg_sheets_id_fk": {
+          "name": "tcg_copies_sheet_id_tcg_sheets_id_fk",
+          "tableFrom": "tcg_copies",
+          "tableTo": "tcg_sheets",
+          "columnsFrom": [
+            "sheet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_copies_cert_number_unique": {
+          "name": "tcg_copies_cert_number_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "cert_number"
+          ]
+        },
+        "tcg_copies_serial_unique": {
+          "name": "tcg_copies_serial_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sheet_id",
+            "cut_index",
+            "slot_offset"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_copy_transfers": {
+      "name": "tcg_copy_transfers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_user_id": {
+          "name": "from_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_user_id": {
+          "name": "to_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_copy_transfers_copyId_idx": {
+          "name": "tcg_copy_transfers_copyId_idx",
+          "columns": [
+            {
+              "expression": "copy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_copy_transfers_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_copy_transfers_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_copy_transfers",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copy_transfers_from_user_id_user_id_fk": {
+          "name": "tcg_copy_transfers_from_user_id_user_id_fk",
+          "tableFrom": "tcg_copy_transfers",
+          "tableTo": "user",
+          "columnsFrom": [
+            "from_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_copy_transfers_to_user_id_user_id_fk": {
+          "name": "tcg_copy_transfers_to_user_id_user_id_fk",
+          "tableFrom": "tcg_copy_transfers",
+          "tableTo": "user",
+          "columnsFrom": [
+            "to_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_displays": {
+      "name": "tcg_displays",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capacity": {
+          "name": "capacity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tcg_displays_userId_idx": {
+          "name": "tcg_displays_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_displays_user_id_user_id_fk": {
+          "name": "tcg_displays_user_id_user_id_fk",
+          "tableFrom": "tcg_displays",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_display_slots": {
+      "name": "tcg_display_slots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_id": {
+          "name": "display_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tcg_display_slots_display_id_tcg_displays_id_fk": {
+          "name": "tcg_display_slots_display_id_tcg_displays_id_fk",
+          "tableFrom": "tcg_display_slots",
+          "tableTo": "tcg_displays",
+          "columnsFrom": [
+            "display_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_display_slots_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_display_slots_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_display_slots",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_display_slots_position_unique": {
+          "name": "tcg_display_slots_position_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "display_id",
+            "position"
+          ]
+        },
+        "tcg_display_slots_copy_unique": {
+          "name": "tcg_display_slots_copy_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "copy_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_listings": {
+      "name": "tcg_listings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seller_id": {
+          "name": "seller_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "buyer_id": {
+          "name": "buyer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sold_grade_service": {
+          "name": "sold_grade_service",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sold_grade": {
+          "name": "sold_grade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sold_designation": {
+          "name": "sold_designation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "sold_at": {
+          "name": "sold_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_listings_copyId_idx": {
+          "name": "tcg_listings_copyId_idx",
+          "columns": [
+            {
+              "expression": "copy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_listings_sellerId_idx": {
+          "name": "tcg_listings_sellerId_idx",
+          "columns": [
+            {
+              "expression": "seller_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_listings_state_idx": {
+          "name": "tcg_listings_state_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_listings_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_listings_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_listings",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_listings_seller_id_user_id_fk": {
+          "name": "tcg_listings_seller_id_user_id_fk",
+          "tableFrom": "tcg_listings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "seller_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_listings_buyer_id_user_id_fk": {
+          "name": "tcg_listings_buyer_id_user_id_fk",
+          "tableFrom": "tcg_listings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "buyer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_lots": {
+      "name": "tcg_lots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seller_id": {
+          "name": "seller_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "buyer_id": {
+          "name": "buyer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "sold_at": {
+          "name": "sold_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_lots_setId_state_idx": {
+          "name": "tcg_lots_setId_state_idx",
+          "columns": [
+            {
+              "expression": "set_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_lots_sellerId_idx": {
+          "name": "tcg_lots_sellerId_idx",
+          "columns": [
+            {
+              "expression": "seller_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_lots_seller_id_user_id_fk": {
+          "name": "tcg_lots_seller_id_user_id_fk",
+          "tableFrom": "tcg_lots",
+          "tableTo": "user",
+          "columnsFrom": [
+            "seller_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_lots_set_id_tcg_sets_id_fk": {
+          "name": "tcg_lots_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_lots",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_lots_buyer_id_user_id_fk": {
+          "name": "tcg_lots_buyer_id_user_id_fk",
+          "tableFrom": "tcg_lots",
+          "tableTo": "user",
+          "columnsFrom": [
+            "buyer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_lot_items": {
+      "name": "tcg_lot_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tcg_lot_items_lotId_idx": {
+          "name": "tcg_lot_items_lotId_idx",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_lot_items_copyId_idx": {
+          "name": "tcg_lot_items_copyId_idx",
+          "columns": [
+            {
+              "expression": "copy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_lot_items_lot_id_tcg_lots_id_fk": {
+          "name": "tcg_lot_items_lot_id_tcg_lots_id_fk",
+          "tableFrom": "tcg_lot_items",
+          "tableTo": "tcg_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_lot_items_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_lot_items_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_lot_items",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_packs": {
+      "name": "tcg_packs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bundle_id": {
+          "name": "bundle_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pack_index": {
+          "name": "pack_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_god": {
+          "name": "is_god",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "cuts": {
+          "name": "cuts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'sealed'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_packs_ownerId_idx": {
+          "name": "tcg_packs_ownerId_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_packs_bundleId_idx": {
+          "name": "tcg_packs_bundleId_idx",
+          "columns": [
+            {
+              "expression": "bundle_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_packs_set_id_tcg_sets_id_fk": {
+          "name": "tcg_packs_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_packs",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_packs_owner_id_user_id_fk": {
+          "name": "tcg_packs_owner_id_user_id_fk",
+          "tableFrom": "tcg_packs",
+          "tableTo": "user",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_packs_bundle_id_tcg_bundles_id_fk": {
+          "name": "tcg_packs_bundle_id_tcg_bundles_id_fk",
+          "tableFrom": "tcg_packs",
+          "tableTo": "tcg_bundles",
+          "columnsFrom": [
+            "bundle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_packs_setId_packIndex_unique": {
+          "name": "tcg_packs_setId_packIndex_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "set_id",
+            "pack_index"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_pack_templates": {
+      "name": "tcg_pack_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slots": {
+          "name": "slots",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tcg_pack_templates_set_id_tcg_sets_id_fk": {
+          "name": "tcg_pack_templates_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_pack_templates",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_pack_templates_setId_kind_unique": {
+          "name": "tcg_pack_templates_setId_kind_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "set_id",
+            "kind"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_printings": {
+      "name": "tcg_printings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card_id": {
+          "name": "card_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaatjes_card_id": {
+          "name": "plaatjes_card_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finish": {
+          "name": "finish",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pattern": {
+          "name": "pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "print_run_label": {
+          "name": "print_run_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1st'"
+        },
+        "bundle": {
+          "name": "bundle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "asset_number": {
+          "name": "asset_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mask_kind": {
+          "name": "mask_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "foil_effect": {
+          "name": "foil_effect",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "foil_mask": {
+          "name": "foil_mask",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_printings_setId_idx": {
+          "name": "tcg_printings_setId_idx",
+          "columns": [
+            {
+              "expression": "set_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_printings_cardId_idx": {
+          "name": "tcg_printings_cardId_idx",
+          "columns": [
+            {
+              "expression": "card_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_printings_set_id_tcg_sets_id_fk": {
+          "name": "tcg_printings_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_printings",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_printings_card_id_tcg_cards_id_fk": {
+          "name": "tcg_printings_card_id_tcg_cards_id_fk",
+          "tableFrom": "tcg_printings",
+          "tableTo": "tcg_cards",
+          "columnsFrom": [
+            "card_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tcg_printings_setId_plaatjesCardId_unique": {
+          "name": "tcg_printings_setId_plaatjesCardId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "set_id",
+            "plaatjes_card_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_sets": {
+      "name": "tcg_sets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaatjes_set_code": {
+          "name": "plaatjes_set_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "template_code": {
+          "name": "template_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_rates": {
+          "name": "published_rates",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_date": {
+          "name": "release_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "target_pack_count": {
+          "name": "target_pack_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "god_pack_one_in": {
+          "name": "god_pack_one_in",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "god_pack_count": {
+          "name": "god_pack_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secret_key": {
+          "name": "secret_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commitment_digest": {
+          "name": "commitment_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "packs_sold": {
+          "name": "packs_sold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "base_packs_sold": {
+          "name": "base_packs_sold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "god_packs_sold": {
+          "name": "god_packs_sold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reprint_of_set_id": {
+          "name": "reprint_of_set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "print_run_label": {
+          "name": "print_run_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1st'"
+        },
+        "on_sale_at": {
+          "name": "on_sale_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "restock_pool": {
+          "name": "restock_pool",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_settings": {
+      "name": "tcg_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "packs_per_pair": {
+          "name": "packs_per_pair",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gems_per_pair": {
+          "name": "gems_per_pair",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "packs_per_day": {
+          "name": "packs_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bundle_packs": {
+          "name": "bundle_packs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bundle_gems": {
+          "name": "bundle_gems",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_sheets": {
+      "name": "tcg_sheets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'base'"
+        },
+        "pack_slots": {
+          "name": "pack_slots",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "layout": {
+          "name": "layout",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "impressions": {
+          "name": "impressions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cursor": {
+          "name": "cursor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cursor_limit": {
+          "name": "cursor_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_sheets_setId_idx": {
+          "name": "tcg_sheets_setId_idx",
+          "columns": [
+            {
+              "expression": "set_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_sheets_set_id_tcg_sets_id_fk": {
+          "name": "tcg_sheets_set_id_tcg_sets_id_fk",
+          "tableFrom": "tcg_sheets",
+          "tableTo": "tcg_sets",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_submissions": {
+      "name": "tcg_submissions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service": {
+          "name": "service",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fee": {
+          "name": "fee",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predicted_grade": {
+          "name": "predicted_grade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "grade_result": {
+          "name": "grade_result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cert_number": {
+          "name": "cert_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "graded_at": {
+          "name": "graded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "returns_at": {
+          "name": "returns_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tcg_submissions_userId_idx": {
+          "name": "tcg_submissions_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_submissions_copyId_idx": {
+          "name": "tcg_submissions_copyId_idx",
+          "columns": [
+            {
+              "expression": "copy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_submissions_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_submissions_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_submissions",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_submissions_user_id_user_id_fk": {
+          "name": "tcg_submissions_user_id_user_id_fk",
+          "tableFrom": "tcg_submissions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_trade_items": {
+      "name": "tcg_trade_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "offer_id": {
+          "name": "offer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "copy_id": {
+          "name": "copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tcg_trade_items_offerId_idx": {
+          "name": "tcg_trade_items_offerId_idx",
+          "columns": [
+            {
+              "expression": "offer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_trade_items_offer_id_tcg_trade_offers_id_fk": {
+          "name": "tcg_trade_items_offer_id_tcg_trade_offers_id_fk",
+          "tableFrom": "tcg_trade_items",
+          "tableTo": "tcg_trade_offers",
+          "columnsFrom": [
+            "offer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_trade_items_copy_id_tcg_copies_id_fk": {
+          "name": "tcg_trade_items_copy_id_tcg_copies_id_fk",
+          "tableFrom": "tcg_trade_items",
+          "tableTo": "tcg_copies",
+          "columnsFrom": [
+            "copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tcg_trade_offers": {
+      "name": "tcg_trade_offers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "from_user_id": {
+          "name": "from_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_user_id": {
+          "name": "to_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_coins": {
+          "name": "sender_coins",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "receiver_coins": {
+          "name": "receiver_coins",
+          "type": "numeric(19, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tcg_trade_offers_from_idx": {
+          "name": "tcg_trade_offers_from_idx",
+          "columns": [
+            {
+              "expression": "from_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tcg_trade_offers_to_idx": {
+          "name": "tcg_trade_offers_to_idx",
+          "columns": [
+            {
+              "expression": "to_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcg_trade_offers_from_user_id_user_id_fk": {
+          "name": "tcg_trade_offers_from_user_id_user_id_fk",
+          "tableFrom": "tcg_trade_offers",
+          "tableTo": "user",
+          "columnsFrom": [
+            "from_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcg_trade_offers_to_user_id_user_id_fk": {
+          "name": "tcg_trade_offers_to_user_id_user_id_fk",
+          "tableFrom": "tcg_trade_offers",
+          "tableTo": "user",
+          "columnsFrom": [
+            "to_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.transactions": {
       "name": "transactions",
       "schema": "",
@@ -4970,6 +7748,13 @@
         },
         "rakeback_unlocked": {
           "name": "rakeback_unlocked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_pokemon_admin": {
+          "name": "is_pokemon_admin",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

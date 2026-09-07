@@ -1,1 +1,0 @@
-ALTER TABLE "hq_state" ADD COLUMN "kill_fraction" double precision DEFAULT 0 NOT NULL;

@@ -1,1 +1,0 @@
-ALTER TABLE "hq_state" ADD COLUMN "created_at" timestamp DEFAULT now() NOT NULL;

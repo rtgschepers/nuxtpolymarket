@@ -24,6 +24,7 @@
     "balance:pirates": "bun scripts/pirates-balance.ts",
     "balance:shapezz": "bun scripts/shapezz-balance.ts",
     "balance:compare": "bun scripts/economy-compare.ts",
+    "tcg:rarity-audit": "bun scripts/tcg-rarity-audit.ts",
     "balance:hero-quest": "bun scripts/hero-quest-balance.ts",
     "sim:hero-quest": "bun scripts/hero-quest-sim.ts"
   },

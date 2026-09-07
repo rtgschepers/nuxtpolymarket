@@ -109,6 +109,11 @@ interface WindowSpec {
     region: number
     /** Navigation node an enemy joins the graph on once it is inside. */
     node: number
+    /**
+     * Floor height of the room this window feeds. Ground-floor windows sit
+     * at 0; an upper-floor window's opening band is measured from its deck.
+     */
+    baseY?: number
 }
 
 export interface CallOfXenoWindow extends WindowSpec {
@@ -120,12 +125,18 @@ export interface CallOfXenoWindow extends WindowSpec {
     centre: { x: number, z: number }
     /** Yaw of the outward normal. */
     facing: number
+    /** Floor height of the room the window feeds. 0 for ground floor. */
+    baseY: number
 }
 
 const WINDOW_SPECS: WindowSpec[] = [
     { id: 'win-barracks-w1', axis: 'z', from: 3, to: 7, at: 0, outward: -1, region: 0, node: 0 },
     { id: 'win-barracks-w2', axis: 'z', from: 10, to: 14, at: 0, outward: -1, region: 0, node: 23 },
     { id: 'win-barracks-s1', axis: 'x', from: 10, to: 14, at: 0, outward: -1, region: 0, node: 0 },
+    // The one upper-floor window: straight into Overwatch off the south
+    // wall, its opening band measured from the deck. Upstairs was the one
+    // place nothing could ever reach — this fixes that.
+    { id: 'win-overwatch-s1', axis: 'x', from: 14, to: 18, at: 0, outward: -1, region: 7, node: 29, baseY: U },
     { id: 'win-mess-s1', axis: 'x', from: 22, to: 26, at: 0, outward: -1, region: 1, node: 3 },
     { id: 'win-mess-s2', axis: 'x', from: 28, to: 32, at: 0, outward: -1, region: 1, node: 3 },
     { id: 'win-garage-s1', axis: 'x', from: 40, to: 44, at: 0, outward: -1, region: 3, node: 5 },
@@ -152,6 +163,7 @@ export const CALL_OF_XENO_WINDOWS: CallOfXenoWindow[] = WINDOW_SPECS.map((spec) 
     const along = spec.axis === 'x'
     return {
         ...spec,
+        baseY: spec.baseY ?? 0,
         outside: along ? { x: mid, z: outAt } : { x: outAt, z: mid },
         inside: along ? { x: mid, z: inAt } : { x: inAt, z: mid },
         centre: along ? { x: mid, z: spec.at } : { x: spec.at, z: mid },
@@ -164,6 +176,40 @@ export const CALL_OF_XENO_WINDOWS: CallOfXenoWindow[] = WINDOW_SPECS.map((spec) 
 
 /** Width of a window opening, shared by every one of them. */
 export const CALL_OF_XENO_WINDOW_WIDTH = WINDOW_SPECS[0]!.to - WINDOW_SPECS[0]!.from
+
+/**
+ * Sideways gap between two enemies queued abreast at a window, and the gap
+ * between one row of the queue and the next.
+ *
+ * Both are deliberately wider than the widest separation radius the sim
+ * pushes bodies apart by (0.9 x the Brute's 1.5 scale = 1.35): slots that
+ * sat closer than that would have the separation pass fighting the approach
+ * every frame, which is the stall this queue exists to prevent.
+ */
+export const CALL_OF_XENO_WINDOW_SLOT_SPACING = 1.7
+/** How close an enemy has to be to its slot to count as posted at it. */
+export const CALL_OF_XENO_WINDOW_SLOT_RADIUS = 0.45
+
+/**
+ * Where the enemy `rank` places in a window's queue should stand. Rank 0 is
+ * the breach position — the window's own `outside` point, so the enemy
+ * working the boards stands exactly where it always did. Everything behind
+ * it fans out two abreast in rows heading away from the wall.
+ *
+ * A single shared approach point is what let a pack deadlock: every body
+ * steered at the same spot, and the separation pass shoved whoever reached
+ * it back out of the arrival radius, so nobody ever held the post long
+ * enough to prise a board off.
+ */
+export function windowApproachSlot(window: CallOfXenoWindow, rank: number): { x: number, z: number } {
+    if (rank <= 0) return { x: window.outside.x, z: window.outside.z }
+    const row = Math.ceil(rank / 2)
+    const lateral = (rank % 2 === 1 ? -1 : 1) * CALL_OF_XENO_WINDOW_SLOT_SPACING
+    const depth = window.outward * row * CALL_OF_XENO_WINDOW_SLOT_SPACING
+    return window.axis === 'x'
+        ? { x: window.outside.x + lateral, z: window.outside.z + depth }
+        : { x: window.outside.x + depth, z: window.outside.z + lateral }
+}
 
 // ---------------------------------------------------------------------------
 // Regions
@@ -225,9 +271,13 @@ function shellRun(axis: 'x' | 'z', at: number, outward: 1 | -1, from: number, to
 
     let cursor = from
     for (const window of here) {
+        // Each window cuts its own band at its own storey: ground-floor
+        // openings at [sill, head], upper-floor ones a deck higher, with
+        // solid wall below and above either.
+        const base = window.baseY ?? 0
         push(cursor, window.from, 0, A)
-        push(window.from, window.to, 0, CALL_OF_XENO_WINDOW_SILL)
-        push(window.from, window.to, CALL_OF_XENO_WINDOW_HEAD, A - CALL_OF_XENO_WINDOW_HEAD)
+        push(window.from, window.to, 0, base + CALL_OF_XENO_WINDOW_SILL)
+        push(window.from, window.to, base + CALL_OF_XENO_WINDOW_HEAD, A - (base + CALL_OF_XENO_WINDOW_HEAD))
         cursor = window.to
     }
     push(cursor, to, 0, A)
@@ -246,6 +296,29 @@ export const CALL_OF_XENO_SHELL_WALLS: CallOfXenoSolid[] = [
     ...shellRun('x', SZ0, -1, SX0 - SHELL_T, SX1 + SHELL_T),
     ...shellRun('x', SZ1, 1, SX0 - SHELL_T, SX1 + SHELL_T)
 ]
+
+/**
+ * Invisible panes filling the window openings — player-only collision. A
+ * running jump otherwise clears the one-metre sill and sails out through
+ * the empty opening band, and the map leaks. Deliberately kept out of the
+ * shared solid set: enemies script their climb through the opening without
+ * consulting collision, and rays (bullets, deploy placement) keep their
+ * existing line-of-sight through the boards. Only player movement unions
+ * these in.
+ *
+ * Each pane spans the full wall height rather than just the opening band:
+ * `solidsInBand` drops any solid a body could step onto, so an opening-sized
+ * pane vanished the moment a jump from a nearby crate lifted the feet past
+ * its top — the player flew straight through the gap at head height. Full
+ * height keeps the pane in the band at every altitude the building allows.
+ */
+export const CALL_OF_XENO_WINDOW_BARRIERS: CallOfXenoSolid[] = CALL_OF_XENO_WINDOWS.map(w => {
+    const near = w.outward > 0 ? w.at : w.at - SHELL_T
+    const far = w.outward > 0 ? w.at + SHELL_T : w.at
+    return w.axis === 'x'
+        ? { box: { minX: w.from, maxX: w.to, minZ: near, maxZ: far }, baseY: 0, height: A }
+        : { box: { minX: near, maxX: far, minZ: w.from, maxZ: w.to }, baseY: 0, height: A }
+})
 
 // Interior structures that get dressed up by the renderer. They stay in the
 // wall list for collision; the decor entry tells the builder what to draw.
@@ -277,8 +350,8 @@ export const CALL_OF_XENO_DECOR: CallOfXenoDecor[] = [
     { box: { minX: 53, maxX: 57, minZ: 25, maxZ: 28 }, kind: 'machine', height: 2.2, theme: 2 },
     // Lab bank.
     { box: { minX: 0.5, maxX: 4, minZ: 34.5, maxZ: 37.5 }, kind: 'machine', height: 2.2, theme: 3 },
-    // Reactor Hall: generator banks pushed flat against the north wall so the
-    // room reads as machinery without a block sticking into the fighting floor.
+    // Reactor Hall: generator banks along the north wall so the room reads as
+    // machinery without a block sticking into the fighting lanes.
     { box: { minX: 21, maxX: 25, minZ: 44.5, maxZ: 47.5 }, kind: 'machine', height: 2.6, theme: 2 },
     { box: { minX: 39, maxX: 43, minZ: 44.5, maxZ: 47.5 }, kind: 'machine', height: 2.6, theme: 2 }
 ]
@@ -573,6 +646,9 @@ export const CALL_OF_XENO_INTERACTABLES: CallOfXenoInteractable[] = [
 
     // Mess Hall — the first door out.
     { id: 'buy-trench', kind: 'wallbuy', x: 34, y: 0, z: 15.6, facing: Math.PI, region: 1, weapon: 'trench', needsPower: false },
+    // PhD Flopper sits in the middle wing between Quick Revive's Barracks
+    // and Speed Cola's Garage.
+    { id: 'perk-phdflopper', kind: 'perk', x: 20, y: 0, z: 15.1, facing: Math.PI, region: 1, perk: 'phdflopper', needsPower: true },
 
     // Atrium — the only mystery box on the map. Set against the north wall
     // between the corner crate and the Reactor door, clear of both flights.
@@ -580,6 +656,9 @@ export const CALL_OF_XENO_INTERACTABLES: CallOfXenoInteractable[] = [
 
     // Catwalk — Juggernog is the reward for taking the high ground.
     { id: 'perk-juggernog', kind: 'perk', x: 18, y: CALL_OF_XENO_UPPER_Y, z: 17, facing: 0, region: 9, perk: 'juggernog', needsPower: true },
+
+    // Overwatch — Deadshot lives upstairs too, a reason to hold the deck.
+    { id: 'perk-deadshot', kind: 'perk', x: 11, y: CALL_OF_XENO_UPPER_Y, z: 15.1, facing: Math.PI, region: 7, perk: 'deadshot', needsPower: true },
 
     // Garage and Workshop — the east wing.
     { id: 'perk-speedcola', kind: 'perk', x: 57.4, y: 0, z: 15, facing: -Math.PI / 2, region: 3, perk: 'speedcola', needsPower: true },
@@ -598,19 +677,48 @@ export const CALL_OF_XENO_INTERACTABLES: CallOfXenoInteractable[] = [
 
 export const CALL_OF_XENO_PLAYER_START = { x: 9, z: 11 }
 
+/**
+ * The two places the mystery box can sit: the Atrium plinth it has always
+ * occupied, and a second anchor in the Garage beside Speed Cola's corner.
+ * A run starts at one picked at random, and each round boundary can move it
+ * — the prop is one physical box, teleported between the anchors.
+ */
+export const CALL_OF_XENO_BOX_SPOTS = [
+    { x: 19, y: 0, z: 32.6, facing: Math.PI },
+    { x: 55.2, y: 0, z: 12.6, facing: -Math.PI / 2 }
+] as const
+
+/** Chance the box moves to the other spot when a new round starts. */
+export const CALL_OF_XENO_BOX_SWAP_CHANCE = 0.15
+
 /** Free-standing props the player cannot walk through. */
-export const CALL_OF_XENO_PROP_SOLIDS: CallOfXenoSolid[] = CALL_OF_XENO_INTERACTABLES
-    .filter(i => i.kind === 'perk' || i.kind === 'papunch' || i.kind === 'power' || i.kind === 'mysterybox' || i.kind === 'workbench')
-    .map(i => ({
+export const CALL_OF_XENO_PROP_SOLIDS: CallOfXenoSolid[] = [
+    ...CALL_OF_XENO_INTERACTABLES
+        .filter(i => i.kind === 'perk' || i.kind === 'papunch' || i.kind === 'power' || i.kind === 'mysterybox' || i.kind === 'workbench')
+        .map(i => ({
+            box: {
+                minX: i.x - (i.kind === 'papunch' ? 1.25 : i.kind === 'workbench' ? 0.85 : 0.6),
+                maxX: i.x + (i.kind === 'papunch' ? 1.25 : i.kind === 'workbench' ? 0.85 : 0.6),
+                minZ: i.z - (i.kind === 'workbench' ? 0.55 : 0.6),
+                maxZ: i.z + (i.kind === 'workbench' ? 0.55 : 0.6)
+            },
+            baseY: i.y,
+            height: i.kind === 'papunch' ? 2 : i.kind === 'mysterybox' ? 1.2 : i.kind === 'workbench' ? 1.2 : 2.2
+        })),
+    // The second box anchor keeps its plinth footprint solid even when the
+    // box itself is parked at the other spot — the crate teleports, the
+    // furniture does not.
+    {
         box: {
-            minX: i.x - (i.kind === 'papunch' ? 1.25 : i.kind === 'workbench' ? 0.85 : 0.6),
-            maxX: i.x + (i.kind === 'papunch' ? 1.25 : i.kind === 'workbench' ? 0.85 : 0.6),
-            minZ: i.z - (i.kind === 'workbench' ? 0.55 : 0.6),
-            maxZ: i.z + (i.kind === 'workbench' ? 0.55 : 0.6)
+            minX: CALL_OF_XENO_BOX_SPOTS[1]!.x - 0.6,
+            maxX: CALL_OF_XENO_BOX_SPOTS[1]!.x + 0.6,
+            minZ: CALL_OF_XENO_BOX_SPOTS[1]!.z - 0.6,
+            maxZ: CALL_OF_XENO_BOX_SPOTS[1]!.z + 0.6
         },
-        baseY: i.y,
-        height: i.kind === 'papunch' ? 2 : i.kind === 'mysterybox' ? 1.2 : i.kind === 'workbench' ? 1.2 : 2.2
-    }))
+        baseY: CALL_OF_XENO_BOX_SPOTS[1]!.y,
+        height: 1.2
+    }
+]
 
 // ---------------------------------------------------------------------------
 // Geometry queries
@@ -668,6 +776,77 @@ export function groundHeight(x: number, z: number, feetY: number): number {
     }
 
     return best
+}
+
+/**
+ * Height of the stair surface at a point, or null when no flight covers it.
+ * Unlike `groundHeight` this reports the slope regardless of whether a body
+ * standing on the floor could actually step up onto it — the navigation grid
+ * needs the true surface to decide which storey a ramp cell belongs to.
+ */
+export function rampSurfaceAt(x: number, z: number): number | null {
+    for (const ramp of CALL_OF_XENO_RAMPS) {
+        if (!inside(ramp.box, x, z)) continue
+        const at = ramp.axis === 'x' ? x : z
+        const t = (at - ramp.lowAt) / (ramp.highAt - ramp.lowAt)
+        return ramp.lowY + (ramp.highY - ramp.lowY) * Math.max(0, Math.min(1, t))
+    }
+    return null
+}
+
+/**
+ * How far off the edge of a flight a body still counts as being on it. The
+ * pack can shove a climber this far sideways in a single frame, and it has to
+ * still be recognised as belonging to the stairs to be put back on them.
+ */
+const RAMP_EDGE_GRACE = 0.6
+
+/**
+ * The flight a body is currently climbing, or null when it is not on one.
+ *
+ * Height is what decides it: a body inside a flight's footprint but down on
+ * the floor underneath is not on the stairs, and one shoved just off the edge
+ * still is. The flights carry no side walls, so this is what lets the sim put
+ * a climber back on the steps instead of letting the pack push it into
+ * mid-air, where it drops to the floor and has to walk all the way round
+ * again.
+ */
+export function rampUnderBody(x: number, z: number, y: number): CallOfXenoRamp | null {
+    for (const ramp of CALL_OF_XENO_RAMPS) {
+        const lateralLow = ramp.axis === 'z' ? ramp.box.minX : ramp.box.minZ
+        const lateralHigh = ramp.axis === 'z' ? ramp.box.maxX : ramp.box.maxZ
+        const lateral = ramp.axis === 'z' ? x : z
+        if (lateral <= lateralLow - RAMP_EDGE_GRACE || lateral >= lateralHigh + RAMP_EDGE_GRACE) continue
+        const alongLow = ramp.axis === 'z' ? ramp.box.minZ : ramp.box.minX
+        const alongHigh = ramp.axis === 'z' ? ramp.box.maxZ : ramp.box.maxX
+        const along = ramp.axis === 'z' ? z : x
+        if (along <= alongLow || along >= alongHigh) continue
+        const t = (along - ramp.lowAt) / (ramp.highAt - ramp.lowAt)
+        const surface = ramp.lowY + (ramp.highY - ramp.lowY) * Math.max(0, Math.min(1, t))
+        if (Math.abs(y - surface) > CALL_OF_XENO_STEP_UP) continue
+        return ramp
+    }
+    return null
+}
+
+/**
+ * Whether a body may tick off a waypoint it has walked up to.
+ *
+ * Anywhere but the stairs, arriving is arriving. On a flight it is not: a
+ * body heading for the foot retires that waypoint while still short of it,
+ * out on the floor inside the footprint where the steps are already too high
+ * to mount, and turns for the next waypoint up the flight. It walks into the
+ * dead ground under the stairs, the next replan sends it back to the foot,
+ * and it shuttles between the two forever — the body circling the bottom of
+ * the stairs, never getting on them. A step of the flight only counts as
+ * reached once the body is actually standing on the flight.
+ */
+export function waypointFootingOk(
+    bodyX: number, bodyZ: number, bodyY: number,
+    waypointX: number, waypointZ: number
+): boolean {
+    if (rampSurfaceAt(waypointX, waypointZ) === null) return true
+    return rampUnderBody(bodyX, bodyZ, bodyY) !== null
 }
 
 /** Everything solid right now, including shut doors and any live extras. */
