@@ -176,11 +176,28 @@ Starting point: `BASE_CURRENCY = 100`, `CURRENCY_GROWTH = 2` → 100 / 200 / 400
 
 **Fixed pool, no reskins** — the same 10 worlds, with the same art and the same enemy rosters, appear identically in every prestige run.
 
-**One name is already pre-committed: World 10 is The Void.** `economy-and-currencies.md` §3 names the prestige currency **Void Shards** after it, with the lore tie "reach the end and reset stronger." The remaining 9 world identities are open, but this one is load-bearing on a locked currency name — the world-design pass either keeps it or renames Void Shards. No tier bumps or visual re-theming between prestiges — this keeps art scope minimal for a small team. Difficulty is communicated entirely through the stat curve (Section 1), not through visual differentiation between prestiges.
+**World 10 is The Void.** `economy-and-currencies.md` §3 names the prestige currency **Void Shards** after it, with the lore tie "reach the end and reset stronger" — load-bearing on a locked currency name, and kept by the naming pass.
+
+**Named 2026-09-15.** The run is a walk toward the source: the archmage of Duskspire opened a door to the Void, the cracks it left spread outward through the kingdom, and a run starts at the farthest frontier — where the damage is only feral hedgerows — and walks inward, past the door and out through the edge of the world into The Void. The theme line is each world's art brief. Elites share the trash roster's name; they are the same enemies, stat-buffed.
+
+| # | World | Theme | Enemies | Boss | Super boss |
+|---|---|---|---|---|---|
+| 1 | Thornwick Vale | Frontier farmland at the edge of the kingdom, where the first cracks have turned the hedgerows feral | Bramble Goblin | Old Gnarlhide | Gorsecrown, King of Hedges |
+| 2 | Mirewood | A drowned forest of black water and hanging moss, rotting from the roots up | Bog Lurker | Mother Leech | Rotheart, the Sunken Elder |
+| 3 | Cinderpass | A volcanic mountain pass choked with ash, held by kobold clans and the thing they worship | Cinder Kobold | Slagjaw | Pyrrhax, the Molten Wyrm |
+| 4 | Rimeholt | A frozen northern hold whose raiders swore themselves to a cold that does not end | Frostbound Raider | Jarl Hrimgar | Vinterhel, the Glacier Titan |
+| 5 | Sunken Amarath | The drowned capital of a sea-empire, its dead still keeping the tides | Drowned Sailor | Tidecaller Nerine | Queen Maerith of the Deep |
+| 6 | Duskspire | A city of mage-towers held at twilight since its archmage opened a door to the Void | Hollow Acolyte | Magister Halvane | Archmage Ithren, the Door-Opener |
+| 7 | The Bonefields | An ancient battlefield where the fallen of a forgotten war rise to fight it again | Restless Legionnaire | Grave Marshal Korr | Ossuar, the Thousand-Bone Host |
+| 8 | The Shattered Sky | Islands of torn-loose stone adrift in a storm the Void has unmoored | Skyshard Wisp | Stormcrown Roc | Zephyrax, Breaker of Heavens |
+| 9 | The Fraying | The edge of the world, where colour, sound and memory come apart thread by thread | Unravelled Knight | Sister Vesper, the Forgotten | Liminus, the Last Door |
+| 10 | The Void | Nothing, pressing in — where every crack leads, and where each run ends before it begins again | Void Thrall | Void Herald | Nihil, the Hunger at the End |
+
+The source of truth is `shared/utils/hero-quest/content/worlds.ts`; the wiki's Content page renders it. Names only — stats come from Section 1. Enemies have no abilities of their own yet. No tier bumps or visual re-theming between prestiges — this keeps art scope minimal for a small team. Difficulty is communicated entirely through the stat curve (Section 1), not through visual differentiation between prestiges.
 
 ---
 
 ## Next sections to define
-- **World themes & enemy/boss design (specific rosters)** — the only remaining greenfield design pass, and a dependency for `gold-economy.md` §9's calendar calibration.
+- ~~**World themes & enemy/boss design (specific rosters)**~~ — named in §5. Still open: art direction and production, and whether enemies get their own ability kits.
 
 *(Classes & combat, all four gacha systems, and idle mechanics & economy are all now Locked in their own docs — see `index.md`.)*

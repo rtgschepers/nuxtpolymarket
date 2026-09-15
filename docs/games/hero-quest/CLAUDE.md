@@ -101,13 +101,13 @@ Rosters are deliberately partial:
 | Gear | 36 | **All 36 — done.** Phase 3; fully named by the epithet table alone |
 | Champions | 48 | **All 48 — done.** Filled during the ability-effects pass |
 | Artifacts | 48 | **All 48 exist**, with the full 33-effect pool. Names are **placeholders** |
-| Worlds | 10 | **Placeholder names and enemies.** World design has not happened. |
+| Worlds | 10 | **Named, with themes** (2026-09-15, `core-progression-and-prestige.md` §5). Art and enemy kits not designed. |
 
 **Every roster is now structurally complete, and that is what retired `foldToAvailableRarity`.** The helper folded a rolled rarity down to the nearest rarity a partial roster populated; with all four systems covering all six rarities it was the identity function everywhere, so it is **deleted** (`implementation-plan.md`, Phase 3). `content.spec.ts` asserts the coverage per system, so "no fold is needed" is a tested claim rather than a comment. If a future roster ships partial, the reasoning for reintroducing it — and why rounding *down* was the right repair — is preserved in a comment where it used to live in `gacha.ts`.
 
 **Champions are complete.** The roster was filled deliberately during the ability-effects pass — the deciding argument was that a complete roster is what lets the fold be retired, and that the rarity-overlap goal is served by the *small* 7-ability pool rather than by more content. All 48 exist, assembled from two tables (`ROSTER`, `ABILITY_SLOTS`) so the structural rules are properties of one distribution.
 
-**Artifact names are placeholders, and the naming pass is still owed.** This guidance previously said not to generate 48 names, and that stood while nothing needed to roll them. Phase 3 needed content for the Dig-site to produce, so all 48 ship assembled from two tables (`ARTIFACT_TITLES`, `ARTIFACT_EFFECT_SLOTS`) with names derived from a placeholder title pool plus the rarity epithet — the same treatment the World roster already gets, and marked as such in the module header. **Replacing `ARTIFACT_TITLES` is the entire naming pass; no code moves.** The per-Artifact *effect assignment* is likewise a distribution rather than an authored choice, and is a legitimate thing for a later pass to re-cut.
+**Artifact names are placeholders, and the naming pass is still owed.** This guidance previously said not to generate 48 names, and that stood while nothing needed to roll them. Phase 3 needed content for the Dig-site to produce, so all 48 ship assembled from two tables (`ARTIFACT_TITLES`, `ARTIFACT_EFFECT_SLOTS`) with names derived from a placeholder title pool plus the rarity epithet — the same stand-in treatment the World roster had until its naming pass, and marked as such in the module header. **Replacing `ARTIFACT_TITLES` is the entire naming pass; no code moves.** The per-Artifact *effect assignment* is likewise a distribution rather than an authored choice, and is a legitimate thing for a later pass to re-cut.
 
 **World 10 must be named The Void**, or Void Shards needs renaming.
 

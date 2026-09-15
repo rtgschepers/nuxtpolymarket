@@ -45,9 +45,9 @@ Two of the 16 skill-cast animations are summon triggers rather than direct-effec
 
 **2 animation states each** (Move, Attack) — **no dedicated Hit or Death animation**. 3 summons × 2 states = **6 animated spritesheets**, the cheapest character-art line on the list.
 
-### 1.4 Enemies — still **blocked on World & Enemy Design**
+### 1.4 Enemies — **named; art direction still owed**
 
-Unchanged — structure known, content isn't:
+The rosters and one-line world themes are set (`core-progression-and-prestige.md` §5): one trash enemy per world (its elites are the same enemy, stat-buffed and visually marked), one boss, one super boss. The structure below stands; "several small variants" of the trash enemy is now a variation on that one named enemy.
 
 | Enemy category | Count needed | Per world |
 |---|---|---|
@@ -134,7 +134,7 @@ Unchanged from the previous pass — nothing here was in the fidelity decision s
 
 | Asset | Count | Notes |
 |---|---|---|
-| World backgrounds | 10 | Blocked on World & Enemy Design. World 10 pre-committed as **The Void** |
+| World backgrounds | 10 | Themes set (`core-progression-and-prestige.md` §5) — Thornwick Vale through **The Void**. Art direction owed |
 | Stage-select / world map UI | 1 | |
 | Tab backgrounds | ~10 | Forge, Guild, Training Grounds (3 states, already locked), Dig-site, Raids, Traits, Prestige, Arena, Encyclopedia, Leaderboard |
 | Gacha pull screen / reveal VFX | **Locked: one shared flash, recolored per rarity tier** | 1 base animation × 6 rarity recolors, not a bespoke cinematic per tier — cheap, reused everywhere |

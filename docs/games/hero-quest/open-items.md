@@ -44,8 +44,8 @@ Every raid auto-applies a preferred Loadout on engage (`loadouts.md` §4). Arena
 
 ## 🔶 Structural follow-ups — mechanical work, not open questions
 
-### 5. World naming still hasn't closed the loop with Void Shards
-`economy-and-currencies.md` names Void Shards after "The Void," described as World 10 — `core-progression-and-prestige.md` §5 now carries a matching note pre-committing World 10 to that name, but the world pass itself still hasn't happened.
+### 5. ~~World naming still hasn't closed the loop with Void Shards~~ — **closed 2026-09-15**
+The naming pass (#6) kept World 10 as **The Void**, so Void Shards keeps its name and its lore tie. `worlds.spec.ts` still asserts it.
 
 *(The `tech-architecture.md` schema-catch-up item that used to be here — Gear/Loadouts/Traits/Holidays missing tables and routes — is **done**. All four now have full schema, routes, and content modules in `tech-architecture.md` §3, §5, §2. The `SEAL_LADDER_GROWTH[gear]` gap is also **resolved** — set to `1.0011`, derived from Gear's roster shape matching Skills', in `gold-economy.md` §7.)*
 
@@ -53,10 +53,15 @@ Every raid auto-applies a preferred Loadout on engage (`loadouts.md` §4). Arena
 
 ## 🔴 Genuinely undesigned — full passes, not edits
 
-### 6. World & enemy design — the big one
-10 worlds, names, art direction, enemy rosters, boss identities. This is the only remaining greenfield system, and it's a **hard dependency** for `asset-list.md`'s entire "Enemies" and "World backgrounds" sections. *(It no longer blocks Gold: `gold-economy.md` §9's prestige→calendar calibration was replaced by the account-age ceiling, #23.)* Enemies are still HP/PWR/DEF stat blocks with no abilities, which is why `controlResist` is inert (#18.6). Recommend this is the next design session.
+### 6. World & enemy design — **naming pass landed 2026-09-15; art and enemy kits still open**
 
-**What the tuning pass (#22) hands this session:** the enemy *curve* is now tuned and derived from a pacing model, so world design is free to choose themes, rosters and enemy kits without re-deciding numbers — but anything that changes fight length (enemy abilities, heals, shields, more escort bodies) moves `FIGHT_LENGTH_DRIFT`'s effective value and has to be re-measured on the campaign walk. A first prestige for a party of three is about a week, and a world takes from under an hour (World 1–2) to about two days (World 10), almost all of it grind in front of gates.
+**Names, themes and rosters are done** (`shared/utils/hero-quest/content/worlds.ts`, `core-progression-and-prestige.md` §5). The run is a walk toward the source: Duskspire's archmage opened a door to the Void (World 6), the cracks spread outward, and a run starts at the far frontier and walks inward past the door and out through the edge of the world into The Void. Each world has a one-line theme, which is the art brief. Nothing numeric moved — enemy stats come only from the curve.
+
+Three naming rules, because the UI depends on them, stated in the `worlds.ts` header: trash names pluralise with a plain "s" ("Bramble Goblins defeated" — documented, not tested), boss names never start with "The" (the button reads "Fight Old Gnarlhide"; it previously rendered "Fight the The Voidborn"), and no name reuses a Champion given name or title (six of the old placeholders did). `worlds.spec.ts` enforces the last two, plus unique names across worlds. World IDs were renamed to match (`world_thornwick_vale` …); nothing persists them — runs store the world as an integer.
+
+**Still open:** art direction and production (`asset-list.md` §1.4 enemies, world backgrounds), and whether enemies get kits of their own — the one part of this pass that would change gameplay. Enemies are still HP/PWR/DEF stat blocks with no abilities, which is why `controlResist` is inert (#18.6). *(This no longer blocks Gold: `gold-economy.md` §9's prestige→calendar calibration was replaced by the account-age ceiling, #23.)*
+
+**What the tuning pass (#22) hands the enemy-kit question:** the enemy *curve* is tuned and derived from a pacing model, so art and kits can be chosen without re-deciding numbers — but anything that changes fight length (enemy abilities, heals, shields, more escort bodies) moves `FIGHT_LENGTH_DRIFT`'s effective value and has to be re-measured on the campaign walk. A first prestige for a party of three is about a week, and a world takes from under an hour (World 1–2) to about two days (World 10), almost all of it grind in front of gates.
 
 ### 7. Passive Skill Tree (backlog item 3)
 Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
@@ -316,7 +321,7 @@ Session-1 playtest, finding 6. `/hero-quest/wiki`, five pages: Basics, Combat, E
 
 **The Economy page marks Trait Gems, Raid Keys and Arena Medals as not in this build.** When Phase 4 ships those systems, flipping `live: true` in `HQ_CURRENCY_DOCS` is the whole edit.
 
-One consequence for the naming passes still owed: Artifact and World names are placeholders, and the Content page now **displays them to players**, with a banner saying so. That raises the priority of `ARTIFACT_TITLES` from "tidy-up" to "visible", though it changes no code — replacing the table is still the entire pass.
+One consequence for the naming passes still owed: Artifact names are placeholders (World names were done 2026-09-15, #6), and the Content page now **displays them to players**, with a banner saying so. That raises the priority of `ARTIFACT_TITLES` from "tidy-up" to "visible", though it changes no code — replacing the table is still the entire pass.
 
 ---
 
@@ -479,7 +484,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - **Decide the Gold consequences (#23)** — first-week income, the lost calendar anchors, and whether the Seal ladder is re-derived now or after world design.
    - **Confirm the solo shape (#22.1)** — no prestige without a party is a consequence of the design, not yet a stated choice.
    - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
-3. **World & Enemy Design (#6)** — the largest remaining greenfield design item. Resolves #5 (world naming). The curve values are no longer parked on it (#10), but enemy kits that change fight length have to be re-measured against #22.
+3. **World & Enemy Design (#6)** — names, themes and rosters done 2026-09-15 (closing #5). What remains is art direction and production, and the optional enemy-kit question; kits that change fight length have to be re-measured against #22.
 4. **The four remaining quick calls (#1-4)** — all answerable in one short pass, none depend on anything else.
 5. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus the two things Phase 3 deliberately left: `global-power-number.md` and `loadouts.md` §4's per-raid auto-apply. GPN is the natural first piece: it was a Phase 3 exit criterion, and Arena matchmaking (#2) cannot be decided without it.
 6. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.

@@ -66,7 +66,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | What resets on prestige (run position only — level persists) | `core-progression-and-prestige.md` | §3 |
 | Void Shards earning formula | `core-progression-and-prestige.md` §4, `economy-and-currencies.md` §3 | |
 | Prestige shop track list | `core-progression-and-prestige.md` | §4 |
-| World themes (fixed pool, no reskins) | `core-progression-and-prestige.md` | §5 |
+| World themes, names and enemy rosters (fixed pool, no reskins) | `core-progression-and-prestige.md` | §5 |
 | Class-switch rules at prestige (no level reset) | `classes-and-combat.md` | §5 |
 
 ### Combat
@@ -254,7 +254,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Artifact effects | 33 | Offense 9 / Defense 8 / Tempo 9 / Fortune 7, max reuse 3 | ✅ named + described |
 | Gear | 36 | 1 per slot per rarity (6 × 6) | ✅ fully named by the epithet table |
 | Traits | 8 stats × 9 grades × 5 sets | — | ✅ all tables transcribed |
-| Worlds | 10 | 10 stages each | ❌ **not designed** — placeholder names and enemies ship; the enemy *curve* is tuned |
+| Worlds | 10 | 10 stages each | ✅ named with themes and rosters (`core-progression-and-prestige.md` §5); ❌ art and enemy kits not designed |
 | Raids | 5 | 4 gacha-paired + Trait | ✅ structure; per-tier mechanic content deferred |
 | Holidays | 4 | New Year, Lunar New Year, Halloween, Christmas | ❌ per-holiday bundle contents deferred |
 

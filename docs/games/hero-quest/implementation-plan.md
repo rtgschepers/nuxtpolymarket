@@ -13,7 +13,7 @@ The governing principle: **the core loop is the risk.** Everything else in this 
 | **2 — Champions** | ✅ Built, with the **full 48-Champion roster** rather than the 8–12 planned, and the full ability-effects pass (`open-items.md` #12–#17). |
 | **3 — Remaining gachas + Loadouts** | ✅ Built, except **GPN**, which is carried into Phase 4 (`open-items.md` #18). Also landed alongside: the dev playtest harness, the Gacha/Collections navigation, the in-game wiki, stat attribution and a projected battle screen (#19–#21, #26). |
 | **4 — Endgame** | Not started. |
-| **5 — Content & tuning** | Partly done early: every roster is structurally complete (Artifact and World names are placeholders), and the combat/progression constants are tuned. **World & enemy design has not happened.** The prestige→calendar Gold mapping below is **retired** — Gold reads account age instead (`gold-economy.md` §3a). |
+| **5 — Content & tuning** | Partly done early: every roster is structurally complete (Artifact names are placeholders; Worlds were named 2026-09-15), and the combat/progression constants are tuned. **World art and enemy kits have not been designed.** The prestige→calendar Gold mapping below is **retired** — Gold reads account age instead (`gold-economy.md` §3a). |
 
 **What comes next** is `open-items.md`'s *Suggested order*: close out the tuning pass (a playtest session, the Gold decisions in #23), then World & Enemy Design, then Phase 4.
 
@@ -140,7 +140,7 @@ Everything that assumes a mature account. Each is genuinely independent — buil
 The long tail, once every system is proven:
 
 - Full rosters: 48 Champions, 48 Artifacts (Skills and Gear are already fully drafted)
-- **World & enemy design** — 10 themes, art, enemy rosters, boss identities. *(World 10 must be named The Void, or Void Shards gets renamed.)*
+- **World & enemy design** — ~~10 themes, enemy rosters, boss identities~~ named 2026-09-15 (World 10 kept as The Void); art and enemy kits remain.
 - The real balance pass: every constant in `open-items.md`, calibrated against actual play data rather than projections
 - ~~`gold-economy.md` §9's prestige→calendar mapping, re-derived now that Hero level persists~~ — retired; Gold is paced on account age (`gold-economy.md` §3a). Re-derive the Seal ladder against it instead (`open-items.md` #23).
 
