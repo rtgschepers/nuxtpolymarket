@@ -4,11 +4,16 @@ import {
     BOSS_MINION_COUNT,
     BOSS_STAGE,
     BOSS_TIMER_SECONDS,
+    ENRAGE_PWR_BONUS,
+    FIGHT_TICK_SECONDS,
     FROSTBIND_FREEZE_STACKS,
+    HASTE_SPD_BONUS,
     MIN_DAMAGE,
     SUPER_BOSS_STAGE
 } from '#shared/utils/hero-quest/constants'
+import { attackIntervalFor } from '#shared/utils/hero-quest/combat'
 import { enemyStatsAt } from '#shared/utils/hero-quest/settle'
+import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { D, ZERO } from '#shared/utils/hero-quest/numbers'
 import { kitFor } from '#shared/utils/hero-quest/content/classes'
 import {
@@ -458,6 +463,65 @@ describe('hero-quest seeded fights', () => {
             for (let index = 1; index < result.events.length; index++) {
                 expect(result.events[index]!.at).toBeGreaterThanOrEqual(result.events[index - 1]!.at)
             }
+        })
+    })
+
+    /**
+     * `buff` and `debuff` statuses have to move the stats combat reads, not just sit in the
+     * registry. Each spec compares the same kind of event either side of the first cast, so the
+     * change can only come from the status.
+     *
+     * Shallow gates on purpose: the Hero's SPD is far from the attack-rate cap and its hits are
+     * well clear of `MIN_DAMAGE`, so neither ceiling can hide the effect.
+     */
+    describe('live buffs and debuffs', () => {
+        const firstCast = (events: readonly { skillId?: string; kind: string; at: number }[], id: string) =>
+            events.find(event => event.skillId === id && event.kind === 'skill')?.at
+
+        it('shortens the swing interval once Haste is up', () => {
+            const result = runFight({ hero: hero(1), position: at(1, BOSS_STAGE), seed: 7 })
+            const haste = firstCast(result.events, 'skill_haste')!
+            // Two strikes per swing share a timestamp; one entry per swing.
+            const swings = [...new Set(result.events
+                .filter(event => event.kind === 'attack' && event.unitIndex === 0)
+                .map(event => event.at))]
+
+            const beforeGap = swings[1]! - swings[0]!
+            const after = swings.findIndex(at => at >= haste)
+            const afterGap = swings[after + 1]! - swings[after]!
+
+            const spd = partyUnitStats(hero(1))[0]!.spd.toNumber()
+            expect(beforeGap).toBeCloseTo(attackIntervalFor(spd), 0)
+            // The swing after Haste lands schedules its successor off doubled SPD. One tick of
+            // slack, since timers resolve on the fight grid.
+            expect(afterGap).toBeLessThanOrEqual(attackIntervalFor(spd * (1 + HASTE_SPD_BONUS)) + FIGHT_TICK_SECONDS)
+            expect(afterGap).toBeLessThan(beforeGap)
+        })
+
+        it('multiplies the Berserker\'s hits once Enrage is up — both halves land', () => {
+            // Enrage puts a PWR buff *and* a DEF debuff on the Berserker. They must stay two
+            // statuses: merged under one id, the buff would vanish into a double-stacked debuff.
+            const result = runFight({ hero: hero(60, 'class_berserker'), position: at(4, BOSS_STAGE), seed: 7 })
+            const enrage = firstCast(result.events, 'skill_enrage')!
+            const plain = result.events.filter(event =>
+                event.kind === 'attack' && event.unitIndex === 0 && event.crit === false)
+
+            const before = plain.filter(event => event.at < enrage).at(-1)!
+            const after = plain.find(event => event.at > enrage && event.enemyIndex === before.enemyIndex)!
+
+            // At least the buff: pooled penetration rises with the buffed PWR too.
+            const ratio = D(after.damage!).div(D(before.damage!)).toNumber()
+            expect(ratio).toBeGreaterThanOrEqual(1 + ENRAGE_PWR_BONUS - 1e-9)
+        })
+
+        it('weakens the escort\'s swings once Threatening Roar is up', () => {
+            const result = runFight({ hero: hero(60, 'class_barbarian'), position: at(4, BOSS_STAGE), seed: 7 })
+            const roar = firstCast(result.events, 'skill_threatening_roar')!
+            const incoming = result.events.filter(event => event.kind === 'enemy_attack' && event.unitIndex === 0)
+
+            const before = incoming.filter(event => event.at < roar).at(-1)!
+            const after = incoming.find(event => event.at > roar && event.enemyIndex === before.enemyIndex)!
+            expect(D(after.damage!).lt(D(before.damage!))).toBe(true)
         })
     })
 })

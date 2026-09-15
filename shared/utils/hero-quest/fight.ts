@@ -46,6 +46,7 @@ import {
 } from './constants'
 import {
     attackIntervalFor,
+    attacksPerSecondFor,
     cooldownFor,
     partyMitigation,
     rawHitDamage,
@@ -72,6 +73,7 @@ import {
     extendHostile,
     hasStatus,
     reflectFraction,
+    statMultiplier,
     tickStatuses
 } from './status'
 import type { StatusInstance } from './status'
@@ -172,7 +174,8 @@ interface Combatant {
     hp: Decimal
     /** Sim-seconds until the next autoattack. */
     attackTimer: number
-    skills: { id: string; interval: number; timer: number; multiplier: number; effect: AbilityEffect }[]
+    /** `cooldownSeconds` is the base; each reset re-reads SPD, so Haste shortens the next cooldown. */
+    skills: { id: string; cooldownSeconds: number; timer: number; multiplier: number; effect: AbilityEffect }[]
     /**
      * Live status effects. Mutable and separate from `stats`, which `stats.ts` builds once and
      * never rewrites — see the `status.ts` header for why that split exists.
@@ -227,12 +230,12 @@ export function runFight(input: FightInput): FightResult {
         // Control Champion cycles its abilities faster than a Tank standing next to it — and by
         // its `cooldownFactor`, which carries Artifacts' Tempo lines.
         skills: (kits[index] ?? []).map((entry) => {
-            const interval = cooldownFor(entry.cooldownSeconds, stats.spd, stats.cooldownFactor)
             const effect = entry.effect ?? SINGLE_TARGET
             return {
                 id: entry.id,
-                interval,
-                timer: interval,
+                cooldownSeconds: entry.cooldownSeconds,
+                // Nothing carries a status at t=0, so the base stats are the live ones here.
+                timer: cooldownFor(entry.cooldownSeconds, stats.spd, stats.cooldownFactor),
                 multiplier: entry.abilityMultiplier * (effect.wealthScaled ? wealth : 1),
                 effect
             }
@@ -286,8 +289,14 @@ export function runFight(input: FightInput): FightResult {
      * DEF — pooled on the party side, never on the enemy side (`classes-and-combat.md` §7).
      * Recomputed per target rather than once, because a boss and its escort have different
      * DEF and pooling theirs would make each of them individually harder to hurt.
+     *
+     * Both sides go through their live statuses: an Empowered unit adds its buffed PWR to the
+     * pool, and a Shatter Armor on the target lowers the DEF the pool is divided against.
      */
-    const penetrationAgainst = (foe: EnemyCombatant) => ONE.sub(partyMitigation(units, foe.stats.def))
+    const penetrationAgainst = (foe: EnemyCombatant) => ONE.sub(partyMitigation(
+        party.map(member => liveUnitStats(member.stats, member.statuses)),
+        liveEnemyStats(foe.stats, foe.statuses).def
+    ))
 
     /**
      * Advance one combatant's statuses, applying periodic damage and healing and logging what
@@ -386,9 +395,19 @@ export function runFight(input: FightInput): FightResult {
                     ...(spec.stacks === undefined ? {} : { stacks: spec.stacks })
                 })
 
+                /**
+                 * The caster's own half, under its own instance id. Enrage lands both halves on the
+                 * Berserker — a PWR buff via `selfStatus` and a DEF debuff via `status` — and under
+                 * one shared id `applyStatus` would merge the second into the first as a refresh,
+                 * leaving a single double-stacked debuff and no buff. The event still names the
+                 * ability, which is what the replay feed shows.
+                 */
                 const landSelfStatus = () => {
                     if (!effect.selfStatus) return
-                    applyStatus(unit.statuses, statusFrom(effect.selfStatus))
+                    applyStatus(unit.statuses, {
+                        ...statusFrom(effect.selfStatus),
+                        id: `${skillId ?? 'autoattack'}_self`
+                    })
                     events.push({
                         at: elapsed, kind: 'status_applied', unitIndex: index,
                         statusId: skillId ?? 'autoattack'
@@ -492,7 +511,8 @@ export function runFight(input: FightInput): FightResult {
                                 : decMaxZero(foe.hp).div(foe.stats.hp).toNumber()
                             const scaled = (multiplier / hits) * executeMultiplier(effect, hpFraction)
                             const { damage, crit } = rollDamage(
-                                unit.stats, penetrationAgainst(foe), scaled, random, effect
+                                liveUnitStats(unit.stats, unit.statuses),
+                                penetrationAgainst(foe), scaled, random, effect
                             )
                             foe.hp = foe.hp.sub(damage)
                             dealtDamage = true
@@ -553,7 +573,9 @@ export function runFight(input: FightInput): FightResult {
 
             unit.attackTimer -= FIGHT_TICK_SECONDS
             if (unit.attackTimer <= 0) {
-                unit.attackTimer += attackIntervalFor(unit.stats.spd)
+                // The next interval is read off live SPD, so a Haste landing mid-fight speeds up
+                // the swing after this one.
+                unit.attackTimer += attackIntervalFor(liveUnitStats(unit.stats, unit.statuses).spd)
                 // A stun stops the swing but the timer still ran — the attack is lost, not
                 // banked, which is what makes hard control worth more than a slow.
                 if (canAutoattack(unit.statuses)) {
@@ -573,7 +595,11 @@ export function runFight(input: FightInput): FightResult {
             for (const skill of unit.skills) {
                 skill.timer -= FIGHT_TICK_SECONDS
                 if (skill.timer > 0) continue
-                skill.timer += skill.interval
+                skill.timer += cooldownFor(
+                    skill.cooldownSeconds,
+                    liveUnitStats(unit.stats, unit.statuses).spd,
+                    unit.stats.cooldownFactor
+                )
                 if (silenced) continue
                 if (!cast(skill.multiplier, skill.effect, skill.id)) break
             }
@@ -599,8 +625,13 @@ export function runFight(input: FightInput): FightResult {
             if (!target) break
             const targetIndex = party.indexOf(target)
             // Through the shared helper rather than re-deriving the formula here, so the
-            // enemy's swing picks up the MIN_DAMAGE floor exactly as the party's does.
-            const raw = rawHitDamage(foe.stats.pwr, target.stats.def)
+            // enemy's swing picks up the MIN_DAMAGE floor exactly as the party's does. Live
+            // stats on both sides: Weaken lowers the attacker's PWR, Bulwark Stance raises the
+            // defender's DEF, and Enrage's penalty lowers the Berserker's own.
+            const raw = rawHitDamage(
+                liveEnemyStats(foe.stats, foe.statuses).pwr,
+                liveUnitStats(target.stats, target.statuses).def
+            )
             // Shields eat what mitigation left, never the raw hit — see `absorbDamage`.
             const { throughput, absorbed, broken } = absorbDamage(target.statuses, raw)
             target.hp = target.hp.sub(throughput)
@@ -669,6 +700,44 @@ export function runFight(input: FightInput): FightResult {
     }
 
     return result('timeout', BOSS_TIMER_SECONDS, events, enemyHpLeft(), enemyMaxHps, input.seed)
+}
+
+/**
+ * A party member's stats with its live `buff` / `debuff` statuses applied.
+ *
+ * `UnitStats` is built once by `stats.ts` and never rewritten, so statuses resolve here at the
+ * point of use (see the `status.ts` header). Only the stats combat reads per action move: PWR
+ * (damage dealt, pooled penetration), DEF (mitigation) and SPD (attack interval, cooldowns).
+ *
+ * Heal, shield and DoT magnitudes stay on the caster's base PWR — a buff to *damage output* is
+ * not a buff to healing, and `projection.ts` prices sustain off base PWR the same way.
+ */
+function liveUnitStats(stats: UnitStats, statuses: readonly StatusInstance[]): UnitStats {
+    if (statuses.length === 0) return stats
+    const spd = stats.spd.mul(statMultiplier(statuses, 'spd'))
+    return {
+        ...stats,
+        pwr: stats.pwr.mul(statMultiplier(statuses, 'pwr')),
+        def: stats.def.mul(statMultiplier(statuses, 'def')),
+        spd,
+        attacksPerSecond: attacksPerSecondFor(spd)
+    }
+}
+
+/**
+ * An enemy's stats with its live statuses applied — PWR and DEF, the two an enemy is read on.
+ *
+ * ⚠ Enemies attack at SPD 0 (`attackIntervalFor(0)`), so a SPD debuff has nothing to multiply:
+ * the slow half of Slow, Chain Bind and Frostbind is inert, though Frostbind's freeze still lands.
+ * `projection.ts` ignores enemy SPD debuffs for the same reason.
+ */
+function liveEnemyStats(stats: EnemyStats, statuses: readonly StatusInstance[]): EnemyStats {
+    if (statuses.length === 0) return stats
+    return {
+        ...stats,
+        pwr: stats.pwr.mul(statMultiplier(statuses, 'pwr')),
+        def: stats.def.mul(statMultiplier(statuses, 'def'))
+    }
 }
 
 /** Crit rolled per strike, not averaged — the one place in the game that does. */
