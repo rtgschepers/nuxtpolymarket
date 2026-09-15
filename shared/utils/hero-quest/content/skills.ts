@@ -36,6 +36,7 @@ import {
     SKILL_BASE_ABILITY_MULTIPLIER,
     SKILL_BASE_COOLDOWN_SECONDS,
     SKILL_BUFF_FRACTION,
+    SKILL_COLLECTION_PASSIVE_FRACTION,
     SKILL_COOLDOWN_REFUND_FRACTION,
     SKILL_DEBUFF_FRACTION,
     SKILL_DOT_MULTIPLIER,
@@ -49,7 +50,7 @@ import {
 import { scaleEffect } from '../effects'
 import type { AbilityEffect } from '../effects'
 import { RARITIES, RARITY_EFFECT_LINES, investmentScalar, rarityIndex } from '../gacha'
-import type { HqModifier } from '../modifiers'
+import { COLLECTION_PASSIVE_KINDS, type HqModifier } from '../modifiers'
 import type { ClassId, ClassSkill, HeroSnapshot, HqStatKey, OwnedCopy, Rarity } from '../types'
 import { classPath, kitFor } from './classes'
 
@@ -435,9 +436,8 @@ export function skillPotency(star: number, level: number): number {
 /**
  * Every equipped Passive's modifier lines, at that copy's potency.
  *
- * **Equipped only.** Unlike Gear and Champions, Skills have no collection passive — §5 makes the
- * slots the whole mechanic, and no doc grants an unequipped Skill anything. Reading the full
- * collection here would invent a reward loop.
+ * **Equipped only** — the collection passive for everything *else* owned is
+ * `skillCollectionModifiers`, and the two never count the same copy.
  *
  * Every line scales, economy lines included: a levelled Merchant's Eye is a better Merchant's Eye.
  * `SKILL_ECONOMY_COEFFICIENT` still holds the Gold family under the combat lines, so §5's stack
@@ -454,6 +454,32 @@ export function skillModifiers(equipped: readonly OwnedCopy[]): HqModifier[] {
             ...line,
             magnitude: line.magnitude * potency
         }))
+    })
+}
+
+/**
+ * The collection passive: what every **owned but unequipped** Passive Skill still gives the Hero.
+ *
+ * Mirrors Gear's `passiveBonus` (decided 2026-09-15 — no doc granted unequipped Skills anything
+ * before): each copy contributes `SKILL_COLLECTION_PASSIVE_FRACTION` of its own equipped lines, at
+ * its own potency, so levelling a benched Skill still shows up. Only combat-stat kinds pass
+ * (`COLLECTION_PASSIVE_KINDS`). A copy named in `equipped` is skipped — it already pays in full
+ * through `skillModifiers`.
+ */
+export function skillCollectionModifiers(
+    owned: readonly OwnedCopy[],
+    equipped: readonly OwnedCopy[]
+): HqModifier[] {
+    const equippedIds = new Set(equipped.map(copy => copy.contentId))
+    return owned.flatMap((copy) => {
+        if (equippedIds.has(copy.contentId) || !isSkillId(copy.contentId)) return []
+        const definition = getSkill(copy.contentId)
+        if (definition.type !== 'passive') return []
+
+        const potency = skillPotency(copy.star, copy.level)
+        return (definition.modifiers ?? [])
+            .filter(line => COLLECTION_PASSIVE_KINDS.has(line.kind))
+            .map(line => ({ ...line, magnitude: line.magnitude * potency * SKILL_COLLECTION_PASSIVE_FRACTION }))
     })
 }
 

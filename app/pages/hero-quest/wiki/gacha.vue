@@ -205,11 +205,13 @@ const dupesToMax = totalDupesToMax()
         </li>
         <li>
           <strong class="text-default">Skills</strong> fill skill slots and fire on their own. No
-          duplicate slotting — level the one copy instead.
+          duplicate slotting — level the one copy instead. An unequipped Passive still gives your
+          Hero a small share of its stat bonus.
         </li>
         <li>
           <strong class="text-default">Artifacts</strong> are party-wide passives. Nothing caps
-          how many share a category, and there are no set bonuses to chase.
+          how many share a category, and there are no set bonuses to chase. An unequipped Artifact
+          still gives your Hero a small share of its stat lines.
         </li>
       </ul>
     </HeroQuestWikiSection>

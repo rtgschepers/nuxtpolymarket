@@ -165,7 +165,7 @@ function asPercent(fraction: number) {
         />
 
         <p class="text-xs text-muted">
-          Nothing caps how many equipped Artifacts share a category
+          Nothing caps how many equipped Artifacts share a category. Unequipped ones still grant a small share of their stats to your Hero
         </p>
 
         <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

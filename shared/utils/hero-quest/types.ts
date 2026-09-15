@@ -275,15 +275,25 @@ export interface HeroSnapshot {
     equippedGear?: Readonly<Record<string, string>>
     /**
      * Equipped Skills only, up to the purchased slot count. Actives join the Hero's firing kit;
-     * Passives fold into the stat pipeline. An unequipped Skill contributes nothing
-     * (`skills-gacha.md` §5 — the slots are the whole mechanic).
+     * Passives fold into the stat pipeline at full strength.
      */
     equippedSkills?: readonly OwnedCopy[]
+    /**
+     * **Every owned Skill**, equipped or not. Unequipped Passives pay the Hero a small collection
+     * passive (`skillCollectionModifiers`); equipped copies are skipped there, since
+     * `equippedSkills` already pays them in full.
+     */
+    ownedSkills?: readonly OwnedCopy[]
     /**
      * Equipped Artifacts only. **Party-wide** — every one applies to the Hero and every fielded
      * Champion alike (`artifacts-dig-site-gacha.md` §1), which is what separates them from Gear.
      */
     equippedArtifacts?: readonly OwnedCopy[]
+    /**
+     * **Every owned Artifact**, equipped or not. Unequipped copies pay a small, Hero-only collection
+     * passive (`artifactCollectionModifiers`).
+     */
+    ownedArtifacts?: readonly OwnedCopy[]
     /**
      * Hours of the player's *current* Gold income sitting banked — the Gambler's Strike family's
      * only input (`skills-gacha.md` §4¹).

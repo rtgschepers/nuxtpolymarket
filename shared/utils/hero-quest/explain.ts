@@ -49,8 +49,8 @@ import {
 import { classPath, getClass } from './content/classes'
 import { getArchetype } from './content/champions'
 import { gearModifiers } from './content/gear'
-import { skillModifiers } from './content/skills'
-import { artifactModifiers } from './content/artifacts'
+import { skillCollectionModifiers, skillModifiers } from './content/skills'
+import { artifactCollectionModifiers, artifactModifiers } from './content/artifacts'
 import {
     baseScaleFor,
     championInvestmentMultiplier,
@@ -448,18 +448,33 @@ function statBreakdowns(
     })
 }
 
-/** Gear / Skills / Artifacts split into the three sums the panel itemises. */
+/**
+ * Gear / Skills / Artifacts split into the three sums the panel itemises.
+ *
+ * On the Hero, the Skills and Artifacts rows each include that system's collection passive — the
+ * owned-but-unequipped copies — so every source the Hero's stat actually received is itemised.
+ * A Champion row shows equipped Artifacts only, because collection passives never reach one.
+ */
 function passiveSources(hero: HeroSnapshot, key: HqStatKey, partyWideOnly: boolean) {
-    const artifacts = sumModifiers(artifactModifiers(hero.equippedArtifacts ?? []))
-    const sources = [{ label: 'Artifacts', pct: artifacts.stats[key] - 1 }]
-    if (partyWideOnly) return sources
+    const equippedArtifacts = hero.equippedArtifacts ?? []
+    if (partyWideOnly) {
+        return [{ label: 'Artifacts', pct: sumModifiers(artifactModifiers(equippedArtifacts)).stats[key] - 1 }]
+    }
 
+    const equippedSkills = hero.equippedSkills ?? []
     const gear = sumModifiers(gearModifiers(hero.ownedGear ?? [], hero.equippedGear ?? {}))
-    const skills = sumModifiers(skillModifiers(hero.equippedSkills ?? []))
+    const skills = sumModifiers([
+        ...skillModifiers(equippedSkills),
+        ...skillCollectionModifiers(hero.ownedSkills ?? [], equippedSkills)
+    ])
+    const artifacts = sumModifiers([
+        ...artifactModifiers(equippedArtifacts),
+        ...artifactCollectionModifiers(hero.ownedArtifacts ?? [], equippedArtifacts)
+    ])
     return [
         { label: 'Gear', pct: gear.stats[key] - 1 },
         { label: 'Skills', pct: skills.stats[key] - 1 },
-        ...sources
+        { label: 'Artifacts', pct: artifacts.stats[key] - 1 }
     ]
 }
 

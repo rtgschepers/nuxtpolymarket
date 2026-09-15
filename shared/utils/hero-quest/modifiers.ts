@@ -85,6 +85,19 @@ export interface HqModifier {
 const STAT_KEYS: readonly HqStatKey[] = ['pwr', 'spd', 'lck', 'imp', 'vit', 'def']
 
 /**
+ * The line kinds an **unequipped** Skill or Artifact passes on through the collection passive
+ * (`SKILL_COLLECTION_PASSIVE_FRACTION`, `ARTIFACT_COLLECTION_PASSIVE_FRACTION`).
+ *
+ * Combat stats only — the six stats, max HP and crit. Everything else stays equipped-only:
+ * economy lines would let a wide collection stack Gold% nobody slotted, cooldown and damage-taken
+ * lines are uptime and mitigation rather than stats, and shred, control resist and reflect are
+ * effects that only make sense on something the player chose to field.
+ */
+export const COLLECTION_PASSIVE_KINDS: ReadonlySet<ModifierKind> = new Set<ModifierKind>([
+    'stat', 'maxHp', 'critChance', 'critDamage'
+])
+
+/**
  * Every modifier line summed, resolved into the exact shapes the consumers want.
  *
  * Reducing kinds (`enemyDefShred`, `damageTaken`, `cooldown`) arrive here as *factors* rather

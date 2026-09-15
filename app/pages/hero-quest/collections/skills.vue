@@ -182,7 +182,7 @@ function asPercent(fraction: number) {
         />
 
         <p class="text-xs text-muted">
-          18 Actives, 18 Passives — a slot takes either
+          18 Actives, 18 Passives — a slot takes either. Unequipped Passives still grant a small share of their stats to your Hero
         </p>
 
         <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

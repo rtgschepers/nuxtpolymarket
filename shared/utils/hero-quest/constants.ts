@@ -1138,6 +1138,20 @@ export const SKILL_ECONOMY_COEFFICIENT = 0.4 // UNTUNED ╧
 export const SKILL_POTENCY_PER_POINT = 0.02 // UNTUNED ╧
 
 /**
+ * What an **owned but unequipped** Passive Skill contributes, as a fraction of what the same copy
+ * gives equipped — the Skills half of the collection passive Gear and Champions already have.
+ *
+ * Decided 2026-09-15, not transcribed: `skills-gacha.md` granted unequipped Skills nothing. 0.1
+ * mirrors Gear's equipped-to-passive ratio (`GEAR_PASSIVE_COEFFICIENT / SLOT_BASE_BONUS`), so
+ * owning is worth something and equipping well is worth ten times more.
+ *
+ * **Hero only, and combat-stat lines only** (`COLLECTION_PASSIVE_KINDS`) — economy and cooldown
+ * lines stay equipped-only, or a wide collection would stack Gold% and cooldown reduction from
+ * slots nobody chose. Active Skills carry no stat lines, so an unequipped Active adds nothing.
+ */
+export const SKILL_COLLECTION_PASSIVE_FRACTION = 0.1 // UNTUNED ╧
+
+/**
  * Gold burst size, in **minutes of current income**, by rarity.
  *
  * `gold-economy.md` §6 requires flat-Gold effects to be a duration of income rather than a fixed
@@ -1206,6 +1220,17 @@ export const ARTIFACT_EFFECT_PER_POINT = 0.004 // UNTUNED ╧
  * Artifacts at once), so they contribute differently to §5's ×3 stack target.
  */
 export const ARTIFACT_ECONOMY_COEFFICIENT = 0.3 // UNTUNED ╧
+
+/**
+ * What an **owned but unequipped** Artifact contributes, as a fraction of its equipped line
+ * magnitude — the Artifact twin of `SKILL_COLLECTION_PASSIVE_FRACTION`, and decided on the same
+ * terms: 0.1 mirrors Gear, combat-stat lines only.
+ *
+ * **Hero only, unlike an equipped Artifact.** Equipped Artifacts are party-wide by identity
+ * (§1); a benched one joins the Champion and Gear passives, which reach only the Hero. A
+ * party-wide collection passive would multiply a wide collection by party size.
+ */
+export const ARTIFACT_COLLECTION_PASSIVE_FRACTION = 0.1 // UNTUNED ╧
 
 // ── Loadouts ───────────────────────────────────────  loadouts.md §3
 

@@ -22,8 +22,8 @@ import {
 import { classPath, getClass } from './content/classes'
 import { getArchetype } from './content/champions'
 import { gearModifiers } from './content/gear'
-import { skillModifiers } from './content/skills'
-import { artifactModifiers } from './content/artifacts'
+import { skillCollectionModifiers, skillModifiers } from './content/skills'
+import { artifactCollectionModifiers, artifactModifiers } from './content/artifacts'
 import { attacksPerSecondFor, critChanceFor, critMultiplierFor, maxHpFor } from './combat'
 import { mergeTotals, noModifiers, sumModifiers } from './modifiers'
 import type { ModifierTotals } from './modifiers'
@@ -198,17 +198,24 @@ export function heroStatBlock(
 // `modifiers.ts`.
 
 /**
- * Hero-only lines: Gear (`gear-equipment.md` §1) and equipped Skill passives
- * (`skills-gacha.md` §1). Neither system touches a Champion, by design — Champions carry their
- * own kits and their own progression.
+ * Hero-only lines: Gear (`gear-equipment.md` §1), equipped Skill passives (`skills-gacha.md` §1),
+ * and the collection passives of every owned-but-unequipped Skill and Artifact. None of these
+ * touches a Champion, by design — Champions carry their own kits and their own progression, and
+ * every collection passive in the game (Champions', Gear's, these two) reaches only the Hero.
  */
 export function heroModifierTotals(hero: HeroSnapshot): ModifierTotals {
     const gear = hero.ownedGear ?? []
     const skills = hero.equippedSkills ?? []
-    if (gear.length === 0 && skills.length === 0) return noModifiers()
+    const ownedSkills = hero.ownedSkills ?? []
+    const ownedArtifacts = hero.ownedArtifacts ?? []
+    if (gear.length === 0 && skills.length === 0 && ownedSkills.length === 0 && ownedArtifacts.length === 0) {
+        return noModifiers()
+    }
     return sumModifiers([
         ...gearModifiers(gear, hero.equippedGear ?? {}),
-        ...skillModifiers(skills)
+        ...skillModifiers(skills),
+        ...skillCollectionModifiers(ownedSkills, skills),
+        ...artifactCollectionModifiers(ownedArtifacts, hero.equippedArtifacts ?? [])
     ])
 }
 

@@ -29,6 +29,7 @@
  */
 
 import {
+    ARTIFACT_COLLECTION_PASSIVE_FRACTION,
     ARTIFACT_ECONOMY_COEFFICIENT,
     ARTIFACT_EFFECT_PER_POINT
 } from '../constants'
@@ -38,7 +39,7 @@ import {
     RARITY_STAT_MULTIPLIER,
     investmentScalar
 } from '../gacha'
-import type { HqModifier, ModifierKind } from '../modifiers'
+import { COLLECTION_PASSIVE_KINDS, type HqModifier, type ModifierKind } from '../modifiers'
 import type { HqStatKey, OwnedCopy, Rarity } from '../types'
 
 /** The four effect categories — stat *domains*, deliberately not Champion archetypes (§2). */
@@ -471,8 +472,7 @@ export function artifactLineMagnitude(
  * is additive by construction, so that rule needs no enforcement here; it is a property of the
  * pipeline rather than a check.
  *
- * Unlike Gear there is no unequipped passive: §1 makes Artifacts an equipped loadout, and no doc
- * grants an un-slotted Artifact anything.
+ * Equipped only — unequipped copies pay the smaller, Hero-only `artifactCollectionModifiers`.
  */
 export function artifactModifiers(equipped: readonly OwnedCopy[]): HqModifier[] {
     return equipped.flatMap((copy) => {
@@ -483,6 +483,34 @@ export function artifactModifiers(equipped: readonly OwnedCopy[]): HqModifier[] 
             stat: line.stat,
             magnitude: artifactLineMagnitude(line.kind, definition.rarity, copy.star, copy.level)
         }))
+    })
+}
+
+/**
+ * The collection passive: what every **owned but unequipped** Artifact still gives the Hero.
+ *
+ * Mirrors Gear's `passiveBonus` (decided 2026-09-15 — §1 granted an un-slotted Artifact nothing
+ * before): `ARTIFACT_COLLECTION_PASSIVE_FRACTION` of each combat-stat line it would pay equipped
+ * (`COLLECTION_PASSIVE_KINDS`), at its own rarity and investment. **Hero only** — the caller routes
+ * it with Gear and Skills, not with the party-wide equipped Artifacts. A copy named in `equipped`
+ * is skipped; it already pays in full.
+ */
+export function artifactCollectionModifiers(
+    owned: readonly OwnedCopy[],
+    equipped: readonly OwnedCopy[]
+): HqModifier[] {
+    const equippedIds = new Set(equipped.map(copy => copy.contentId))
+    return owned.flatMap((copy) => {
+        if (equippedIds.has(copy.contentId) || !isArtifactId(copy.contentId)) return []
+        const definition = getArtifact(copy.contentId)
+        return definition.effects
+            .filter(line => COLLECTION_PASSIVE_KINDS.has(line.kind))
+            .map(line => ({
+                kind: line.kind,
+                stat: line.stat,
+                magnitude: artifactLineMagnitude(line.kind, definition.rarity, copy.star, copy.level)
+                    * ARTIFACT_COLLECTION_PASSIVE_FRACTION
+            }))
     })
 }
 

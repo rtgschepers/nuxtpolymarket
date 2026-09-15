@@ -353,7 +353,12 @@ export function heroSnapshotOf(
             collections.artifact,
             artifactSlots(shopLevels),
             isArtifactId
-        )
+        ),
+        // The whole collection, for the Skill and Artifact collection passives. Anything not in
+        // the equipped lists above — including a copy past the purchased slot count — pays the
+        // smaller unequipped share.
+        ownedSkills: ownedCopies(collections.skill, isSkillId),
+        ownedArtifacts: ownedCopies(collections.artifact, isArtifactId)
     }
 
     /**
