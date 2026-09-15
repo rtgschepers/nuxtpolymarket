@@ -98,9 +98,22 @@ const CLASS_NODE_SPECS: readonly Omit<ClassNode, 'defaultRow'>[] = [
                 duration: SKILL_STATUS_DURATION_SECONDS, magnitude: HASTE_SPD_BONUS
             }
         }, NO_DAMAGE),
-        spread: { pwr: 'mid', spd: 'mid', lck: 'mid', imp: 'mid', vit: 'mid', def: 'mid' },
+        /**
+         * Decided this pass, not transcribed — the Beginner was the only node in the tree with
+         * no damage in its kit *and* no `high` stat, and a fresh account fields it alone for a
+         * whole prestige.
+         *
+         * At all-`mid` and one strike it dealt 5.6 DPS at level 1, against 18–25 for every base
+         * class, so a solo opening stage ran 5m 20s and the Hero died six times over before
+         * clearing it. `high` PWR is what every base class already carries; `high` SPD and a
+         * second strike are the Beginner's own, and both are node-local — neither rides the
+         * cumulative kit, so no later class inherits them. Together they are ×4 DPS, which
+         * is the part of the solo gap the enemy side should not have to close. See
+         * `BOSS_HP_MULT` for the gate that keeps a solo Beginner from walking past Stage 5.
+         */
+        spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'mid', def: 'mid' },
         delta: {},
-        strikesPerAttack: 1,
+        strikesPerAttack: 2,
         autoTarget: 'lowest_hp_pct'
     },
 

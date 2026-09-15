@@ -233,7 +233,10 @@ describe('enemy packs', () => {
             const two = killsBeforeWipe(units, { members: [member, member] }, spk)
 
             expect(two).toBeLessThan(one)
-            expect(two).toBe(Math.floor(one / effectiveStreams(2)))
+            // Divide the unrounded survival time, not `one`: flooring twice is off by one
+            // whenever the fractional kill `one` dropped would have carried across.
+            const survives = secondsToDie(units, { members: [member] })
+            expect(two).toBe(Math.floor(survives / effectiveStreams(2) / spk))
         })
     })
 

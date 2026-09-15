@@ -74,10 +74,10 @@ function at(world: number, stage: number, killsInStage = 0, prestige = 0): RunPo
 /**
  * Lowest level at which a solo Hero outlasts every wave stage in World 1 — **found, not named.**
  *
- * The opening is lethal by design since `BASE_HP` came down to 150 (see "the opening is playable
- * at all"), so a level-1 Hero wipes on the first screen and levels out of it. Specs about
- * *advance* and *gate* logic need a Hero past that point, or they quietly measure the wave wipe
- * instead of the rule they claim to test.
+ * A Hero that levels as it walks clears World 1 Stages 1–4, but a level-1 *snapshot* held for a
+ * whole settle window does not: it drops on Stage 4 of World 1. Specs about *advance* and *gate*
+ * logic need a Hero past that point, or they quietly measure the wave wipe instead of the rule
+ * they claim to test.
  */
 const OPENING_CLEAR_LEVEL = (() => {
     for (let heroLevel = 1; heroLevel <= 300; heroLevel++) {
@@ -329,15 +329,15 @@ describe('hero-quest settle', () => {
          * A level-1 solo Hero must be able to *make progress* on the very first stage — which
          * is deliberately weaker than clearing it.
          *
-         * `BASE_HP` came down to 150 so that VIT carries the HP pool from level 1 instead of a
-         * flat constant carrying it for twenty levels, and the price is a lethal opening: a
-         * level-1 Hero wipes partway through World 1 Stage 1. That is survivable as a *design*
-         * because a wave wipe banks the kills it landed and restarts the same stage, so income
-         * never stops and the Hero levels its way out (`killsBeforeWipe`).
+         * The opening clears Stage 1 today, but this floor is written against the weaker claim
+         * on purpose. For a long stretch it did not — a level-1 Hero wiped partway through World
+         * 1 Stage 1 — and that was still survivable as a *design*, because a wave wipe banks the
+         * kills it landed and restarts the same stage, so income never stops and the Hero
+         * levels its way out (`killsBeforeWipe`).
          *
          * What must never happen is banking **zero** kills. That is the real "unfarmable from
          * the first screen" failure — no XP, no Gold, no way forward, ever — and it is what
-         * this floor guards.
+         * this floor guards, whichever way the opening is tuned next.
          *
          * Pinned deliberately rather than left to incidental coverage. `BASE_HP` silently
          * reverted to a stale value twice during editing; the suite happened to catch it the
@@ -384,23 +384,28 @@ describe('hero-quest settle', () => {
                 for (let stage = 1; stage <= STAGES_PER_WORLD; stage++) {
                     if (stage === BOSS_STAGE || stage === SUPER_BOSS_STAGE) continue
                     const position = at(world, stage)
-                    const units = partyUnitStats(hero)
-                    const pack = enemyPackAt(position)
-                    const kills = killsBeforeWipe(units, pack, secondsPerKill(units, pack))
+                    const kills = wipeCount(position)
                     if (kills > 0 && kills < BASE_KILL_COUNT) return position
                 }
             }
             throw new Error('no stage in the opening loop wipes a level-1 Hero mid-stage')
         })()
 
+        /**
+         * Both helpers read the rate model `settle()` itself runs (`rateAt`), kit included.
+         *
+         * They used to resolve the bare stat block, which leaves out the Beginner's Haste. That
+         * is harmless while the fixture sits deep inside the wipe band and wrong at its edge:
+         * once the opening became clearable the first wipe landed on World 1 Stage 3, where the
+         * bare block banked 24 kills and `settle` — hasted — banked 30 and cleared the stage.
+         */
         function secondsPerKillAt(position: RunPosition, heroLevel = 1) {
-            const units = partyUnitStats({ ...hero, heroLevel })
-            return secondsPerKill(units, enemyPackAt(position))
+            return rateAt({ ...hero, heroLevel }, position).secondsPerKill
         }
 
         function wipeCount(position: RunPosition, heroLevel = 1) {
-            const units = partyUnitStats({ ...hero, heroLevel })
-            return killsBeforeWipe(units, enemyPackAt(position), secondsPerKillAt(position, heroLevel))
+            const { abilities, units, pack, secondsPerKill: spk } = rateAt({ ...hero, heroLevel }, position)
+            return killsBeforeWipe(units, pack, spk, abilities.healingPerSecond, abilities.damageTakenFactor)
         }
 
         /**

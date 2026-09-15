@@ -184,6 +184,39 @@ export const ENEMY_PRESTIGE_STEP_MULT = 1
  * The old three-values-of-PWR comparison this replaced is no longer meaningful: it measured
  * where the clamp broke, and the clamp no longer moves.
  *
+ * ## Cut 7 → 1.75, with `K` 4 → 16 — the same clamp, a quarter of the hit
+ *
+ * Those survival figures stopped being true when `BASE_ENEMY_HP` 10 → 60 made every stage
+ * attempt six times longer and nothing on the defensive side moved with it. Measured at each
+ * world's entry level before this cut: waves 1.0x–2.6x through World 3 and elites **0.1x–0.4x
+ * through World 5**, with elite wipe blockers in the walk as deep as World 6 —
+ * so the campaign walk was full of elite wipes the whole time these comments said every blocker
+ * was a boss timer. A solo Beginner sat at 0.07x–0.12x on World 1's first four stages.
+ *
+ * Moved as a pair so the clamp stays exactly where it was. Mitigation is `DEF / (PWR × K)`, so
+ * dividing PWR by four and multiplying `K` by four leaves every mitigation fraction in the game
+ * unchanged — the Beginner still turns aside 36% of a trash hit, a Tank still reaches immunity
+ * at DEF 28 — and the only thing that moves is the size of the hit, to exactly a quarter.
+ * `STAT_PACES_ENEMY_CURVE` holds that at every depth. Swept with the Beginner retune
+ * (`content/classes.ts`) in place, solo on the World 1 walk:
+ *
+ *     PWR / K       S1      S2      S3      S4
+ *     7 / 4         0.46x   0.37x   0.31x   0.28x   (Beginner retune alone)
+ *     3.5 / 8       0.92x   0.75x   0.64x   0.57x
+ *     2 / 14        1.63x   1.32x   1.12x   1.00x   ✗ no margin on S4
+ *     1.75 / 16     1.86x   1.51x   1.29x   1.15x   ← here
+ *
+ * **Pace-neutral, measured:** the first prestige for a party of 3 reads 6d 9h at every row. Offence
+ * never felt `K` (see its comment), so this moves survival and nothing else.
+ *
+ * 1.75 is also about as far as the pair can go: a Tank's level-1 hit is already 0.75 and floors
+ * at `MIN_DAMAGE` for the first few stages, and a Beginner's is 1.13. Another halving puts
+ * every unit on the floor at World 1, which is the reading this whole scheme exists to avoid.
+ *
+ * With the party the walk fields, at each world's entry level: waves 4x–13x, elites 0.6x–2.1x
+ * (World 1 2.1x, World 2–3 still wipes on arrival and levels out at the Stage 5 grind), and
+ * every blocker in the first prestige is now a boss timer.
+ *
  * `BASE_ENEMY_HP` is **how long a fight is**, and with `ENEMY_HP_STEP_EXPONENT` covering the
  * party's DPS growth it is that at every depth rather than just on the first screen. Raised
  * 10 → 60 for the one-week first prestige: a wave stage goes from 15 seconds — the
@@ -198,7 +231,7 @@ export const ENEMY_PRESTIGE_STEP_MULT = 1
  * W5S10 at 175. Raising this further means raising the timer with it.
  */
 export const BASE_ENEMY_HP = 60 // TUNED ✓
-export const BASE_ENEMY_PWR = 7 // TUNED ✓
+export const BASE_ENEMY_PWR = 1.75 // TUNED ✓
 export const BASE_ENEMY_DEF = 2 // TUNED ✓
 export const ELITE_STAT_MULT = 1.2 // TUNED ✓
 
@@ -211,9 +244,36 @@ export const ELITE_STAT_MULT = 1.2 // TUNED ✓
  * `BOSS_TIMER_SECONDS` is a pure DPS check, and party DPS is exactly what Champions add.
  * Making the *gate* the wall — rather than the wave ramp — is what turns "this got slow"
  * into "this needs a party", which is the thing a player can act on.
+ *
+ * ## 3 → 7 and 6 → 9, with the Beginner retune
+ *
+ * **The Stage 5 boss is the first wall of a fresh account.** A solo level-1 Beginner is meant
+ * to clear World 1 Stages 1–4 and be stopped there — by the timer, because the answer the gate
+ * is asking for is Champions. The Beginner retune (`content/classes.ts`) made it four times as
+ * dangerous, and at the old 3 it walked the gate at level 13 in 20s. The boss has to out-grow
+ * that retune without growing past what a starting party can do:
+ *
+ *     BOSS_HP_MULT     solo S5 (lvl 13)         party of 3 S5    first prestige, party of 3
+ *     3                20s  PASS ✗              11s              walls at P0 W10S10
+ *     6                32s  TIMER FAIL, −7%     17s              6d 20h
+ *     7                36s  TIMER FAIL, −21%    19s              6d 9h    ← here
+ *     8                40s  TIMER FAIL, −33%    21s              6d 3h
+ *
+ * 7 over 6 for the margin: a gate decided by 2 seconds of a seeded fight is a coin flip in
+ * `fight.ts`, not a wall. A solo Beginner farms Stage 4 to level 20 to pass it alone (it used to
+ * be 44, reached by wiping up to it); a party passes it on sight.
+ *
+ * The super boss moved for the week, not for the opening. The Beginner's extra DPS is about half
+ * again on the party the walk fields, which took the first prestige from 6d 9h to 3d 20h. The
+ * two dials that bring it back, with `BOSS_HP_MULT` at 7:
+ *
+ *     SUPER_BOSS_HP_MULT 6, XP_PACE_SLACK 0.9     3d 20h
+ *     SUPER_BOSS_HP_MULT 9, XP_PACE_SLACK 0.9     4d 13h
+ *     SUPER_BOSS_HP_MULT 9, XP_PACE_SLACK 1.0     6d 9h, loop wall at P1 W2S10 as before   ← here
+ *     SUPER_BOSS_HP_MULT 10, XP_PACE_SLACK 1.0    6d 21h
  */
-export const BOSS_HP_MULT = 3 // TUNED ✓
-export const SUPER_BOSS_HP_MULT = 6 // TUNED ✓
+export const BOSS_HP_MULT = 7 // TUNED ✓
+export const SUPER_BOSS_HP_MULT = 9 // TUNED ✓
 
 export const BOSS_ATK_MULT = 1.2 // TUNED ✓
 export const SUPER_BOSS_ATK_MULT = 1.5 // TUNED ✓
@@ -238,13 +298,21 @@ export const SUPER_BOSS_ATK_MULT = 1.5 // TUNED ✓
  * Twenty levels is four or five stages of grinding — an ordinary thing to do at a wall — so at
  * 2 the reward for grinding was the `MIN_DAMAGE` readout coming back.
  *
+ * ## Why 16 now, and why that is still "4"
+ *
+ * What the band is made of is `DEF / (PWR × K)`, so **`K` is only meaningful as a product with
+ * `BASE_ENEMY_PWR`**. That product is unchanged: `BASE_ENEMY_PWR` 7 → 1.75 cut every enemy hit
+ * to a quarter, and `K` rose by the same factor so the clamp — and every figure above — stays
+ * put. Read `K` 16 at PWR 1.75 as the old `K` 4 at PWR 7; the reasoning for 4 still holds.
+ * Moving one without the other is the retune `BASE_ENEMY_PWR` warns against.
+ *
  * **It is close to a defence-only dial, despite being shared.** Offence goes through
  * `partyMitigation`, which pools the party's PWR before dividing, and pooled PWR runs orders of
  * magnitude above enemy DEF at every depth — mitigation on that side is already ~0 and halving
  * it again changes nothing that shows up in a clear time. The defensive side is pairwise and
  * sits right on the clamp, which is where the whole effect lands.
  */
-export const K = 4 // TUNED ✓
+export const K = 16 // TUNED ✓
 
 /**
  * The damage floor. **A hit never deals less than this, however far DEF outruns PWR.**
@@ -383,6 +451,12 @@ export const OVERFLOW_CONVERSION_RATE = 0.01 // UNTUNED ╧
  * pool almost immediately. **The trade is that the opening is now lethal**, and deliberately:
  * a level-1 Beginner sits at 0.6x–0.7x on World 1's wave stages and 0.3x on its elites.
  *
+ * ⚠ **No longer the opening's shape — and the fix deliberately did not come back here.** Once
+ * `BASE_ENEMY_HP` went to 60 the lethal opening became a 0.1x one, and the retune that answered
+ * it left this at 150: `BASE_ENEMY_PWR` / `K` cut the hit and the Beginner's own spread cut the
+ * fight, so a solo Beginner now clears World 1 Stages 1–4 and stops at the Stage 5 boss. The two
+ * sections below are the reasoning for 150, and still the reason not to raise it.
+ *
  * ## Why a lethal opening is not a broken one
  *
  * `settle.killsBeforeWipe` banks every kill landed before the party drops and restarts *that
@@ -456,6 +530,11 @@ export const BASE_HP = 150 // TUNED ✓
  * ⚠ **It is coupled to fight length, not to depth.** `BASE_ENEMY_HP` 10 → 60 made every stage
  * attempt six times longer and so cost six times more HP; that is the change that would force
  * this one, and the pair has to be re-derived together if fight length moves again.
+ *
+ * It was re-derived — just not here. The survival that change took away came back through the
+ * size of the hit (`BASE_ENEMY_PWR` / `K`) and the length of a solo fight (the Beginner's
+ * spread), which left VIT's share of the pool exactly as this section chose it. The table above
+ * predates that: the same level-1 Hero now dies at 2m 32s on a stage it clears in 1m 22s.
  */
 export const HP_PER_VIT = 10 // TUNED ✓
 
@@ -858,8 +937,12 @@ export const CHAMPION_INVESTMENT_PER_POINT = 0.05 // UNTUNED ╧
  * by the **ratio** of XP earned to XP required, so dividing both by ten is provably neutral —
  * a pure change of units. Nothing about the run moves; the displayed numbers are one order of
  * magnitude smaller at every depth.
+ *
+ * **Moving it alone is not a change of units.** Without `XP_TO_LEVEL_BASE` beside it, it shifts
+ * the level trajectory by `ln(factor) / ln(XP_TO_LEVEL_GROWTH)` levels at every stage and scales
+ * grind time at every gate by the inverse — the week the campaign walk measures is re-paced.
  */
-export const XP_BASE_PER_KILL = 1 // UNTUNED ╧
+export const XP_BASE_PER_KILL = 1 // TUNED ✓
 
 /**
  * xpToNextLevel(level) = XP_TO_LEVEL_BASE × XP_TO_LEVEL_GROWTH^(level-1)
@@ -871,7 +954,7 @@ export const XP_BASE_PER_KILL = 1 // UNTUNED ╧
  * Declared ahead of the XP-income constants because `XP_STEP_EXPONENT` is derived from it.
  */
 /** Re-denominated 100 → 10 with `XP_BASE_PER_KILL`. See its note — the two move as a pair. */
-export const XP_TO_LEVEL_BASE = 10 // UNTUNED ╧
+export const XP_TO_LEVEL_BASE = 10 // TUNED ✓
 
 /**
  * **This is the dial for "XP numbers are too big", and very nearly *only* that.**
@@ -957,13 +1040,29 @@ export const XP_TO_LEVEL_GROWTH = 1.05 // TUNED ✓
  * you, and therefore how long you sit in front of it — **this is the dial for how much of the
  * week is idle waiting**, and 0.9 is what makes that week a week.
  *
+ * ## Raised 0.9 → 1.0 to keep the week
+ *
+ * The Beginner retune (`content/classes.ts`) made the party the walk fields about half again as
+ * fast, and a faster party grinds out every gate sooner. `SUPER_BOSS_HP_MULT` took some of that
+ * back; this took the rest. Re-swept with both in place, prestige 0 with a party of 3:
+ *
+ *     0.9    4d 13h — 2h 50m fighting, 4d 10h grinding   ends level 449
+ *     0.95   5d 9h  — 2h 53m fighting, 5d 6h grinding    ends level 471
+ *     1.0    6d 9h  — 2h 54m fighting, 6d 7h grinding    ends level 494   ← here
+ *     1.05   7d 11h — 2h 57m fighting, 7d 8h grinding    ends level 516
+ *
+ * Same shape as the table above — fighting flat, grinding carrying the whole difference — so it
+ * is still only the grind dial. 1.0 is a value, not a boundary: it makes SPD and IMP track the
+ * enemy curve one-for-one, which is not `STAT_PACE_RATIO` 1.0's "no gating" — the gates here
+ * are `FIGHT_LENGTH_DRIFT`'s, and every blocker in the walk is still a boss timer.
+ *
  * ⚠ **It used to be far more dangerous than that.** Before PWR joined `STAT_PACES_ENEMY_CURVE`,
  * PWR coverage was exactly this number, so anything under 1.0 walked pooled party PWR into the
  * offensive mitigation clamp — and lowering it to slow the game down pulled that cliff from
  * prestige 4 in to P1 W2, where a single world cost nearly two days of fighting. The sweep
  * above is only safe because that coupling is gone.
  */
-export const XP_PACE_SLACK = 0.9 // TUNED ✓
+export const XP_PACE_SLACK = 1.0 // TUNED ✓
 
 /** Derived. Move `XP_PACE_SLACK`, or the two curves it is measured against. */
 export const XP_STEP_EXPONENT =
