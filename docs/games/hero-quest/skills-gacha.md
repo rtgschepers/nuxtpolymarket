@@ -156,6 +156,7 @@ A full first pass at all 36 skills, ready for your fine-tuning. Every numeric ma
 - **Fully mixable** — both across class paths (any Hero class can equip any skill) and across type (either slot can hold an Active or a Passive, in any combination).
 - **No duplicate slotting.** Each equipped slot must hold a *different* skill — you can't slot the same skill twice to double-stack it. Leveling the one copy you own (via the shared dupe system) is how you make a single skill stronger, not slotting it twice.
 - Equipped Actives auto-fire on cooldown exactly like class-tree skills (`classes-and-combat.md` §3) — no toggle, no tap, no separate casting behavior for Training Grounds skills.
+- **Unequipped Passives still count, a little (added 2026-09-15).** Every owned Passive Skill not in a slot gives the Hero `SKILL_COLLECTION_PASSIVE_FRACTION` (0.1, untuned) of its combat-stat lines — the six stats, max HP, crit chance, crit damage — at its own potency, mirroring Gear's unequipped passive. Economy and cooldown lines stay slot-only, and Actives have no stat lines, so an unequipped Active adds nothing. Previously an unequipped Skill contributed nothing at all.
 - Swapping equipped skills is free and unlimited outside of combat — a loadout-level choice, same convention as every other equip-swap in the project (`artifacts-dig-site-gacha.md` §7, `gear-equipment.md` §3, `loadouts.md` §2).
 
 ---

@@ -84,7 +84,7 @@ When you need a new constant:
 
 `implementation-plan.md` defines five phases. **Build only the current phase.** Each phase names its deferred systems explicitly; treat that list as a prohibition, not a suggestion.
 
-The current phase is **Phase 4**, but it has not started, and `open-items.md` puts a playtest session, the Gold decisions (#23) and World & Enemy Design ahead of it. Phase 4's systems are independent of each other; build the one asked for, not its neighbours. GPN is the natural first piece — it was left over from Phase 3 and Arena matchmaking depends on it.
+The current phase is **Phase 4**, but it has not started, and `open-items.md` puts a playtest session, the Gold decisions (#23) and World & Enemy Design ahead of it. Phase 4's systems are independent of each other; build the one asked for, not its neighbours. GPN, left over from Phase 3, is built (`open-items.md` #28).
 
 The failure this rule was written against still generalises: building a content system (a gacha, a raid) on top of a loop nobody has validated means tuning it against numbers that will move. The loop is now tuned on the sim but has been felt in only one logged session.
 
@@ -136,6 +136,6 @@ A good kickoff prompt names the phase, the docs, and the prohibition. The one us
 > Do NOT build: any gacha, any raid, Arena, Traits, Loadouts, Gear, Holidays, GPN, Battle Speed, leaderboards, evasion.
 > Read `CLAUDE.md` §3 before writing code, and §4 before writing any constant.
 
-For a Phase 4 system, scope it the same way — e.g. GPN: `global-power-number.md`, `tech-architecture.md` §3 §8, `classes-and-combat.md` §7; do NOT build Arena, Traits or Raids.
+For a Phase 4 system, scope it the same way — e.g. Traits: `traits.md`, `classes-and-combat.md` §7 (evasion), `tech-architecture.md` §3 §5; do NOT build Arena, Raids or Holidays.
 
 Phase 0 and Phase 1 were the proving ground. The loop is tuned; whether it is fun is still one logged session's worth of evidence.

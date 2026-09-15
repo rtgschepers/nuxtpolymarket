@@ -160,8 +160,10 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Loadout contents (5 components) | `loadouts.md` | §1 |
 | Loadout slots 2→10, Gems | `loadouts.md` | §3 |
 | Per-raid loadout auto-apply | `loadouts.md` | §4 |
-| GPN formula `sqrt(DPS × EHP)` | `global-power-number.md` | §2 |
+| GPN formula `DPS × EHP` | `global-power-number.md` | §2 |
 | What flows into GPN | `global-power-number.md` | §4 |
+| GPN as built (zero-DEF DPS, computed on read, battle-screen display) | `global-power-number.md` | *As built* |
+| Collection passives — every owned Champion, Gear piece, Passive Skill and Artifact raises stats | `champions-guild-gacha.md` §7, `gear-equipment.md` §3, `skills-gacha.md` §5, `artifacts-dig-site-gacha.md` §1 | |
 | Arena defense loadout, Defense GPN | `arena.md` | §1, §2 |
 | Training Dummy fallback | `arena.md` | §2a |
 | Arena attempts (5/day, non-banking) | `arena.md` | §3 |
@@ -236,8 +238,8 @@ Not design docs — they describe the *state* of the project rather than the gam
 | `raidDifficulty(L) = RAID_BASE × RAID_GROWTH^(L-1)` | `raid-system.md` §2 |
 | `raidRewardGranted(L) = REWARD_BASE × REWARD_GROWTH^(L-1)` | `raid-system.md` §6 |
 | `rollCost(locked) = 5 + locked × 5` | `traits.md` §2 |
-| `memberEHP = HP × (1 + DEF / EHP_DEF_CONSTANT)` | `global-power-number.md` §2 |
-| `GPN = sqrt(partyEffectiveDPS × partyEffectiveEHP)` | `global-power-number.md` §2 |
+| `memberEHP = HP × (1 + DEF / EHP_DEF_CONSTANT) / (1 − EVA)` | `global-power-number.md` §2 |
+| `GPN = partyEffectiveDPS × partyEffectiveEHP` | `global-power-number.md` §2 |
 | Asymmetric Elo (`K_ATTACK` ≠ `K_DEFEND`) | `arena.md` §4 |
 | `medalsOnWin = BASE × (1 + UPSET × (1 − expectedAttacker))` | `arena.md` §5 |
 

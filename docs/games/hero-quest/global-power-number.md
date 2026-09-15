@@ -1,6 +1,8 @@
 # Global Power Number (GPN)
 
-Status: **Locked** — decisions confirmed, ready to reference for implementation planning. Resolves `tech-architecture.md` §8's "exact formula = tuning pass" placeholder, and is idea backlog item 1.
+Status: **Locked, and built 2026-09-15** — see *As built* at the end. Resolves `tech-architecture.md` §8's "exact formula = tuning pass" placeholder, and is idea backlog item 1.
+
+> **Reconfirmed 2026-09-15.** A proposal to turn GPN into an account-wide, never-decreasing "big number" built from collection size and progress was considered and **rejected in favour of this locked design**, because Arena matchmaking needs a number that predicts fights. What came out of it instead: every collected piece now raises stats even when unequipped (§1), so the collection reaches GPN through real stats rather than a separate term.
 
 ## Structure recap
 
@@ -16,9 +18,9 @@ Earlier drafts of this doc considered a two-part formula: a dominant "combat pow
 
 That's unnecessary. **Champions already count while benched without any extra term**, because a benched Champion still grants the Hero a passive stat buff (`champions-guild-gacha.md` §7) — so its contribution is already sitting inside the Hero's real stats by the time GPN reads them. Deriving GPN purely from current stats gets that "counts even benched" behavior for free, with no separate collection-scalar math to maintain.
 
-**The flip side, stated plainly (revised — Gear moved sides):** **Champions and Gear** both have a passive-collection mechanic (`champions-guild-gacha.md` §7, `gear-equipment.md` §3), so owning and leveling them moves GPN whether or not the copy is fielded/equipped. **Skills and Artifacts do not** (`skills-gacha.md` / `artifacts-dig-site-gacha.md`) — only equipped copies affect anything, so pulling one that stays unequipped doesn't move GPN at all.
+**The flip side — resolved 2026-09-15.** This section used to record a two-and-two split: Champions and Gear had a passive-collection mechanic, Skills and Artifacts did not. **All four now do.** An owned-but-unequipped Passive Skill or Artifact gives the Hero `SKILL_COLLECTION_PASSIVE_FRACTION` / `ARTIFACT_COLLECTION_PASSIVE_FRACTION` (0.1, untuned — Gear's equipped-to-passive ratio) of its own combat-stat lines (the six stats, max HP, crit chance, crit damage), at its own rarity and investment. Economy, cooldown and utility lines stay equipped-only. As predicted here, GPN needed no change — the passives land in the stats GPN reads.
 
-That two-and-two split is an asymmetry inherited from those docs' own mechanics, not something introduced here — and it resolves itself automatically, with zero changes to this doc, if a Skill/Artifact passive-collection bonus ever gets designed later.
+The one remaining gap is **Active Skills**: they carry no stat lines, so an unequipped Active still adds nothing.
 
 **One consequence worth naming for Gear specifically:** because unequipped Gear contributes passively but a *stronger* unequipped piece contributes only that smaller passive, a player who ignores the upgrade indicator (`gear-equipment.md` §3) sees a GPN below what they've actually earned. That's intended — GPN reads actual current stats, not best-possible ones — and the indicator exists precisely so the gap is visible rather than hidden.
 
@@ -41,12 +43,12 @@ Base EVA is 0 for every unit, so this term is `/ 1` — a no-op — for any part
 **New formula, GPN-specific.** Deliberately *not* the Combat doc's mitigation math (`mitigation = min(1, DEF/(PWR × K))`, `classes-and-combat.md` §7) — that formula is defined relative to a specific attacker's PWR and has no meaning without one. GPN needs an absolute "how much punishment can this party currently take" number, untied to any particular enemy, so DEF converts straight into an effective-HP multiplier via its own new constant, `EHP_DEF_CONSTANT` — tuned independently of combat's `K`, same tune-via-playtest convention as everything else.
 
 ```
-globalPowerNumber = sqrt(partyEffectiveDPS × partyEffectiveEHP)
+globalPowerNumber = partyEffectiveDPS × partyEffectiveEHP
 ```
-Geometric mean, not a straight sum or product:
-- A straight **product** would compound two already-exponential values together and blow the display far past what either stat alone looks like.
-- A straight **sum** would let one side (e.g. huge DPS) fully mask a weak other side (e.g. paper-thin EHP).
-- The **geometric mean** keeps the result in the same order of magnitude as either input alone, and a party lopsided toward pure offense or pure survivability gets pulled down by whichever side is weak — rewarding balanced parties over min-maxed extremes, which fits a number meant to represent overall strength.
+**Revised 2026-09-15: a product, no square root.** This was `sqrt(partyEffectiveDPS × partyEffectiveEHP)`, chosen because a straight product "would blow the display far past what either stat alone looks like" — which is exactly what GPN is now for: a big number that keeps getting bigger. The change is presentation only:
+- **Ranking is unchanged.** A square root is monotonic, so any party that beat another under the geometric mean still beats it under the product. Arena matchmaking bands just need setting against the product (`ARENA_MATCH_BAND_PCT` is untuned — a 10% band on the root is ~21% on the product).
+- **Balance is still rewarded.** Against a straight **sum**, where huge DPS masks paper-thin EHP, the product still pulls a lopsided party down: for a fixed budget it peaks when neither side is neglected.
+- **Gains read twice as large** in relative terms — a step that showed +12% now shows ~+25%.
 
 All Decimal-typed throughout (`DPS`, `HP`, `DEF` are already Decimal per `tech-architecture.md` §2), so GPN inherits that automatically — no new numeric-type concern.
 
@@ -73,10 +75,12 @@ Recomputed on every settle (`tech-architecture.md` §4a, unchanged) from the par
 - Equipped Artifacts (`artifacts-dig-site-gacha.md` §2) — party-wide passive modifiers apply to every fielded member's stats directly
 - Party slot unlocks — indirectly, once an unlocked slot is actually filled with a fielded Champion
 
+- **Owned-but-unequipped Passive Skills and Artifacts** (new 2026-09-15) — a tenth of their combat-stat lines, Hero only, via their collection passives (§1)
+
 **Does not flow in, under current mechanics:**
-- Unequipped/benched Skills — no passive-collection bonus exists in `skills-gacha.md` today
-- Unequipped Artifacts — same, `artifacts-dig-site-gacha.md`
-- *(Unequipped **Gear** used to belong on this list and no longer does — it has a passive-collection bonus, see above)*
+- Unequipped **Active** Skills — no stat lines to pass on
+- The economy, cooldown and utility lines of unequipped Skills and Artifacts
+- *(Unequipped Gear, and unequipped Passive Skills and Artifacts, used to belong on this list and no longer do — see above)*
 - Gacha level (1–10 per system) — reflects drop-rate progress, not a stat
 - A weaker benched Champion sitting behind a stronger fielded one — its own stat block was never in the sum to begin with (only its passive contribution, already counted via the Hero, applies)
 
@@ -98,4 +102,17 @@ Recomputed on every settle (`tech-architecture.md` §4a, unchanged) from the par
 
 ## Implementation Note
 
-Everything above is locked: GPN as a pure live function of the Hero + fielded Champions' actual DPS/EHP (no separate collection term), the new GPN-specific EHP formula (distinct from combat's attacker-relative mitigation), the geometric-mean combination, live-snapshot behavior (can decrease), and raw big-number display. `EHP_DEF_CONSTANT` joins the rest of the project's tunable constants in `constants.ts`, calibrated during the balance-script pass same as everything else. **Revised in a later pass:** the EHP formula now carries a `1/(1−EVA)` evasion term (`classes-and-combat.md` §7), and the "what flows in" lists are updated for Gear (both equipped and passively owned) and Traits (party-wide), neither of which existed when this doc was first written. **The Arena defense-loadout nuance (§5) is now resolved** — see `arena.md` (Locked), which introduces a Defense GPN computed off `defenseLoadout` specifically so Arena matchmaking compares like with like.
+Everything above is locked: GPN as a pure live function of the Hero + fielded Champions' actual DPS/EHP (no separate collection term), the new GPN-specific EHP formula (distinct from combat's attacker-relative mitigation), the ~~geometric-mean~~ product combination (revised 2026-09-15), live-snapshot behavior (can decrease), and raw big-number display. `EHP_DEF_CONSTANT` joins the rest of the project's tunable constants in `constants.ts`, calibrated during the balance-script pass same as everything else. **Revised in a later pass:** the EHP formula now carries a `1/(1−EVA)` evasion term (`classes-and-combat.md` §7), and the "what flows in" lists are updated for Gear (both equipped and passively owned) and Traits (party-wide), neither of which existed when this doc was first written. **The Arena defense-loadout nuance (§5) is now resolved** — see `arena.md` (Locked), which introduces a Defense GPN computed off `defenseLoadout` specifically so Arena matchmaking compares like with like.
+
+
+---
+
+## As built — 2026-09-15
+
+- **`shared/utils/hero-quest/power.ts`** — `globalPower(hero)` returns the GPN (`dps × ehp`, §2), party DPS, party EHP and a per-unit breakdown; `memberEhp(unit)` is §2's EHP. Pure, so any client or script can recompute it. Specced in `test/hero-quest/power.spec.ts`.
+- **DPS is taken against zero DEF and a single target.** GPN has no enemy, so there is no mitigation, and an AoE ability is counted for the one body it is guaranteed to hit. Autoattacks come from `partyDps` and abilities from `partyAbilityDpsByUnit` — the idle rate's own functions. **Ability self-buffs projected from uptime (Haste) are not included**: they belong to a fight, and GPN is a snapshot of the stat block.
+- **`EHP_DEF_CONSTANT = 10`, `// UNTUNED ╧`** — a level-1 Hero's DEF doubles its EHP. DEF rides the level curve like HP, so EHP grows as the stat curve squared, the same order as DPS.
+- **Computed on read, not stored.** It ships on the hero payload (`serializeHero` → `power: { gpn, dps, ehp }`) rather than being written to `hqState.globalPowerNumber` on every settle as `tech-architecture.md` §8 describes. Nothing reads a stored value yet, and a settle-time write would be stale the moment the player equipped something without settling. Add the column when the leaderboard aggregate or Arena's Defense GPN needs one.
+- **Shown** as the battle screen's headline (`GlobalPower.vue`): it counts up to a new value on a log scale, shows a `+12%` / `×3.2` chip on a gain and a red one on a loss, and lists party DPS and effective HP beneath. It updates when a payload lands, not between polls — the stats need a snapshot only the server has. The wiki's Combat page has an entry, with its formula interpolated from the constants.
+- **Measured** (product form), un-invested Beginner stand-ins, no collection: level 1 → 8.9K (solo) / 55K (party of 3); level 100 → 2.0M / 12.6M; level 500 → 11.5Qi / 112Qi; level 2000 → 1.6e69 / 1.5e70.
+- **Not built:** the platform leaderboard aggregate, the profile display, and Defense GPN (Arena).

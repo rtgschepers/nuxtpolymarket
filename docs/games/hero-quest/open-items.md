@@ -424,6 +424,25 @@ Consequence worth re-measuring: any boss-gate verdict from before `b96a322` unde
 
 ---
 
+### 28. Global Power Number built, and every collection now raises stats — **landed 2026-09-15**
+
+**GPN is built on the locked formula** (`global-power-number.md`, *As built*), **minus the square root**: `party DPS × party effective HP`. The root only shrank the display — it never changed which party ranks higher — and the number is meant to be big (§2). Computed on read from the fielded party's real stats and shown as the battle screen's animated headline, with a wiki entry. It can go down, as locked.
+
+**A different design was considered and rejected.** The proposal was an account-wide, never-decreasing number built from collection size and progress ("big number go bigger"). It was dropped because Arena matchmaking compares GPN with a defender's Defense GPN, and a number padded by collection size would stop predicting fights. The locked design stands.
+
+**What came out of it: collection passives for Skills and Artifacts.** Before, only owned Champions and Gear raised stats while benched. Now an owned-but-unequipped Passive Skill or Artifact gives the Hero a tenth of its combat-stat lines, the same ratio Gear uses — which is how the collection reaches GPN without a separate term. Decisions taken with it:
+
+- **Stat lines only** (`COLLECTION_PASSIVE_KINDS`: the six stats, max HP, crit chance, crit damage). Economy, cooldown, damage-taken, shred, control-resist and reflect lines stay equipped-only, so a wide collection cannot stack Gold% or cooldown reduction nobody slotted.
+- **Hero only**, for Artifacts too — every collection passive in the game reaches only the Hero, and a party-wide one would multiply a collection by party size.
+- **An equipped copy is never counted twice**, and a copy past the purchased slot count pays the unequipped share.
+- **Unequipped Active Skills still add nothing** — they have no stat lines. If that feels wrong in play, the fix is to give Actives a stat line, not to widen the passive.
+
+**Deviations, recorded:** GPN is not stored on `hqState` and not written on settle (nothing reads a stored value yet); DPS is against zero DEF and a single target, without projected ability buffs. **Not built:** leaderboard aggregate, profile display, Defense GPN.
+
+New placeholders, all `// UNTUNED ╧`: `SKILL_COLLECTION_PASSIVE_FRACTION`, `ARTIFACT_COLLECTION_PASSIVE_FRACTION`, `EHP_DEF_CONSTANT` (now in use). None of these moves the campaign walk, which fields no collection.
+
+---
+
 ## ⚪ Standing numeric tuning — **what is still `// UNTUNED ╧`**
 
 Named constants with a formula shape locked and a placeholder value. Consolidated so a tuning pass has one list. `rg '╧' shared/utils/hero-quest/constants.ts` is the authority — **62 markers** as of 2026-09-15.
@@ -439,8 +458,9 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | Constant(s) | Doc | Note |
 |---|---|---|
 | Offline Efficiency / Offline Cap `BASE_COST` (×2) | `idle-mechanics.md` §4 | Formula shapes locked, no anchor value |
-| `K_ATTACK`, `K_DEFEND`, `MEDAL_BASE_WIN`, `MEDAL_BASE_LOSS`, `MEDAL_UPSET_BONUS`, `ARENA_MATCH_BAND_PCT`, `ARENA_SHOP_GEM_PRICE` | `arena.md` | `ARENA_MATCH_BAND_PCT` also a design question, see #2. `ARENA_SHOP_GEM_PRICE` has an explicit calibration target (under 1 Battle Speed block per day's Medals) |
-| `EHP_DEF_CONSTANT` | `global-power-number.md` §2 | |
+| `K_ATTACK`, `K_DEFEND`, `MEDAL_BASE_WIN`, `MEDAL_BASE_LOSS`, `MEDAL_UPSET_BONUS`, `ARENA_MATCH_BAND_PCT`, `ARENA_SHOP_GEM_PRICE` | `arena.md` | `ARENA_MATCH_BAND_PCT` also a design question, see #2 — and set it against GPN's product form (#28), where a 10% band on the old square root is ~21%. `ARENA_SHOP_GEM_PRICE` has an explicit calibration target (under 1 Battle Speed block per day's Medals) |
+| `EHP_DEF_CONSTANT` | `global-power-number.md` §2 | Built (#28). At 10 a level-1 Hero's DEF doubles its EHP; tune against how balanced parties should read against lopsided ones |
+| `SKILL_COLLECTION_PASSIVE_FRACTION`, `ARTIFACT_COLLECTION_PASSIVE_FRACTION` | none — see #28 | What an unequipped Passive Skill or Artifact gives the Hero, as a fraction of equipping it. 0.1 mirrors Gear; tune together with `GEAR_PASSIVE_COEFFICIENT` so all three collections feel comparable |
 | `RAID_BASE_STATS`, `RAID_LEVEL_GROWTH`, `RAID_REWARD_BASE/GROWTH`, `RAID_ENRAGE_SECONDS`, `RAID_RAMPAGE_DMG/POWER_BASE/GROWTH` | `raid-system.md` | Per-raid |
 | `SLOT_BASE_BONUS` ×6, `GEAR_PASSIVE_COEFFICIENT` | `gear-equipment.md` §2 | Built. The six slot coefficients are deliberately *identical* — no doc ranks the stats against each other, so six different values would encode a spread nobody decided. `GEAR_PASSIVE_COEFFICIENT` must stay well under them or manual equip stops mattering |
 | `SKILL_PASSIVE_MAGNITUDE[]`, `SKILL_ECONOMY_COEFFICIENT` | `skills-gacha.md` §4 | The whole 36-skill magnitude ladder, indexed by rarity. §4 authors it as "small" → "large" and assigns no number anywhere; the *relative ordering* is design content, so retune the set rather than entries |
@@ -486,7 +506,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
 3. **World & Enemy Design (#6)** — names, themes and rosters done 2026-09-15 (closing #5). What remains is art direction and production, and the optional enemy-kit question; kits that change fight length have to be re-measured against #22.
 4. **The four remaining quick calls (#1-4)** — all answerable in one short pass, none depend on anything else.
-5. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus the two things Phase 3 deliberately left: `global-power-number.md` and `loadouts.md` §4's per-raid auto-apply. GPN is the natural first piece: it was a Phase 3 exit criterion, and Arena matchmaking (#2) cannot be decided without it.
+5. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus `loadouts.md` §4's per-raid auto-apply. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena.
 6. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 7. **Playtest, then tune the rest.** The combat and progression block is tuned (#22); the gacha, shop, economy and ability-magnitude constants are settled here — see the standing-tuning section. The balance script and campaign sim stay in use throughout.
 

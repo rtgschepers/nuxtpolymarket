@@ -44,7 +44,7 @@ This corrects the earlier schema note in `tech-architecture.md` §3, which liste
 
 ## 2. Opponent Selection & Matchmaking
 
-**New: Defense GPN.** Computed with the exact same formula as live GPN (`global-power-number.md` — `sqrt(partyEffectiveDPS × partyEffectiveEHP)`), but evaluated against `defenseLoadout`'s stats instead of live state. Unlike live GPN, it does **not** need recomputing on every settle tick — it's static between edits, so it's recomputed once whenever `defenseLoadout` is saved and stored denormalized (`hqState.defenseGpn`), same indexing approach as live GPN.
+**New: Defense GPN.** Computed with the exact same formula as live GPN (`global-power-number.md` — `partyEffectiveDPS × partyEffectiveEHP`), but evaluated against `defenseLoadout`'s stats instead of live state. Unlike live GPN, it does **not** need recomputing on every settle tick — it's static between edits, so it's recomputed once whenever `defenseLoadout` is saved and stored denormalized (`hqState.defenseGpn`), same indexing approach as live GPN.
 
 **Matchmaking compares the attacker's live GPN against the pool of other players' Defense GPN** — this is the actual fix for the divergence flagged in `global-power-number.md` §5 and `tech-architecture.md` §4d: defenders are now matched on a number that actually reflects what they'll be fought with, not a proxy that could be stale or unrelated.
 

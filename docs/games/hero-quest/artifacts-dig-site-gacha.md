@@ -18,7 +18,9 @@ Status: **Locked** — decisions confirmed, ready to reference for implementatio
 | Skills | Hero only, equipped loadout | Active + passive, universal |
 | **Artifacts** | **Whole party, equipped loadout** | **Passive only** |
 
-No actives, no cooldowns, no buttons — every Artifact is a pure passive modifier. Champions, Skills, and Artifacts each now have a distinct job: Champions are the party members, Skills are the Hero's own active/passive loadout, Artifacts are party-wide passive gear.
+No actives, no cooldowns, no buttons — every Artifact is a pure passive modifier.
+
+**Unequipped Artifacts still count, a little (added 2026-09-15).** Every owned Artifact not in a slot gives **the Hero only** `ARTIFACT_COLLECTION_PASSIVE_FRACTION` (0.1, untuned) of its combat-stat lines — the six stats, max HP, crit chance, crit damage — at its own rarity and investment, mirroring Gear's unequipped passive. It is Hero-only, unlike an equipped Artifact, so a wide collection is not multiplied by party size; economy, cooldown and utility lines stay slot-only. Previously an unequipped Artifact contributed nothing. Champions, Skills, and Artifacts each now have a distinct job: Champions are the party members, Skills are the Hero's own active/passive loadout, Artifacts are party-wide passive gear.
 
 Making this actually work required a change to `champions-guild-gacha.md` §2: Champions carry full stat parity with the Hero (PWR, SPD, LCK, IMP, VIT, DEF, plus HP — and since the Hero's STR/DEX/INT merged into PWR, that parity is now exact rather than a substitution). That closes the two gaps flagged in the last draft — non-Tank Champions had no DEF/VIT, and no Champion had SPD — so every Artifact category below now applies cleanly to the whole roster, not just Tank.
 
