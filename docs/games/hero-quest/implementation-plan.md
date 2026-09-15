@@ -13,7 +13,7 @@ The governing principle: **the core loop is the risk.** Everything else in this 
 | **2 — Champions** | ✅ Built, with the **full 48-Champion roster** rather than the 8–12 planned, and the full ability-effects pass (`open-items.md` #12–#17). |
 | **3 — Remaining gachas + Loadouts** | ✅ Built, except **GPN**, which is carried into Phase 4 (`open-items.md` #18). Also landed alongside: the dev playtest harness, the Gacha/Collections navigation, the in-game wiki, stat attribution and a projected battle screen (#19–#21, #26). |
 | **4 — Endgame** | Not started. |
-| **5 — Content & tuning** | Partly done early: every roster is structurally complete (Artifact names are placeholders; Worlds were named 2026-09-15), and the combat/progression constants are tuned. **World art and enemy kits have not been designed.** The prestige→calendar Gold mapping below is **retired** — Gold reads account age instead (`gold-economy.md` §3a). |
+| **5 — Content & tuning** | Partly done early: every roster is structurally complete (Artifacts and Worlds were named 2026-09-15), and the combat/progression constants are tuned. **World art and enemy kits have not been designed.** The prestige→calendar Gold mapping below is **retired** — Gold reads account age instead (`gold-economy.md` §3a). |
 
 **What comes next** is `open-items.md`'s *Suggested order*: close out the tuning pass (a playtest session, the Gold decisions in #23), then World & Enemy Design, then Phase 4.
 

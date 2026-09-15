@@ -83,7 +83,7 @@ And three things Phase 3 shipped that nobody has ever felt: **Skill potency** (�
 
 - **`controlResist` does nothing.** Unshaken, Unbreakable Will and Immortal Vanguard are declared against a real modifier kind, but `EnemyStats` is HP/PWR/DEF and enemies have no abilities — there is no control to resist. Goes live the day enemy kits do.
 - **Six effects are flat approximations.** Ramping-over-a-fight buffs (Momentum, Steady Ground, Flow State, Compound Interest) render flat because the idle rate is one frozen average per window with no "later in the fight". On-kill and once-per-fight procs (Lucky Dig, Windfall, Unbroken, Bulwark's Legacy) become rates.
-- **Artifact names are placeholders** — all 48. World and enemy names are real as of 2026-09-15 (`core-progression-and-prestige.md` §5), but there is no world or enemy art yet. Do note if a name reads wrong on screen.
+- **No world or enemy art yet.** Artifact, World and enemy names are all real as of 2026-09-15 — do note if a name reads wrong on screen or doesn't fit what the item does.
 - **Presentation is placeholder chrome**, not the intended Pixi 8 canvas (`tech-architecture.md` §7). The battle screen does walk forward between server payloads now (`open-items.md` #26), so a jumping bar or a stage counter that snaps back on refresh *is* worth reporting.
 - **`STAT_PACES_ENEMY_CURVE` does nothing while `XP_PACE_SLACK` is 1.0** — both stat curves are numerically identical.
 - **Ability magnitudes are still placeholders** (`SKILL_*`, `ENRAGE_*` and the rest). Note if a kit feels useless or dominant, but that is not yet a tuning finding.

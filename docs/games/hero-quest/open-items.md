@@ -250,7 +250,7 @@ Gear (Forge), Skills (Training Grounds), Artifacts (Dig-site) and Loadouts §1�
 
 **1. `foldToAvailableRarity` is deleted, not merely unused.** All four rosters now populate all six rarities — Champions 48, Gear 36, Skills 36, Artifacts 48 — which made it the identity function everywhere. `content.spec.ts` asserts the coverage per system, so the claim is tested rather than commented, and the *reasoning* (why rounding down was the right repair for a partial roster) is preserved as a comment where the helper used to live.
 
-**2. The Artifact roster ships with placeholder names, overriding the earlier "do not generate 48 names" guidance.** The Dig-site needs content to roll, and shipping partial would have kept every other gacha paying for content this one had not authored. Names come from a placeholder title pool plus the rarity epithet, the same treatment Worlds already get; `ARTIFACT_TITLES` is the naming pass's one edit. The per-Artifact effect assignment is a shared distribution table, not 48 authored choices, so it is equally re-cuttable.
+**2. ~~The Artifact roster ships with placeholder names~~ — named 2026-09-15 (`artifacts-dig-site-gacha.md` §3a), overriding the earlier "do not generate 48 names" guidance.** The Dig-site needs content to roll, and shipping partial would have kept every other gacha paying for content this one had not authored. They first shipped as a placeholder title pool plus the rarity epithet (`ARTIFACT_TITLES`), replaced by authored names in `ARTIFACT_NAMES`. The per-Artifact effect assignment is a shared distribution table, not 48 authored choices, so it is equally re-cuttable.
 
 **3. Three routes replaced twelve.** `gacha/pull`, `gacha/craft` and `gacha/buy-seals` each take `system` in the body per `tech-architecture.md` §5, and the Phase 2 `guild/*` copies were retired. `guild/party.post.ts` became `loadout/set.post.ts`, which sets any of the five loadout components — party, formation, Skills, Artifacts, Gear — because a formation is only valid against a specific party, and once a route has to take two together it may as well take the set a Loadout is *defined* as. `loadout/apply` then runs a saved preset through the identical validator, which is what keeps §1's "never goes stale" promise honest instead of assumed.
 
@@ -321,7 +321,7 @@ Session-1 playtest, finding 6. `/hero-quest/wiki`, five pages: Basics, Combat, E
 
 **The Economy page marks Trait Gems, Raid Keys and Arena Medals as not in this build.** When Phase 4 ships those systems, flipping `live: true` in `HQ_CURRENCY_DOCS` is the whole edit.
 
-One consequence for the naming passes still owed: Artifact names are placeholders (World names were done 2026-09-15, #6), and the Content page now **displays them to players**, with a banner saying so. That raises the priority of `ARTIFACT_TITLES` from "tidy-up" to "visible", though it changes no code — replacing the table is still the entire pass.
+~~One consequence for the naming passes still owed: Artifact and World names were placeholders displayed to players.~~ **Both naming passes landed 2026-09-15** (#6, `artifacts-dig-site-gacha.md` §3a), and the Content page's placeholder banner is gone.
 
 ---
 

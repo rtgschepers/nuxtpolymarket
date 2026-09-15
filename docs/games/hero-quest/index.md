@@ -105,6 +105,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Skills: equip rules, no duplicate slotting | `skills-gacha.md` | §5 |
 | Skills: square vs circle UI convention | `skills-gacha.md` | §7 |
 | Artifacts: 4 categories, 33-effect pool | `artifacts-dig-site-gacha.md` | §2, §3 |
+| Artifacts: named roster (48 relics, by rarity and category) | `artifacts-dig-site-gacha.md` | §3a |
 | Artifacts: stacking rules, no set bonuses | `artifacts-dig-site-gacha.md` | §4 |
 | Gear: 6 slots + stat mapping | `gear-equipment.md` | §1 |
 | Gear: `equippedBonus` / `passiveBonus` formulas | `gear-equipment.md` | §2, §3 |
@@ -250,7 +251,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Champions | 48 | 2 per archetype per rarity (4 × 6 × 2) | ✅ all 48 named and built (`open-items.md` #17) |
 | Champion abilities | 28 | 7 per archetype | ✅ named + described |
 | Skills | 36 | 6 per rarity, 3 Active / 3 Passive | ✅ full draft |
-| Artifacts | 48 | 2 per category per rarity (4 × 6 × 2) | ⚠️ all 48 built; **names are placeholders** (`ARTIFACT_TITLES`) |
+| Artifacts | 48 | 2 per category per rarity (4 × 6 × 2) | ✅ all 48 built and named (`artifacts-dig-site-gacha.md` §3a) |
 | Artifact effects | 33 | Offense 9 / Defense 8 / Tempo 9 / Fortune 7, max reuse 3 | ✅ named + described |
 | Gear | 36 | 1 per slot per rarity (6 × 6) | ✅ fully named by the epithet table |
 | Traits | 8 stats × 9 grades × 5 sets | — | ✅ all tables transcribed |
@@ -268,7 +269,6 @@ Not design docs — they describe the *state* of the project rather than the gam
 | **Passive Skill Tree** | `idea-backlog.md` item 3 — unchecked, no raid assigned |
 | ~~**Alternative enemy-scaling formula**~~ | Applied — the continuous `b^n` curve (`open-items.md` #10) |
 | **Holiday gameplay events** (limited-time modes) | Explicitly deferred in `holiday-events.md` |
-| **Artifact naming pass** | All 48 built with placeholder names; replacing `ARTIFACT_TITLES` is the whole pass |
 | **Per-raid mechanic content** | Fight types locked, specifics deferred |
 | **Remaining tuning** | Combat/progression tuned (#22); 62 `// UNTUNED ╧` constants remain, mostly gacha, shop, economy and ability magnitudes — see `open-items.md`, "Standing numeric tuning" |
 | **Gold decisions** | First-week income, lost calendar anchors, stale Seal ladder — `open-items.md` #23 |

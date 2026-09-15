@@ -136,6 +136,29 @@ Here's the full pool for all four categories — this is the part you wanted to 
 
 ---
 
+## 3a. The Roster — **named 2026-09-15**
+
+Names were left to implementation (§3) and are now authored: **relics dug out of the ten worlds** (`core-progression-and-prestige.md` §5). Commons are frontier odds and ends from Thornwick Vale and Mirewood; a relic that belonged to a world's boss or super boss sits higher than that world's rank-and-file; every Mythic comes from Duskspire (World 6) or deeper. Each name points at what its effects do. The effect *assignment* is still the shared distribution table in `content/artifacts.ts`, unchanged.
+
+No rarity epithet in the name — the collection card shows rarity as colour and label. Names are unique (§4), never repeat a pool effect's name, and never reuse a Champion given name or title; all three are asserted in `content.spec.ts`. IDs (`artifact_offense_0` …) are what saves reference, so a rename never touches one.
+
+| Rarity | Offense | Defense | Tempo | Fortune |
+|---|---|---|---|---|
+| Common | Goblin Cudgel — *Might Surge* | Hedgeknight Buckler — *Iron Ward* | Bramblefoot Sandals — *Swift Current* | Thornwick Copper — *Prospector's Fortune* |
+| Common | Tracker's Flint — *Precision Edge* | Mireroot Charm — *Vital Bloom* | Marsh Hourglass — *Quickening* | Hedge-Witch Almanac — *Scholar's Boon* |
+| Uncommon | Slagjaw's Tooth — *Killing Blow* | Cinderscale Shard — *Deflection* | Ashwalker Anklet — *Flow State* | Mirewood Night Lantern — *Night Owl* |
+| Uncommon | Frostbound War Drum — *Momentum* | Rimeholt Hearthstone — *Steady Ground* | Frostbite Horn — *Alacrity Surge* | Kobold Prospecting Pick — *Lucky Dig* |
+| Rare | Dawnbreak Arrowhead — *Opening Strike* | Tideglass Pendant — *Bulwark's Legacy* | Sailor's Distress Bell — *Overdrive* | Rimeholt Saga Stone — *Quick Study* |
+| Rare | Last Legion Standard — *Last Stand* | Mother Leech's Vial — *Guardian's Echo* | Acolyte's Prayer Beads — *Slipstream* | Amarath Tide Ledger — *Compound Interest* |
+| Epic | Hrimgar's Icebreaker — *Might Surge, Shattering Blow* | Grave Marshal's Pauldron — *Iron Ward, Unbroken* | Halvane's Spellglass — *Swift Current, Chain Reaction* | Sunken Doubloon — *Prospector's Fortune, Windfall* |
+| Epic | Eye of Pyrrhax — *Precision Edge, Killing Blow* | Rotheart Barkshield — *Vital Bloom, Deflection* | Korr's Marching Drum — *Quickening, Flow State* | Duskspire Star Chart — *Scholar's Boon, Night Owl* |
+| Legendary | Stormcrown Talon — *Momentum, Shattering Blow* | Glacier Titan's Heart — *Steady Ground, Unbroken* | Skyshard Prism — *Alacrity Surge, Chain Reaction* | Grave Robber's Spade — *Lucky Dig, Windfall* |
+| Legendary | Banner of the Bonefields — *Opening Strike, Last Stand* | Maerith's Pearl — *Bulwark's Legacy, Guardian's Echo* | Zephyrax Wingbone — *Overdrive, Slipstream* | Tome of Unfinished Lessons — *Quick Study, Compound Interest* |
+| Mythic | Ithren's Burning Sigil — *Might Surge, Precision Edge, Killing Blow* | Ossuar's Bone Mantle — *Iron Ward, Vital Bloom, Deflection* | Fraying Thread — *Swift Current, Quickening, Flow State* | Hoard of the Shattered Sky — *Prospector's Fortune, Scholar's Boon, Night Owl* |
+| Mythic | Key to the Last Door — *Momentum, Opening Strike, Last Stand* | Vesper's Forgotten Hymn — *Steady Ground, Bulwark's Legacy, Guardian's Echo* | Herald's Stopped Clock — *Alacrity Surge, Overdrive, Slipstream* | Last Coin of the Void — *Lucky Dig, Quick Study, Compound Interest* |
+
+---
+
 ## 4. Stacking Rules — Locked
 
 - Each Artifact is a single unique owned instance, same ownership model as Champions/Skills — you can't own or equip two copies of the same named Artifact.
@@ -185,6 +208,6 @@ With this, all three *slot-based* collectible systems (Champions, Skills, Artifa
 
 Everything in this doc reflects decisions confirmed across this conversation: party-wide/passive-only scope (with the matching stat-parity update to `champions-guild-gacha.md` §2), the 4 effect categories and their Hero/Champion stat mapping, the 48-Artifact roster size (2 per category per rarity), the 33-effect base pool across the 4 categories (Offense 9 / Defense 8 / Tempo 9 / Fortune 7), a max-reuse ceiling of 3 per effect, uncapped same-category stacking, no set bonuses, the Excavation Seals/Artifact Essence currency names, and the 2→5 slot progression mirroring Champions/Skills.
 
-The effect pool (Section 3) is a complete first-pass draft, not a final authored list — same spirit as the Skills roster: names, exact magnitudes, and the specific per-Artifact rarity assignments (which effects pair at Epic/Legendary, which trio at Mythic) are left to your fine-tuning pass and to implementation, respectively.
+The effect pool (Section 3) is a complete first-pass draft, not a final authored list — same spirit as the Skills roster: names, exact magnitudes, and the specific per-Artifact rarity assignments (which effects pair at Epic/Legendary, which trio at Mythic) are left to your fine-tuning pass and to implementation, respectively. *(Artifact names were authored 2026-09-15 — §3a.)*
 
 **One general design principle from this doc is also now reflected in `skills-gacha.md`**: Gold-granting effects should stay small, given Gold's persistent, global-currency status — that applies project-wide, not to Artifacts alone. The "buffs should relate to combat" principle (used here to rule out Seeker's Luck) stays scoped to this doc for now; Skills' existing economy effects already satisfy it without needing a correction.
