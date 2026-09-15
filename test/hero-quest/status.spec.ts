@@ -61,6 +61,28 @@ describe('status engine', () => {
             expect(statuses[0]!.remaining).toBe(20)
         })
 
+        it('refreshes a stat buff or debuff in place rather than stacking it', () => {
+            // A buff that outlasts its own cooldown is recast while still up. Stacking it would
+            // turn "doubles SPD" into ×6 and a −20% debuff into −100%.
+            const haste = { id: 'haste', kind: 'buff' as const, stat: 'spd' as const, duration: 6, magnitude: 1 }
+            const statuses = list(haste)
+            tickStatuses(statuses, 4)
+            applyStatus(statuses, haste)
+            applyStatus(statuses, { ...haste, id: 'weaken', kind: 'debuff', stat: 'pwr' })
+            applyStatus(statuses, { ...haste, id: 'weaken', kind: 'debuff', stat: 'pwr' })
+
+            expect(statuses.find(status => status.id === 'haste')).toMatchObject({ stacks: 1, remaining: 6 })
+            expect(statuses.find(status => status.id === 'weaken')!.stacks).toBe(1)
+            expect(statMultiplier(statuses, 'spd').toNumber()).toBe(2)
+        })
+
+        it('stacks a stat effect whose application asks for stacks', () => {
+            // How Frostbind's slow and Iron Skin opt in.
+            const slow = { id: 'slow', kind: 'debuff' as const, stat: 'spd' as const, duration: 6, magnitude: 0.1, stacks: 1 }
+            const statuses = list(slow, slow, slow)
+            expect(statuses[0]!.stacks).toBe(3)
+        })
+
         it('caps stacks so a maintained effect cannot grow without bound', () => {
             const statuses = list(burn)
             for (let index = 0; index < STATUS_MAX_STACKS + 5; index++) applyStatus(statuses, burn)

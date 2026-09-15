@@ -95,7 +95,18 @@ export interface StatusApplication {
     stat?: HqStatKey
     duration: number
     magnitude?: DecimalSource
+    /**
+     * Stacks this application adds. Omitted means 1 — and, for a `buff` / `debuff`, also means
+     * *do not stack on reapply*. Set it explicitly to make a stat effect build (Frostbind).
+     */
     stacks?: number
+}
+
+/** Kinds that multiply a stat. They refresh in place unless an application opts into stacking. */
+const STAT_KINDS: readonly StatusKind[] = ['buff', 'debuff']
+
+function stacksOnReapply(incoming: StatusApplication): boolean {
+    return incoming.stacks !== undefined || !STAT_KINDS.includes(incoming.kind)
 }
 
 /**
@@ -107,6 +118,12 @@ export interface StatusApplication {
  * `STATUS_MAX_STACKS`. Both halves are needed by the rosters: "re-application stacks" (Rising
  * Flame) demands the stack, and a stacking effect whose duration never refreshed would expire
  * mid-build no matter how hard it was maintained.
+ *
+ * **Stat buffs and debuffs are the exception: they refresh without stacking** unless the
+ * application sets `stacks` explicitly. A buff whose duration outlasts its own cooldown is
+ * otherwise recast while still up, so "doubles SPD" (Haste) would compound to ×6 and a flat
+ * −20% debuff would climb to −100%. The effects that are *meant* to build — Frostbind's slow,
+ * Iron Skin — say so with `stacks`.
  *
  * Refresh is to the **longer** of the two durations, never blindly to the new one — otherwise
  * a short cheap application would cut a long expensive one short, which makes a strong effect
@@ -123,7 +140,9 @@ export function applyStatus(list: StatusInstance[], incoming: StatusApplication)
 
     if (existing) {
         existing.remaining = Math.max(existing.remaining, incoming.duration)
-        existing.stacks = Math.min(STATUS_MAX_STACKS, existing.stacks + added)
+        if (stacksOnReapply(incoming)) {
+            existing.stacks = Math.min(STATUS_MAX_STACKS, existing.stacks + added)
+        }
         // A shield is a pool, so a refresh tops it up rather than replacing the per-stack
         // magnitude — the only kind where `magnitude` accumulates instead of describing a rate.
         if (incoming.kind === 'shield') {

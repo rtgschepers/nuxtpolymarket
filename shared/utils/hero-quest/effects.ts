@@ -71,6 +71,10 @@ export interface StatusSpec {
     magnitude?: number
     /** True when `magnitude` is a multiple of PWR rather than a flat fraction. */
     scalesWithPwr?: boolean
+    /**
+     * Stacks added per application. ⚠ Setting it on a `buff` / `debuff` is what makes the effect
+     * build on recast — without it a stat effect only refreshes (`status.applyStatus`).
+     */
     stacks?: number
 }
 

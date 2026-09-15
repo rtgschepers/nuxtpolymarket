@@ -200,7 +200,8 @@ export const MAX_EVASION = 0.60
  * Ceiling on stacks of one effect on one unit.
  *
  * Reapplication refreshes duration *and* adds a stack, so without a cap a maintained DoT grows
- * without bound — and Frostbind's "at max stacks, fully disables" needs a max to point at.
+ * without bound — and Frostbind's "at max stacks, fully disables" needs a max to point at. Stat
+ * buffs and debuffs only stack when their spec sets `stacks` (see `status.applyStatus`).
  */
 export const STATUS_MAX_STACKS = 5 // TUNED ✓
 
