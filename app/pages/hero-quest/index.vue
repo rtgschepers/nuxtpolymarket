@@ -159,7 +159,7 @@ const awayReport = computed(() => {
           :loading="engaging"
           @click="onEngage"
         >
-          Fight the {{ liveRun.enemyName }}
+          Fight {{ liveRun.enemyName }}
         </UButton>
       </div>
 

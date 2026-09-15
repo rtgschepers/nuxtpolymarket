@@ -12,7 +12,7 @@ import { WORLDS } from '#shared/utils/hero-quest/content/worlds'
  * Every table below is a `v-for` over the content module the game itself rolls against. Nothing
  * here is transcribed, so a roster edit updates this page and there is no second copy to forget.
  * That is the entire reason this page exists as code rather than as a markdown doc: rosters still
- * change, and two of them (Artifacts, Worlds) ship with placeholder names that a later pass will
+ * change, and one of them (Artifacts) ships with placeholder names that a later pass will
  * replace wholesale.
  *
  * One roster at a time. Rendering all 200-odd entries at once is a page nobody scrolls, and the
@@ -76,8 +76,8 @@ function parentName(parentId: string | null) {
       variant="subtle"
       icon="i-lucide-pencil-ruler"
       title="Some names are placeholders"
-      description="Artifact names and World names are stand-ins awaiting a naming pass. Their
-        mechanics are real; their names are not final."
+      description="Artifact names are stand-ins awaiting a naming pass. Their mechanics are real;
+        their names are not final."
     />
 
     <div class="flex flex-wrap gap-1">
@@ -389,8 +389,13 @@ function parentName(parentId: string | null) {
             :key="world.id"
             class="border-t border-default"
           >
-            <td class="py-1.5 pr-3 text-default font-medium whitespace-nowrap">
-              {{ world.name }}
+            <td class="py-1.5 pr-3 align-top">
+              <div class="text-default font-medium whitespace-nowrap">
+                {{ world.name }}
+              </div>
+              <div class="text-muted max-w-xs">
+                {{ world.theme }}
+              </div>
             </td>
             <td class="py-1.5 px-3 text-muted">
               {{ world.enemyName }}

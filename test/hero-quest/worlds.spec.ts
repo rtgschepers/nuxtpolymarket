@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WORLDS, enemyNameAt, getWorld, runProgress } from '#shared/utils/hero-quest/content/worlds'
+import { CHAMPIONS } from '#shared/utils/hero-quest/content/champions'
 import {
     BOSS_STAGE,
     ELITE_STAGE_MAX,
@@ -33,11 +34,36 @@ describe('hero-quest worlds', () => {
         expect(last.name).toBe('The Void')
     })
 
-    it('names every enemy role in every world', () => {
+    it('names every enemy role and gives every world a theme', () => {
         for (const world of WORLDS) {
             expect(world.enemyName.length, world.id).toBeGreaterThan(0)
             expect(world.bossName.length, world.id).toBeGreaterThan(0)
             expect(world.superBossName.length, world.id).toBeGreaterThan(0)
+            expect(world.theme.length, world.id).toBeGreaterThan(0)
+        }
+    })
+
+    it('never uses a name twice across worlds', () => {
+        const names = WORLDS.flatMap(world => [world.name, world.enemyName, world.bossName, world.superBossName])
+        expect(new Set(names).size).toBe(names.length)
+    })
+
+    it('starts no boss name with "The", which the fight button and gate copy read as a proper name', () => {
+        // The screen says "Fight <name>" and "<name> blocks the way"; a leading article reads
+        // "Fight The Void Herald".
+        for (const world of WORLDS) {
+            expect(world.bossName, world.id).not.toMatch(/^the\s/i)
+            expect(world.superBossName, world.id).not.toMatch(/^the\s/i)
+        }
+    })
+
+    it('never reuses a Champion given name or title, so a boss cannot be mistaken for a pull', () => {
+        const championWords = new Set(CHAMPIONS.flatMap(champion => [champion.givenName, champion.title]).map(word => word.toLowerCase()))
+        for (const world of WORLDS) {
+            for (const name of [world.enemyName, world.bossName, world.superBossName]) {
+                const clashes = name.split(/[\s,]+/).filter(word => championWords.has(word.toLowerCase()))
+                expect(clashes, `${world.id}: ${name}`).toEqual([])
+            }
         }
     })
 

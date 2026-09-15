@@ -1,14 +1,23 @@
 /**
  * The 10 worlds a prestige run walks through.
  *
- * **Placeholders, and deliberately so.** World and enemy design is the last genuinely
- * greenfield pass in the project (`open-items.md` #6) and has not happened — no themes, no
- * art direction, no enemy rosters, no boss identities. Nothing here affects a single number:
- * every stat comes from `settle.enemyStatsAt`, which knows only the run index.
+ * **Names and themes only.** Nothing here affects a single number: every stat comes from
+ * `settle.enemyStatsAt`, which knows only the run index. Enemies have no kits of their own yet
+ * (`open-items.md` #6), so a roster here is a name and an art brief, not a mechanic.
  *
- * What is real and must survive the design pass: **World 10 is The Void.** Void Shards are
- * named after it (`economy-and-currencies.md` §3), so the world pass either keeps the name
- * or renames the prestige currency.
+ * **The arc is a walk toward the source.** The archmage of Duskspire (World 6) opened a door
+ * to the Void, and the cracks it left spread outward through the kingdom. A run starts at the
+ * farthest frontier, where the damage is only feral hedgerows, and walks inward — through places
+ * the Void has hollowed a little more each time — past the door itself and out through the edge
+ * of the world into **The Void** (World 10). Void Shards are named after it
+ * (`economy-and-currencies.md` §3), which is also the lore of a prestige: reach the end, and
+ * start again stronger.
+ *
+ * **Naming rules the UI depends on:**
+ * - `enemyName` pluralises with a plain "s" (`RunPosition` renders "Bramble Goblins defeated").
+ * - Boss names never start with "The", because sentences read "Fight Old Gnarlhide" and
+ *   "Old Gnarlhide blocks the way".
+ * - No name reuses a Champion given name or title, so a boss is never mistaken for a pull.
  *
  * The fixed pool never re-themes between prestiges (`core-progression-and-prestige.md` §5) —
  * difficulty is communicated entirely through the stat curve, which is what keeps art scope
@@ -25,6 +34,8 @@ export interface WorldDefinition {
     /** 1-based, and equal to this entry's position in the play order. */
     index: number
     name: string
+    /** One line of setting — the brief the world's background and roster art are drawn from. */
+    theme: string
     /** Trash and elite mobs. Flavour only; stats come from the curve. */
     enemyName: string
     bossName: string
@@ -32,16 +43,96 @@ export interface WorldDefinition {
 }
 
 export const WORLDS: readonly WorldDefinition[] = [
-    { id: 'world_01', index: 1, name: 'World 1', enemyName: 'Wanderer', bossName: 'Warden', superBossName: 'Gatekeeper' },
-    { id: 'world_02', index: 2, name: 'World 2', enemyName: 'Prowler', bossName: 'Marauder', superBossName: 'Overseer' },
-    { id: 'world_03', index: 3, name: 'World 3', enemyName: 'Husk', bossName: 'Ravager', superBossName: 'Harbinger' },
-    { id: 'world_04', index: 4, name: 'World 4', enemyName: 'Stalker', bossName: 'Executioner', superBossName: 'Archon' },
-    { id: 'world_05', index: 5, name: 'World 5', enemyName: 'Revenant', bossName: 'Tyrant', superBossName: 'Sovereign' },
-    { id: 'world_06', index: 6, name: 'World 6', enemyName: 'Wraith', bossName: 'Devourer', superBossName: 'Colossus' },
-    { id: 'world_07', index: 7, name: 'World 7', enemyName: 'Shade', bossName: 'Desolator', superBossName: 'Leviathan' },
-    { id: 'world_08', index: 8, name: 'World 8', enemyName: 'Phantom', bossName: 'Anathema', superBossName: 'Behemoth' },
-    { id: 'world_09', index: 9, name: 'World 9', enemyName: 'Umbra', bossName: 'Oblivion', superBossName: 'Eidolon' },
-    { id: 'world_the_void', index: 10, name: 'The Void', enemyName: 'Void Spawn', bossName: 'Void Herald', superBossName: 'The Voidborn' }
+    {
+        id: 'world_thornwick_vale',
+        index: 1,
+        name: 'Thornwick Vale',
+        theme: 'Frontier farmland at the edge of the kingdom, where the first cracks have turned the hedgerows feral.',
+        enemyName: 'Bramble Goblin',
+        bossName: 'Old Gnarlhide',
+        superBossName: 'Gorsecrown, King of Hedges'
+    },
+    {
+        id: 'world_mirewood',
+        index: 2,
+        name: 'Mirewood',
+        theme: 'A drowned forest of black water and hanging moss, rotting from the roots up.',
+        enemyName: 'Bog Lurker',
+        bossName: 'Mother Leech',
+        superBossName: 'Rotheart, the Sunken Elder'
+    },
+    {
+        id: 'world_cinderpass',
+        index: 3,
+        name: 'Cinderpass',
+        theme: 'A volcanic mountain pass choked with ash, held by kobold clans and the thing they worship.',
+        enemyName: 'Cinder Kobold',
+        bossName: 'Slagjaw',
+        superBossName: 'Pyrrhax, the Molten Wyrm'
+    },
+    {
+        id: 'world_rimeholt',
+        index: 4,
+        name: 'Rimeholt',
+        theme: 'A frozen northern hold whose raiders swore themselves to a cold that does not end.',
+        enemyName: 'Frostbound Raider',
+        bossName: 'Jarl Hrimgar',
+        superBossName: 'Vinterhel, the Glacier Titan'
+    },
+    {
+        id: 'world_sunken_amarath',
+        index: 5,
+        name: 'Sunken Amarath',
+        theme: 'The drowned capital of a sea-empire, its dead still keeping the tides.',
+        enemyName: 'Drowned Sailor',
+        bossName: 'Tidecaller Nerine',
+        superBossName: 'Queen Maerith of the Deep'
+    },
+    {
+        id: 'world_duskspire',
+        index: 6,
+        name: 'Duskspire',
+        theme: 'A city of mage-towers held at twilight since its archmage opened a door to the Void.',
+        enemyName: 'Hollow Acolyte',
+        bossName: 'Magister Halvane',
+        superBossName: 'Archmage Ithren, the Door-Opener'
+    },
+    {
+        id: 'world_the_bonefields',
+        index: 7,
+        name: 'The Bonefields',
+        theme: 'An ancient battlefield where the fallen of a forgotten war rise to fight it again.',
+        enemyName: 'Restless Legionnaire',
+        bossName: 'Grave Marshal Korr',
+        superBossName: 'Ossuar, the Thousand-Bone Host'
+    },
+    {
+        id: 'world_the_shattered_sky',
+        index: 8,
+        name: 'The Shattered Sky',
+        theme: 'Islands of torn-loose stone adrift in a storm the Void has unmoored.',
+        enemyName: 'Skyshard Wisp',
+        bossName: 'Stormcrown Roc',
+        superBossName: 'Zephyrax, Breaker of Heavens'
+    },
+    {
+        id: 'world_the_fraying',
+        index: 9,
+        name: 'The Fraying',
+        theme: 'The edge of the world, where colour, sound and memory come apart thread by thread.',
+        enemyName: 'Unravelled Knight',
+        bossName: 'Sister Vesper, the Forgotten',
+        superBossName: 'Liminus, the Last Door'
+    },
+    {
+        id: 'world_the_void',
+        index: 10,
+        name: 'The Void',
+        theme: 'Nothing, pressing in — where every crack leads, and where each run ends before it begins again.',
+        enemyName: 'Void Thrall',
+        bossName: 'Void Herald',
+        superBossName: 'Nihil, the Hunger at the End'
+    }
 ]
 
 export const WORLD_BY_INDEX: Readonly<Record<number, WorldDefinition>> = Object.fromEntries(
