@@ -12,7 +12,7 @@
 
 import { eq, sql } from 'drizzle-orm'
 import { db, type DbExecutor } from '#server/database'
-import { hqCollection, hqLoadouts, hqShopUpgrades, hqState } from '#server/database/schema'
+import { hqCollection, hqFights, hqLoadouts, hqShopUpgrades, hqState } from '#server/database/schema'
 import { credit, getBalance } from '#server/utils/balance'
 import {
     BASE_ARTIFACT_SLOTS,
@@ -29,7 +29,10 @@ import {
     SEAL_GRANT_AMOUNT,
     SEAL_GRANT_BANK_CAP_DAYS,
     SEAL_GRANT_INTERVAL_HOURS,
+    SEAL_GRANT_PER_BOSS,
+    SEAL_GRANT_PER_WORLD_CLEAR,
     STAGES_PER_WORLD,
+    SUPER_BOSS_STAGE,
     TEN_PULL_SIZE,
     VOID_SHARD_BASE,
     VOID_SHARD_GROWTH,
@@ -84,7 +87,9 @@ import {
 import { gachaContent } from '#shared/utils/hero-quest/content/registry'
 import {
     enemyStatsAt,
+    fallbackStage,
     killsBeforeWipe,
+    nextStage,
     offlineCapHours,
     offlineEfficiency,
     goldPerKill,
@@ -99,6 +104,8 @@ import {
     wealthHoursFor,
     xpToNextLevel
 } from '#shared/utils/hero-quest/settle'
+import { runFight } from '#shared/utils/hero-quest/fight'
+import { randomInt } from '#shared/utils/random'
 import { economyBonuses, partyUnitStats } from '#shared/utils/hero-quest/stats'
 import type { StatsExplanation } from '#shared/utils/hero-quest/explain'
 import { D, ZERO, decPow, fromStore, toStore } from '#shared/utils/hero-quest/numbers'
@@ -569,6 +576,116 @@ export function prestigeResetValues(state: HqStateRow) {
         // whatever fraction of a kill the last one happened to end on.
         killFraction: 0,
         atBossGate: false
+    }
+}
+
+/**
+ * Resolve a boss or super-boss fight and apply its outcome, under the `hqState` row lock.
+ *
+ * Lives here rather than in `boss/engage.post.ts` so the race is testable against a real lock
+ * (`boss-engage.spec.ts`), the same reason `claimFreePull` does. The caller settles first and
+ * reads banked Gold *before* opening `tx` — `credit` locks the balance row from inside, so that
+ * read must not happen on a second pool connection while this lock is held.
+ *
+ * **Two guards, and both are the mutation's own read under the lock:**
+ *
+ * - **Not at a gate → 400.** A win or loss at any ordinary gate moves the run off it, so of a
+ *   burst of concurrent engages the first resolves and every other one reads a position that is
+ *   no longer a gate.
+ * - **Run already cleared → 400.** The World 10 super boss is the exception to the first guard:
+ *   `nextStage` is a fixed point there, so a win leaves the run parked on the *same* gate. Without
+ *   this check a cleared run could be re-fought indefinitely — every win paying the boss and
+ *   world-clear Milestone Seals again — and a burst on the first clear would pay once per queued
+ *   request, since the lock serializes them but none of them moves the run.
+ */
+export async function resolveBossEngage(tx: DbExecutor, userId: string, bankedGold: number) {
+    const [state] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
+    if (!state) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run to play' })
+
+    const position = positionOf(state)
+    if (!isBossStage(position.stage)) {
+        throw createError({ statusCode: 400, statusMessage: 'The run is not at a boss gate' })
+    }
+    if (state.runCleared) {
+        throw createError({ statusCode: 400, statusMessage: 'The run is complete — prestige to start the next one' })
+    }
+
+    const shopLevels = await getShopLevels(userId, tx)
+    // Both read inside the lock — the boss is a DPS check against the *fielded party*, and a
+    // stale collection would resolve it with the wrong Champions, the wrong Gear, the wrong
+    // equipped Skills or the wrong Artifacts.
+    const collections = await getCollections(userId, tx)
+    const hero = heroSnapshotOf(state, shopLevels, collections, bankedGold)
+
+    // CSPRNG for the seed; everything downstream is deterministic from it, which is what
+    // lets the client replay the exact fight without being trusted with the outcome.
+    const seed = randomInt(1, 0x7FFFFFFF)
+    const fight = runFight({ hero, position, seed })
+
+    // Win advances; anything else falls back one stage to farm (`core-progression-and-
+    // prestige.md` §2). No retry here — the run farms back up to the gate and engages again.
+    const won = fight.outcome === 'win'
+    const landing = won ? nextStage(position) : fallbackStage(position)
+
+    // `nextStage` is a fixed point at World 10 / Stage 10 — there is nowhere further to
+    // go — so beating the final super boss leaves the run standing exactly where it was.
+    // The flag is what separates that from having merely walked up to it.
+    const clearedTheRun = won
+        && position.world === WORLD_COUNT
+        && position.stage === SUPER_BOSS_STAGE
+
+    // Milestone Seals, granted on the win only and paid in all four types at once
+    // (`economy-and-currencies.md` §5). Clearing Stage 10 finishes a World, which is the
+    // larger of the two batches; the Stage 5 boss pays the small one.
+    const sealsEarned = won
+        ? SEAL_GRANT_PER_BOSS + (position.stage === SUPER_BOSS_STAGE ? SEAL_GRANT_PER_WORLD_CLEAR : 0)
+        : 0
+
+    const [updated] = await tx.update(hqState)
+        .set({
+            world: landing.world,
+            stage: landing.stage,
+            killCount: 0,
+            // Cleared with the kill counter it belongs to — the fight was resolved on its
+            // own terms, so nothing is owed toward the first body of wherever the run lands.
+            killFraction: 0,
+            atBossGate: isBossStage(landing.stage),
+            runCleared: clearedTheRun,
+            ...(sealsEarned > 0 ? sealGrantSet(sealsEarned) : {})
+        })
+        .where(eq(hqState.userId, userId))
+        .returning()
+
+    await tx.insert(hqFights).values({
+        userId,
+        kind: 'boss',
+        seed,
+        outcome: fight.outcome,
+        context: {
+            position,
+            heroLevel: hero.heroLevel,
+            classId: hero.classId,
+            enemyMaxHp: fight.enemyMaxHp,
+            /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
+            enemyMaxHps: fight.enemyMaxHps,
+            secondsElapsed: fight.secondsElapsed,
+            landing: { world: landing.world, stage: landing.stage }
+        }
+    })
+
+    return {
+        outcome: fight.outcome,
+        seed,
+        secondsElapsed: fight.secondsElapsed,
+        damageDealtPct: fight.damageDealtPct,
+        enemyMaxHp: fight.enemyMaxHp,
+        /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
+        enemyMaxHps: fight.enemyMaxHps,
+        enemyHpRemaining: fight.enemyHpRemaining,
+        events: fight.events,
+        landing: { world: updated?.world ?? landing.world, stage: updated?.stage ?? landing.stage },
+        /** True when this win cleared World 10 / Stage 10 and prestige is now available. */
+        runComplete: updated?.runCleared ?? clearedTheRun
     }
 }
 

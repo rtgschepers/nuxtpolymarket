@@ -144,8 +144,12 @@ const awayReport = computed(() => {
         :hero="liveHero"
       />
 
+      <!--
+        Not on a cleared run: the World 10 super boss stays parked on its gate after it falls, and
+        the server rejects a re-fight there. The battle view already points the player at prestige.
+      -->
       <div
-        v-if="liveRun.atBossGate"
+        v-if="liveRun.atBossGate && !liveRun.runCleared"
         class="flex justify-center"
       >
         <UButton

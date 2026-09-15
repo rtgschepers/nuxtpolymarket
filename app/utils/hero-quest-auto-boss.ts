@@ -18,9 +18,9 @@
  * otherwise hit:
  *
  * 1. **The run must not already be cleared.** `nextStage` is a fixed point at World 10 Stage 10,
- *    so a won super boss leaves the run parked on the same gate with `runCleared` set. Firing
- *    there would re-fight the final boss forever, and every win pays Milestone Seals. Manual
- *    re-engage has the same shape and predates this — flagged, not fixed here.
+ *    so a won super boss leaves the run parked on the same gate with `runCleared` set. The
+ *    server rejects a re-fight there (`resolveBossEngage`); holding here just avoids sending a
+ *    request that can only fail.
  * 2. **The projection must have held the gate for `AUTO_ENGAGE_GRACE_KILLS`.** The client counts
  *    kills fractionally and the server floors, so the screen reaches a gate up to one kill before
  *    the server agrees. See `AUTO_ENGAGE_GRACE_KILLS`.
