@@ -17,7 +17,7 @@ import { SHOP_TRACKS } from '#shared/utils/hero-quest/content/shop'
  * Currencies and where they go.
  *
  * The currency list comes from `HQ_CURRENCY_DOCS`, which carries a `live` flag — three of the
- * eleven specified currencies belong to systems that ship in a later phase, and listing them as
+ * specified currencies belong to systems that ship in a later phase, and listing them as
  * working would send players hunting for something they cannot earn.
  *
  * The prestige shop table is generated from `SHOP_TRACKS`, so adding a track updates this page.

@@ -6,7 +6,7 @@ import { assertDevHarness, devSet, type DevSet } from '#server/utils/hero-quest-
  * **Dev only** — see `server/utils/hero-quest-dev.ts`.
  *
  * `atBossGate` is always derived from the landing stage rather than accepted from the body, so a
- * jump can never leave `boss/engage` able to resolve a fight against a trash stage.
+ * jump can never store a flag that disagrees with the stage.
  */
 export default defineEventHandler(async (event) => {
     assertDevHarness()

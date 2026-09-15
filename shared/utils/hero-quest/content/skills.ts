@@ -8,8 +8,8 @@
  *
  * ## The roster is doc-authored, which makes this pass a transcription
  *
- * Unlike Champions — where seven class skills had nothing but a name in a tree diagram — §4
- * gives a complete 36-entry draft: name, type, and a one-line effect for every one. The doc's
+ * Unlike the class tree — where seven skills had nothing but a name in a diagram — §4 gives a
+ * complete 36-entry draft: name, type, and a one-line effect for every one. The doc's
  * own wording is quoted above each entry so a later reading can check the transcription rather
  * than re-derive intent. What is *not* in the doc is any magnitude ("small", "medium–large",
  * "a portion"), which is why every number here comes from `constants.ts`.
@@ -18,20 +18,15 @@
  *
  * - **Active** → an `AbilityEffect`, joining the Hero's kit in `fight.ts` and `projection.ts`.
  *   Plugs into the existing cooldown/SPD system with no new combat code (§3).
- * - **Passive** → `HqModifier` lines, folded into the stat pipeline and the economy rates. The
- *   Phase 3 brief asked whether these belong in `stats.ts` rather than as combat statuses, and
- *   they do: a Passive is "always on, no cooldown, no button" (§3), which is the definition of a
- *   stat modifier and not of a status with a duration.
+ * - **Passive** → `HqModifier` lines, folded into the stat pipeline and the economy rates. A
+ *   Passive is "always on, no cooldown, no button" (§3) — a stat modifier, not a status with a
+ *   duration.
  *
- * Exactly 18 of each, an exact 50/50 split, 3 Active and 3 Passive per rarity (§3).
+ * 18 of each: 3 Active and 3 Passive per rarity (§3).
  *
- * ## Universality is now nearly self-enforcing
- *
- * §3's core rule is that no skill may hard-reference a path-specific stat, since any Hero can
- * equip any skill. With STR/DEX/INT merged into PWR there *is* no path-specific stat left to
- * reference by accident — every line below targets one of the six stats every class has, or an
- * external resource (Gold, XP, offline efficiency) that has nothing to do with class at all.
- * `content.spec.ts` asserts it anyway, because the rule outlives the merge that made it easy.
+ * §3's universality rule — no skill may reference a path-specific stat, since any Hero can equip
+ * any skill — holds trivially because every class shares the same six stats; `content.spec.ts`
+ * asserts it anyway.
  */
 
 import {
@@ -127,14 +122,8 @@ const selfBuff = (key: HqStatKey) =>
     ({ kind: 'buff' as const, stat: key, duration: TIMED, magnitude: SKILL_BUFF_FRACTION })
 
 /**
- * The cooldown a "chance to refund / reset / trigger again" clause is rendered as.
- *
- * Three Legendary and Mythic Actives carry one — Executioner's Edge refunds part of its cooldown
- * on a kill, Ragnarok Strike may reset its own outright, Fortune's Gambit may fire a second time.
- * None of them is expressible: there is no on-kill trigger, no cooldown-mutation channel and no
- * scheduled-event queue. All three land as **a permanently shorter cooldown** — more casts per
- * minute, which is what all three clauses buy — with the *conditionality* dropped. Stated rather
- * than hidden, exactly as the ability-effects pass handled its six approximations.
+ * The cooldown a "chance to refund / reset / trigger again" clause is rendered as — a permanently
+ * shorter cooldown with the conditionality dropped. See `SKILL_COOLDOWN_REFUND_FRACTION`.
  */
 const REFUNDED_COOLDOWN = SKILL_BASE_COOLDOWN_SECONDS * (1 - SKILL_COOLDOWN_REFUND_FRACTION)
 
@@ -191,7 +180,7 @@ export const SKILLS: readonly SkillDefinition[] = [
      * "Deals no damage — instantly grants a small burst of bonus Gold."
      *
      * The burst is minutes of current income, never a flat amount (`gold-economy.md` §6), and it
-     * rides `GOLD_BURST_COOLDOWN_SECONDS` rather than the shared 8s base — see that constant for
+     * rides `GOLD_BURST_COOLDOWN_SECONDS` rather than the shared base — see that constant for
      * why a pure-economy Active cannot share a damage skill's cadence.
      */
     active('Coin Toss', 'common', ['Grants a small burst of bonus Gold. Deals no damage.'],
@@ -328,10 +317,7 @@ export const SKILLS: readonly SkillDefinition[] = [
     /**
      * "+DEF%/VIT (medium–large), AND resistance to (reduced chance/duration of) one debuff type."
      *
-     * The resistance line is a `controlResist` modifier, which is summed and **currently inert** —
-     * enemies have no abilities, so nothing in the game applies a debuff to the party to resist.
-     * Declared honestly rather than re-pointed at a stat that happens to be wired up; it goes live
-     * the day enemy kits do. See `modifiers.ts`.
+     * The resistance line is a `controlResist` modifier, **currently inert** — see `modifiers.ts`.
      */
     passive('Unbreakable Will', 'legendary', ['+DEF.', 'Shortens debuffs applied to you.'],
         [stat('legendary', 'def'), other('legendary', 'controlResist')]),
@@ -401,7 +387,7 @@ export function skillsOfRarity(rarity: Rarity): SkillDefinition[] {
     return SKILLS.filter(entry => entry.rarity === rarity)
 }
 
-/** All six rarities carry six skills each — no rarity fold has ever been needed here. */
+/** All six rarities carry six skills each. */
 export function skillRarityHasContent(rarity: Rarity): boolean {
     return SKILLS.some(entry => entry.rarity === rarity)
 }
@@ -436,17 +422,9 @@ export function trainingGroundsArt(classId: ClassId): TrainingGroundsArt {
 /**
  * potency(star, level) = 1 + (star × 10 + level − 1) × SKILL_POTENCY_PER_POINT
  *
- * **What a levelled Skill copy is worth.** `gacha-shared-system.md` §6 makes
- * `(star × 10 + level)` the universal per-copy power scalar, and Gear, Artifacts and the Champion
- * passive all read it — `skills-gacha.md` simply never says Skills do, which left a levelled copy
- * worth nothing at all beyond the duplicates it ate. This closes that gap on the terms the rest of
- * the project already uses.
- *
- * **Identity at minimum, deliberately.** A 0★/Lv1 copy returns exactly 1.0, so §4's authored
- * magnitude bands remain the reference point and a freshly-pulled Mythic is exactly as strong as
- * the doc describes. The alternative — Artifacts' *proportional* curve — would make that same
- * fresh Mythic 1/60th of its described strength, which would be rewriting the doc rather than
- * extending it. See `SKILL_POTENCY_PER_POINT` for the full reasoning.
+ * **What a levelled Skill copy is worth.** Identity at minimum: a 0★/Lv1 copy returns exactly 1.0,
+ * so §4's authored magnitude bands stay the reference point. See `SKILL_POTENCY_PER_POINT` for why
+ * this shape rather than Artifacts' proportional one.
  */
 export function skillPotency(star: number, level: number): number {
     return 1 + Math.max(0, investmentScalar(star, level) - 1) * SKILL_POTENCY_PER_POINT
@@ -515,10 +493,9 @@ export function skillActives(equipped: readonly OwnedCopy[]): ClassSkill[] {
  * The Hero's complete firing kit: the class tree's accumulated skills plus every equipped
  * Training Grounds Active.
  *
- * One function so `fight.ts` and `projection.ts` cannot disagree about what the Hero brings —
- * they each built the kit themselves before Skills existed, and a divergence here would mean the
- * boss fight and the idle rate were describing different Heroes. §7's square-vs-circle UI split
- * is presentation only; mechanically both feed the same cooldown system (§5).
+ * One function so `fight.ts` and `projection.ts` cannot disagree about what the Hero brings. §7's
+ * square-vs-circle UI split is presentation only; mechanically both feed the same cooldown system
+ * (§5).
  */
 export function heroKit(hero: HeroSnapshot): ClassSkill[] {
     return [...kitFor(hero.classId), ...skillActives(hero.equippedSkills ?? [])]

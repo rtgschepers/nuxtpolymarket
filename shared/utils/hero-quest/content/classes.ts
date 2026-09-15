@@ -7,10 +7,8 @@
  * "extreme" qualifiers mapped onto the three DELTA_* magnitude constants. Both accumulate
  * down the path, so Berserker carries Warrior's and Barbarian's shifts.
  *
- * Skills carry a cooldown and a damage multiplier, both from the shared placeholder pair —
- * see `SKILL_BASE_COOLDOWN_SECONDS`. Nothing here is per-skill-tuned yet, and the several
- * distinctive behaviours §7 sketches (chaining, multi-target, summons, the Haste SPD
- * double, Enrage's HP trade) have no numeric model in any doc and are not implemented.
+ * Every skill uses the shared placeholder cooldown (`SKILL_BASE_COOLDOWN_SECONDS`); what
+ * differs per skill is its effect shape — see `skill` below.
  */
 
 import {
@@ -48,12 +46,9 @@ export const ROOT_CLASS_ID: ClassId = 'class_beginner'
  * What *is* authored here is each ability's **shape**: its target pattern, its damage relative
  * to a plain hit, and any status it carries.
  *
- * Nine of the sixteen had a one-clause behavioural hint in the docs (Haste doubles SPD,
- * Bouncebolt chains, Lightning Storm and Meteor Shower hit multiple targets, Totem Storm and
- * Raise Dead affect the party or battlefield, Disciple and Man's Best Friend summon, Enrage
- * trades max HP). The other seven had nothing but a name in a tree diagram and were specified
- * during this pass; each carries a comment saying so, because "the doc said this" and "we
- * decided this" must not become indistinguishable a year from now.
+ * Nine of the sixteen have a one-clause behavioural hint in the docs; the other seven had only a
+ * name and were specified here. Each carries a comment saying which ("Doc-specified" or
+ * "Specified this pass"), so "the doc said this" and "we decided this" stay distinguishable.
  */
 function skill(
     id: string,
@@ -99,17 +94,12 @@ const CLASS_NODE_SPECS: readonly Omit<ClassNode, 'defaultRow'>[] = [
             }
         }, NO_DAMAGE),
         /**
-         * Decided this pass, not transcribed — the Beginner was the only node in the tree with
-         * no damage in its kit *and* no `high` stat, and a fresh account fields it alone for a
-         * whole prestige.
-         *
-         * At all-`mid` and one strike it dealt 5.6 DPS at level 1, against 18–25 for every base
-         * class, so a solo opening stage ran 5m 20s and the Hero died six times over before
-         * clearing it. `high` PWR is what every base class already carries; `high` SPD and a
-         * second strike are the Beginner's own, and both are node-local — neither rides the
-         * cumulative kit, so no later class inherits them. Together they are ×4 DPS, which
-         * is the part of the solo gap the enemy side should not have to close. See
-         * `BOSS_HP_MULT` for the gate that keeps a solo Beginner from walking past Stage 5.
+         * Decided, not transcribed. The Beginner has no damage in its kit and a fresh account
+         * fields it alone, so an all-`mid`, one-strike spread left it at a fraction of every base
+         * class's DPS. `high` PWR matches the base classes; `high` SPD and the second strike are
+         * the Beginner's own and node-local (spreads and strikes are not inherited), so no later
+         * class carries them. See `BOSS_HP_MULT` for the gate that stops a solo Beginner at
+         * Stage 5.
          */
         spread: { pwr: 'high', spd: 'high', lck: 'mid', imp: 'mid', vit: 'mid', def: 'mid' },
         delta: {},
@@ -176,7 +166,7 @@ const CLASS_NODE_SPECS: readonly Omit<ClassNode, 'defaultRow'>[] = [
             }
         }, NO_DAMAGE),
         spread: { pwr: 'high', spd: 'low', lck: 'low', imp: 'mid', vit: 'high', def: 'high' },
-        // Enrage trades max HP and incoming damage as a skill-level cost, not a base-stat one
+        // Enrage's DEF trade is a skill-level cost, not a base-stat one
         delta: { pwr: DELTA_EXTREME },
         strikesPerAttack: 1,
         autoTarget: 'lowest_hp_pct'

@@ -11,11 +11,11 @@ import { WORLDS } from '#shared/utils/hero-quest/content/worlds'
  *
  * Every table below is a `v-for` over the content module the game itself rolls against. Nothing
  * here is transcribed, so a roster edit updates this page and there is no second copy to forget.
- * That is the entire reason this page exists as code rather than as a markdown doc: six rosters
- * are still being authored, and one of them (Artifacts) ships with placeholder names that a
- * later pass will replace wholesale.
+ * That is the entire reason this page exists as code rather than as a markdown doc: rosters still
+ * change, and two of them (Artifacts, Worlds) ship with placeholder names that a later pass will
+ * replace wholesale.
  *
- * One roster at a time. Rendering all 190-odd entries at once is a page nobody scrolls, and the
+ * One roster at a time. Rendering all 200-odd entries at once is a page nobody scrolls, and the
  * chips double as the table of contents.
  */
 

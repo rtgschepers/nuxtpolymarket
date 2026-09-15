@@ -1,8 +1,6 @@
 /**
  * Status effects: the shared engine every ability plugs into.
  *
- * ## Why this module exists at all
- *
  * Both ability rosters describe effects that presume a status system — Rising Flame's
  * "re-application stacks", Frostbind's "at max stacks, fully disables", Purify's "removes all
  * debuffs and grants brief debuff immunity", Unraveling Curse's "extends the remaining
@@ -11,12 +9,8 @@
  * design doc defines one, so the data model and every interaction rule below is a decision
  * made here rather than transcribed.
  *
- * ## What is deliberately *not* here
- *
- * No ability references any of this yet. Stage 2 builds the engine; Stage 3 authors the
- * effects onto it. That ordering is what lets the engine be tested on its own terms, and it is
- * why every function here degrades to a no-op on an empty status list — a unit with no
- * statuses must behave exactly as it did before this module existed.
+ * Every function here degrades to a no-op on an empty status list, so a unit with no statuses
+ * behaves exactly as the bare stat block says.
  *
  * ## Where it lives
  *
@@ -107,7 +101,7 @@ export interface StatusApplication {
 /**
  * Apply an effect to a status list, mutating it in place.
  *
- * ## The stacking rule — decided here, documented in `classes-and-combat.md`
+ * ## The stacking rule
  *
  * Reapplying the same `id` **refreshes the duration and adds a stack**, capped at
  * `STATUS_MAX_STACKS`. Both halves are needed by the rosters: "re-application stacks" (Rising
@@ -174,14 +168,11 @@ export interface StatusTick {
  *
  * ## The cadence rule
  *
- * DoT and HoT pay out on a fixed `STATUS_TICK_SECONDS` grid rather than continuously or once
- * per combat tick. Per combat tick would silently couple every effect's strength to
- * `FIGHT_TICK_SECONDS` — halving the sim resolution would double every burn — which is the
- * kind of coupling that makes a tuning value impossible to reason about. A fixed grid keeps
- * "damage per second" a property of the effect.
+ * DoT and HoT are denominated per `STATUS_TICK_SECONDS` rather than per combat tick, so their
+ * strength does not depend on `FIGHT_TICK_SECONDS` (see `STATUS_TICK_SECONDS`).
  *
- * Fractional ticks accumulate rather than rounding away, so an effect that expires between
- * grid points still pays out the fraction it earned.
+ * Paid pro rata — `seconds / STATUS_TICK_SECONDS` ticks' worth per advance — so an effect that
+ * expires between grid points still pays out the fraction it earned.
  */
 export function tickStatuses(list: StatusInstance[], seconds: number): StatusTick {
     let damage = ZERO

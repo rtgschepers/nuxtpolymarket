@@ -2,9 +2,8 @@
  * Hero Quest balance projections.
  *
  * Reads the tuning registry and the pure settle math and prints tables. No database, no
- * Nitro, no game around it — that is the entire point of building this in Phase 0: the
- * untuned constants get their first real values from projections rather than from guesses
- * that go load-bearing three phases later.
+ * Nitro, no game around it — so untuned constants get their values from projections rather
+ * than from guesses that go load-bearing later.
  *
  *   bun run balance:hero-quest --table=time-to-boss --prestige=0 --world=1
  *
@@ -59,7 +58,7 @@ function arg(name: string, fallback: string): string {
     return hit ? hit.slice(name.length + 3) : fallback
 }
 
-/** How far the Gold tables walk. There is no prestige cap any more, so this is a display choice. */
+/** How far the Gold tables walk. Gold has no prestige cap, so this is a display choice. */
 const GOLD_CURVE_PRESTIGES = 20
 
 const table = arg('table', 'time-to-boss')
@@ -248,7 +247,7 @@ function attackRate() {
 function levelCurve() {
     // Stat blocks are Decimal, and `console.table` renders a Decimal as its object shape —
     // so every stat is formatted on the way out. `formatHq` rather than `toFixed` because
-    // geometric growth takes these past what a fixed-point string can show by level ~500.
+    // geometric growth eventually takes these past what a fixed-point string can show.
     const stats = (block: HqStatBlock) => ({
         PWR: formatHq(block.pwr),
         SPD: formatHq(block.spd),

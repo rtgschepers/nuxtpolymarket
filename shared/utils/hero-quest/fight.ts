@@ -25,27 +25,17 @@
  *
  * ## Skills
  *
- * Every skill auto-fires the instant its cooldown completes — there is no manual mode
- * anywhere in this game (`classes-and-combat.md` §3). **Every unit fires its own kit**: the
- * Hero's is cumulative down the class path, so a Berserker brings four skills and a Beginner
- * one, while a Champion brings the 1–3 its rarity grants (`champions-guild-gacha.md` §2).
+ * Every skill auto-fires the instant its cooldown completes — there is no manual mode anywhere
+ * in this game (`classes-and-combat.md` §3). **Every unit fires its own kit**: the Hero's is
+ * cumulative down the class path plus equipped Skill Actives (`heroKit`), while a Champion
+ * brings the 1–3 its rarity grants (`champions-guild-gacha.md` §2). Each ability's behaviour —
+ * targeting, statuses, heals, shields — comes from its `AbilityEffect` (`effects.ts`).
  *
- * All of them — 16 class skills and 28 Champion abilities — currently resolve as
- * single-target damage on a shared placeholder cooldown and multiplier. The distinctive
- * behaviours the docs sketch (chaining, multi-target, summons, heals, the whole Support and
- * Control archetype identities) have no numeric model anywhere and are not built. What is
- * built is the framework that fires them; the effects are a later content pass.
+ * The wave rate sees these only as averages (`projection.ts`), so a boss fight and the idle rate
+ * agree within the tolerance `projection.spec.ts` asserts, not exactly.
  *
- * **Two consequences worth knowing:**
- *
- * 1. `settle.ts` has no skill term at all, so a boss's DPS check is fought with strictly
- *    more damage than the wave rate on screen implies. That gap is intentional but untuned,
- *    it moves whenever `SKILL_BASE_ABILITY_MULTIPLIER` moves, and it **widened when Champion
- *    abilities started firing** — a party of six now brings up to 19 skills to a boss and
- *    still none to the wave rate.
- * 2. Ability *count* is now a real rarity payoff, not just flavour. A Mythic's three
- *    abilities out-damage a Common's one on top of the ×2.5 stat multiplier, which is the
- *    intended shape but has never been balanced against it.
+ * Ability *count* is a real rarity payoff: a Mythic's three abilities out-damage a Common's one
+ * on top of the ×2.5 stat multiplier — the intended shape, never balanced against it.
  */
 
 import {
@@ -98,9 +88,7 @@ export type FightEventKind =
      * cast anything and the client should not draw a swing for it.
      */
     | 'reflect'
-    // Status-engine events. Nothing emits these until Stage 3 authors effects onto the
-    // engine, but the replay contract is fixed here so the client is never handed a kind it
-    // silently drops.
+    // Status-engine events.
     | 'heal' | 'shield' | 'status_applied' | 'status_expired' | 'status_tick'
 
 /**
@@ -214,13 +202,8 @@ export function runFight(input: FightInput): FightResult {
     const units = partyUnitStats(input.hero)
 
     /**
-     * One kit per unit, in the order `partyUnitStats` builds the party: the Hero's cumulative
-     * class kit first, then each fielded Champion's own 1–3 abilities.
-     *
-     * The two sources stay separate because they are genuinely different — the Hero's kit is
-     * *accumulated down the class path* (`kitFor`), while a Champion's is a fixed list fixed
-     * by its rarity — but from here down they are the same thing, so there is no per-unit
-     * branch below.
+     * One kit per unit, in the order `partyUnitStats` builds the party: the Hero's kit first,
+     * then each fielded Champion's own abilities. Mirrors `projection.armedParty`.
      */
     const kits: readonly (readonly ClassSkill[])[] = [
         heroKit(input.hero),
@@ -261,9 +244,7 @@ export function runFight(input: FightInput): FightResult {
      * and within the eligible row whoever carries the most threat.
      *
      * Recomputed per swing rather than fixed once, because **taunt is a status** — a Tank that
-     * taunts mid-fight has to start pulling immediately, and one whose taunt expires has to
-     * stop. That is the only reason this is a function and not the precomputed list it
-     * replaced; the row rule itself is unchanged.
+     * taunts mid-fight has to start pulling immediately, and one whose taunt expires has to stop.
      *
      * Shares `targetingOrder` with `settle.ts` so the projection and the fight can never
      * disagree about who is soaking.
@@ -576,9 +557,8 @@ export function runFight(input: FightInput): FightResult {
                 // A stun stops the swing but the timer still ran — the attack is lost, not
                 // banked, which is what makes hard control worth more than a slow.
                 if (canAutoattack(unit.statuses)) {
-                    // strikesPerAttack folds Hunter's triple and Beast Master's quad in
-                    // without a special case; each strike rolls its own crit, per §7. Overkill
-                    // rolls onto the next body rather than being wasted.
+                    // Multi-strike kits need no special case; each strike rolls its own crit,
+                    // per §7. Overkill rolls onto the next body rather than being wasted.
                     for (let hit = 0; hit < unit.stats.strikesPerAttack; hit++) {
                         if (!strike(1)) break
                     }
@@ -646,11 +626,9 @@ export function runFight(input: FightInput): FightResult {
             /**
              * Reflect — the fraction a defender bounces back at whoever hit it.
              *
-             * Two sources, summed: the timed `reflect` status (Guardian's Reflect, which had been
-             * applied but never resolved anywhere until now) and the passive `reflectFraction` on
-             * the unit's stat block (Immortal Vanguard). Computed off `throughput` — what actually
-             * landed — so a hit a shield ate reflects nothing, which is the right reading of
-             * "reflect a portion of incoming damage".
+             * Two sources, summed: the timed `reflect` status (Guardian's Reflect) and the passive
+             * `reflectFraction` on the unit's stat block (Immortal Vanguard). Computed off
+             * `throughput` — what actually landed — so a hit a shield ate reflects nothing.
              */
             const reflected = reflectFraction(target.statuses)
                 .add(target.stats.reflectFraction)

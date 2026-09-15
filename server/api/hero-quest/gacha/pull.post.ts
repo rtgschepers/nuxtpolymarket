@@ -69,9 +69,8 @@ async function claimWithSeals(tx: Tx, userId: string, system: GachaSystem, seals
  * Pull from any of the four gachas — `system` in the body (`tech-architecture.md` §5).
  *
  * **One route, not four.** `gacha-shared-system.md` makes the four deliberately parallel — one
- * rarity ladder, one levelling curve, one drop table, one dupe formula — and
- * `docs/games/hero-quest/CLAUDE.md` §3 requires that machinery be written once and take `system` as an
- * argument. Only two things genuinely differ per system: which content module resolves a roll,
+ * rarity ladder, one levelling curve, one drop table, one dupe formula — so the machinery is
+ * written once and takes `system` as an argument. Only two things genuinely differ per system: which content module resolves a roll,
  * and which two columns hold the balances. `content/registry.ts` covers the first and
  * `SEAL_COLUMN` / `ESSENCE_COLUMN` in the domain layer cover the second, so everything below is
  * identical for all four by construction rather than by four files staying in sync.
@@ -81,8 +80,8 @@ async function claimWithSeals(tx: Tx, userId: string, system: GachaSystem, seals
  * `free: true` spends one of the day's free 10-pull entitlements instead of Seals. Everything
  * after the payment is byte-identical — same rarity roll, same dupe merge, same level bump, same
  * auto-equip — because a free pull *is* a pull and only the payment differs. That is why this is
- * a branch inside one route rather than a second route: duplicating it would mean two copies of
- * the roll loop, which is precisely what §3's one-route rule exists to prevent.
+ * a branch inside one route rather than a second route: two routes would mean two copies of the
+ * roll loop.
  *
  * ## Why the whole thing sits inside one transaction
  *
@@ -143,8 +142,7 @@ export default defineEventHandler(async (event) => {
 
         for (let index = 0; index < cost.pulls; index++) {
             // Rarity from the level's drop table, then a uniform pick inside it. Every roster
-            // populates every rarity, so a rolled rarity is the rarity paid out — the folding
-            // scaffolding partial rosters needed is gone.
+            // populates every rarity, so a rolled rarity is the rarity paid out.
             const rarity = rarityFromRoll(gachaLevel, randomFloat())
             const definition = content.fromRoll(rarity, randomFloat())
 

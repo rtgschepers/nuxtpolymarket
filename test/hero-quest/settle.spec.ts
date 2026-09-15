@@ -95,19 +95,17 @@ const OPENING_CLEAR_LEVEL = (() => {
  * First position along the play order where the hero cannot land a single kill inside the
  * longest window the game ever settles (the 72h offline cap).
  *
- * Since `MIN_DAMAGE` replaced the hard zero, no position produces literally zero damage any
- * more — the wall is a *rate* wall rather than an absolute one. "Cannot progress" therefore
+ * With the `MIN_DAMAGE` floor no position produces literally zero damage — the wall is a *rate*
+ * wall rather than an absolute one. "Cannot progress" therefore
  * has to be expressed against a time budget, and the offline cap is the natural one: a stage
  * that yields nothing across a maximal offline window yields nothing in practice.
  */
 const LONGEST_SETTLE_SECONDS = 72 * 3600
 
 /**
- * Scanned across prestiges, not just the first loop. The session-2 enemy cut (`BASE_ENEMY_HP`
- * 30 → 10, `BASE_ENEMY_DEF` 5 → 2) pushed the stall out of the prestige-0 run entirely — a
- * static level-1 Beginner now grinds through all ten worlds and walls at P1 W2S10. Naming a
- * prestige here would be the same mistake as naming a stage: the claim under test is that the
- * wall exists and that levels answer it, not where it sits.
+ * Scanned across prestiges, not just the first loop — tuning moves where the stall lands, and
+ * naming a prestige would be the same mistake as naming a stage: the claim under test is that
+ * the wall exists and that levels answer it, not where it sits.
  */
 const STALL_SEARCH_PRESTIGES = 4
 
@@ -118,9 +116,7 @@ function firstStallingPosition(snapshot: HeroSnapshot): RunPosition | null {
                 // Wave stages only. A gate settles to zero kills because it is a gate — the
                 // fight is a separate seeded resolution — so a gate would satisfy every
                 // assertion below without the DEF wall being involved at all, and the spec
-                // would quietly stop testing what it claims to. The crit retune made that a
-                // live hazard rather than a theoretical one: the lower DPS moved the first
-                // stall onto P0 W10S10, the last gate of the opening loop.
+                // would quietly stop testing what it claims to.
                 if (stage === BOSS_STAGE || stage === SUPER_BOSS_STAGE) continue
                 const position = at(world, stage, 0, prestige)
                 const spk = secondsPerKill(partyUnitStats(snapshot), enemyPackAt(position))
@@ -133,7 +129,7 @@ function firstStallingPosition(snapshot: HeroSnapshot): RunPosition | null {
 
 /**
  * The lowest level at which the wall stops being a wall — found, not named, for the same reason
- * the wall itself is. The crit retune moved it by well over a hundred levels in one edit.
+ * the wall itself is. A single retune can move it by a hundred levels.
  *
  * Searched through `settle` rather than through `secondsPerKill`, because the rate alone is not
  * what decides whether a window yields anything: the offline cap shortens the window, a party
@@ -359,8 +355,7 @@ describe('hero-quest settle', () => {
          * The bound is **two worlds' worth of levels to clear the first world** — derived from
          * `LEVELS_PER_STAGE` rather than pinned, because the honest quantity is "how far behind
          * the natural pace does the opening put you", and a flat number stops meaning that the
-         * moment fight length or the XP curve moves. It did: `BASE_ENEMY_HP` 10 → 60 made every
-         * fight six times longer, so the opening costs 50 levels where it used to cost 24.
+         * moment fight length or the XP curve moves.
          */
         it('levels out of the opening quickly rather than grinding the first screen', () => {
             const twoWorldsOfLevels = 1 + LEVELS_PER_STAGE * STAGES_PER_WORLD * 2
@@ -377,7 +372,6 @@ describe('hero-quest settle', () => {
          * The band it has to land inside is `0 < killsBeforeWipe < BASE_KILL_COUNT`, and it is
          * narrow: below it the stage clears outright, above it the party dies before its first
          * kill and the specs about *banking progress while walled* have nothing to measure.
-         * `BASE_ENEMY_HP` 10 → 60 walked the old W2S2 fixture straight past the top of it.
          */
         const unsurvivable = (() => {
             for (let world = 1; world <= WORLD_COUNT; world++) {
@@ -392,12 +386,9 @@ describe('hero-quest settle', () => {
         })()
 
         /**
-         * Both helpers read the rate model `settle()` itself runs (`rateAt`), kit included.
-         *
-         * They used to resolve the bare stat block, which leaves out the Beginner's Haste. That
-         * is harmless while the fixture sits deep inside the wipe band and wrong at its edge:
-         * once the opening became clearable the first wipe landed on World 1 Stage 3, where the
-         * bare block banked 24 kills and `settle` — hasted — banked 30 and cleared the stage.
+         * Both helpers read the rate model `settle()` itself runs (`rateAt`), kit included. The
+         * bare stat block leaves out the Beginner's Haste, which is enough to flip a stage at the
+         * edge of the wipe band between wiping and clearing.
          */
         function secondsPerKillAt(position: RunPosition, heroLevel = 1) {
             return rateAt({ ...hero, heroLevel }, position).secondsPerKill
@@ -410,9 +401,7 @@ describe('hero-quest settle', () => {
 
         /**
          * The first wave stage where the Hero still scratches the enemy but one kill outlasts
-         * it — **found, not named**, for the same reason `firstStallingPosition` is. It moved
-         * W2S6 → W2S9 on the session-2 enemy cut and again when `BASE_HP` went to 1500, since a
-         * deeper level-1 pool is precisely what buys the extra kills before the drop.
+         * it — **found, not named**, for the same reason `firstStallingPosition` is.
          */
         function firstNoKillWipe(): RunPosition {
             for (let world = 1; world <= WORLD_COUNT; world++) {
@@ -429,19 +418,14 @@ describe('hero-quest settle', () => {
             const units = partyUnitStats({ ...hero, heroLevel: 200 })
             const enemy = enemyPackAt(at(1, 1))
 
-            // No longer literally infinite: since MIN_DAMAGE landed, a fully-mitigated
-            // defender still takes chip damage, so every party dies *eventually*.
+            // Not literally infinite: with the MIN_DAMAGE floor a fully-mitigated defender still
+            // takes chip damage, so every party dies *eventually*.
             //
             // What makes the wipe unreachable is measured against the **stage**, not against
-            // a wall-clock figure: an over-levelled party clears the 30 kills hundreds of
-            // times over before dropping. A raw seconds threshold would also be a hidden
-            // assertion about pack size, since packs scale survival by `1/streams(N)`.
-            //
-            // The multiplier is a proxy for "unreachable", not a measured quantity, and it
-            // came down from 1000 to 100 with the session-1 HP cut — this fixture now survives
-            // 377 full clears rather than 1000+. Still unreachable by any playable standard;
-            // the level-200 fixture is kept rather than inflated to chase the old number,
-            // since the claim under test is about the shape, not the magnitude.
+            // a wall-clock figure: an over-levelled party clears the 30 kills many times over
+            // before dropping. A raw seconds threshold would also be a hidden assertion about
+            // pack size, since packs scale survival by `1/streams(N)`. The ×100 is a proxy for
+            // "unreachable", not a measured quantity.
             const survives = secondsToDie(units, enemy)
             expect(Number.isFinite(survives)).toBe(true)
             expect(wipeCount(at(1, 1), 200)).toBeGreaterThan(BASE_KILL_COUNT * 100)
@@ -477,7 +461,7 @@ describe('hero-quest settle', () => {
 
         it('earns nothing when the party dies before landing a single kill', () => {
             // The narrow band where the hero still scratches the enemy but one kill outlasts
-            // it — past this the hero deals literally 0 and `stalls` instead (below).
+            // it — deeper still, the kill rate itself stalls (below).
             const position = firstNoKillWipe()
             expect(secondsPerKillAt(position)).toBeLessThan(Number.POSITIVE_INFINITY)
             expect(wipeCount(position)).toBe(0)
@@ -516,10 +500,8 @@ describe('hero-quest settle', () => {
         it('lands the player at the boss, not past it and not short of it', () => {
             // Levelled enough to outlast a Stage 4 attempt: this is a spec about the *gate*,
             // and a hero that wipes on the wave before it never reaches the gate to be gated.
-            // The threshold rose with `WAVE_PACK_SIZE` — six attackers per encounter is a
-            // real survivability cost — and again with the `BASE_HP` cut, which is why it now
-            // reads the derived level rather than a number. The wave-wipe rule is tested on
-            // its own elsewhere.
+            // Reads the derived level rather than a number, because tuning moves it. The
+            // wave-wipe rule is tested on its own elsewhere.
             const result = settle(input({
                 hero: { ...hero, heroLevel: OPENING_CLEAR_LEVEL },
                 position: at(1, 4, BASE_KILL_COUNT - 1),
@@ -540,10 +522,8 @@ describe('hero-quest settle', () => {
         })
 
         it('gates Stage 10 the same way it gates Stage 5', () => {
-            // Needs a leveled hero: a level-1 Beginner cannot scratch a Stage 9 elite (below),
-            // and below level 80 it cannot outlast a full elite stage attempt either — six
-            // elites per encounter is a much heavier incoming stream than one. That threshold
-            // was 35 before the session-1 HP cut took `HP_PER_VIT` from 200 to 10.
+            // Needs a levelled hero, one that outlasts a full elite stage attempt — six elites
+            // per encounter is a much heavier incoming stream than one.
             const result = settle(input({
                 hero: { ...hero, heroLevel: 80 },
                 position: at(1, 9, BASE_KILL_COUNT - 1),
@@ -686,11 +666,8 @@ describe('hero-quest settle', () => {
              * departure stage's rate and chunking re-prices at each new stage — so a longer
              * horizon would be measuring that instead.
              *
-             * Measured before the carry existed, at this stage's ~1.88s/kill: one hour paid 1918
-             * kills settled in a single window, 1680 across sixty one-minute polls, and **zero**
-             * across 3600 one-second reloads, since `floor()` of a sub-1 budget is zero every
-             * time. The last is the reported bug — a player refreshing faster than they killed
-             * never progressed at all.
+             * Without the carry, a player refreshing faster than they killed would never progress
+             * at all, since `floor()` of a sub-1 budget is zero every time.
              */
             it('adds up the same however the presence is cut', () => {
                 const spk = rateAt(hero, at(1, 1)).secondsPerKill
@@ -720,7 +697,7 @@ describe('hero-quest settle', () => {
                 expect(whole.kills).toBe(BASE_KILL_COUNT - 6)
 
                 // The last of these settles roughly fifty times per kill — the shape of a player
-                // reloading the page, which used to earn nothing whatsoever.
+                // reloading the page.
                 for (const steps of [2, 10, 60, BASE_KILL_COUNT * 50]) {
                     const chunked = walk(steps)
                     expect(chunked.kills).toBe(whole.kills)
@@ -773,7 +750,7 @@ describe('hero-quest settle', () => {
         it('rides the same index as the enemy, one base, no seam at a boundary', () => {
             expect(goldProgressionFactor(0, 1, 1)).toBeCloseTo(1, 12)
             // Every adjacent pair along the play order steps by exactly one base, including
-            // the two boundaries the old table-times-two-bases form discontinued at.
+            // the world and prestige boundaries.
             const steps: [number, number, number][] = [
                 [0, 1, 1], [0, 1, 2], [0, 1, 10], [0, 2, 1], [0, 10, 10], [1, 1, 1], [1, 1, 2]
             ]
@@ -787,8 +764,7 @@ describe('hero-quest settle', () => {
         })
 
         it('never falls back when a run loops to the next prestige', () => {
-            // The old curve paid x11.6 across a run but only x2.8 for the prestige, so
-            // finishing World 10 and starting World 1 again *cut* Gold per kill by ~4x.
+            // Finishing World 10 and starting World 1 again must never cut Gold per kill.
             const lastStage = goldProgressionFactor(0, WORLD_COUNT, STAGES_PER_WORLD)
             const firstOfNext = goldProgressionFactor(1, 1, 1)
             expect(firstOfNext).toBeGreaterThan(lastStage)
@@ -809,8 +785,9 @@ describe('hero-quest settle', () => {
 
         it('leaves healthy headroom under the shared balance column', () => {
             // Gold lives on user.balance — numeric(19,4), a ~1e15 ceiling. The worst case
-            // stacks everything at once: prestige cap, deepest stage, throughput floor, a
-            // x4 Gold% stack and x4 Battle Speed, and a player who never spends a coin.
+            // stacks everything at once: the tenure ceiling at its ten-year horizon, the
+            // throughput floor, a x4 Gold% stack and x4 Battle Speed, and a player who never
+            // spends a coin.
             const BALANCE_COLUMN_CEILING = 1e15
             const worstCase = maxGoldPerHour(4, 4)
             const headroomHours = BALANCE_COLUMN_CEILING / worstCase
@@ -873,8 +850,7 @@ describe('hero-quest settle', () => {
         })
 
         it('caps a young account that has out-progressed the calendar', () => {
-            // Four prestige loops fit inside the first few hours of play, so this is the
-            // ordinary case rather than an exotic one.
+            // A deep position on a brand-new account — exactly the case the ceiling exists for.
             const young = goldPerKill(4, 10, 10, 0.1)
             expect(young).toBeCloseTo(BASE_GOLD * goldTenureCeiling(0.1), 9)
             expect(young).toBeLessThan(BASE_GOLD * goldProgressionFactor(4, 10, 10))
@@ -907,8 +883,8 @@ describe('hero-quest settle', () => {
         })
 
         it('applies inside settle(), not just at the formula', () => {
-            // A hero deep enough to have out-progressed a young calendar — which takes a few
-            // prestige loops, i.e. a few hours. Parked at a gate so position holds and every
+            // A hero deep enough to have out-progressed a young calendar. Parked at a gate so
+            // position holds and every
             // kill farms Stage 4 at one rate, making the payout readable as kills x one value.
             const deep = { hero: { ...hero, heroLevel: 1500 }, position: at(10, BOSS_STAGE, 0, 2) }
 
@@ -938,8 +914,8 @@ describe('hero-quest settle', () => {
         })
 
         it('never lets XP per second decay with depth', () => {
-            // XP/second ∝ xpPerKill ÷ enemy HP. Sharing an index is what holds this flat;
-            // the old three-base curve decayed here, so farming got worse the deeper you went.
+            // XP per kill measured against the enemy curve. Sharing an index at an exponent of at
+            // least 1 is what keeps farming from getting worse the deeper the run goes.
             const rate = (prestige: number, world: number, stage: number) =>
                 xpPerKill(prestige, world, stage).div(enemyMultiplier(prestige, world, stage)).toNumber()
 
@@ -972,11 +948,8 @@ describe('hero-quest settle', () => {
 
         it('carries the remainder forward instead of dropping it', () => {
             // Expressed as a fraction of level 2's own price rather than as a literal, so it
-            // stays a *partial* level under any re-denomination of the XP curve. A hard-coded
-            // 25 was a quarter of a level at `XP_TO_LEVEL_BASE` 100 and more than two whole
-            // levels once session 1 took it to 10 — so the spec had been asserting "overshoot
-            // by a bit" while actually supplying "overshoot by two levels", and only passed
-            // because the two happened to coincide at the original base.
+            // stays a *partial* level under any re-denomination of the XP curve — a literal
+            // amount silently becomes several whole levels when `XP_TO_LEVEL_BASE` moves.
             const remainder = xpToNextLevel(2).div(4)
             const result = applyXp(1, ZERO, xpToNextLevel(1).add(remainder))
             expect(result.level).toBe(2)

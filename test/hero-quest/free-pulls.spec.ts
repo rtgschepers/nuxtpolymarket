@@ -193,11 +193,9 @@ describe.skipIf(SKIP)('free pull claiming', () => {
         // Time is injected rather than waited on — the specs must not take half an hour, and the
         // clock being a parameter is what makes the boundary testable at all.
         //
-        // Anchored at midday UTC, not `Date.now()`. An earlier draft advanced the third claim by
-        // twenty cooldowns and expected a refusal; twenty cooldowns is ten hours, which crosses
-        // UTC midnight and legitimately refills the allowance. The spec was wrong, not the code —
-        // and it is a fair warning that "long enough later" and "still today" are different ideas
-        // here.
+        // Anchored at midday UTC, not `Date.now()`, and kept to a few cooldowns: advancing far
+        // enough to cross UTC midnight legitimately refills the allowance. "Long enough later"
+        // and "still today" are different ideas here.
         await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW))
         await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS))
 

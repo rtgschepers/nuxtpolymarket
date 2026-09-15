@@ -12,7 +12,7 @@
  * that it is the *same walk*, over the same pure helpers (`killsRequired`, `nextStage`,
  * `goldPerKill`, `xpPerKill`, `applyXp`, `offlineFarmStage`), against a rate the server handed
  * over. The next payload overwrites all of it. No projected number is ever sent back, and
- * nothing here decides anything — `docs/games/hero-quest/CLAUDE.md` §3, server authority.
+ * nothing here decides anything — the server stays the authority.
  *
  * ## The one rate
  *

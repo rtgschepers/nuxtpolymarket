@@ -21,7 +21,7 @@ const MAX_SEALS_PER_PURCHASE = 10
  * The first Seal bought *today* costs `SEAL_LADDER_BASE_GOLD`; each further one that day costs
  * more, at a growth rate calibrated per gacha. The four gachas hold **independent counters
  * behind one shared reset date**, so buying Champion pulls today never moves the price of Skill
- * pulls — a distinction that only started mattering when there were four gachas to confuse.
+ * pulls.
  *
  * This is the designed Gold sink — the reason banked Gold is worth anything at all, since Gold
  * buys nothing else in the game. The ladder's compounding is the brake, and deliberately a smooth

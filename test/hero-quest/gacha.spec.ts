@@ -98,14 +98,11 @@ describe('drop table', () => {
 })
 
 /**
- * Every roster populates every rarity — the invariant that replaced the fold.
+ * Every roster populates every rarity — the invariant the drop table rests on.
  *
- * `foldToAvailableRarity` used to live here, repairing the Phase 2 Champion roster's gaps by
- * rounding a rolled rarity *down* to the nearest shipped one. All four rosters are complete now,
- * which made it the identity function everywhere, so it is deleted (`implementation-plan.md`,
- * Phase 3). These specs are what keep the deletion honest: the moment any roster stops covering
- * a rarity, a pull at that rarity throws instead of silently paying out something else, and this
- * is the test that says so before a player finds it.
+ * The moment any roster stops covering a rarity, a pull at that rarity throws instead of silently
+ * paying out something else, and this is the test that says so before a player finds it. See the
+ * drop-table note in `gacha.ts` for how to repair a partial roster.
  */
 describe('roster coverage — why no rarity fold is needed', () => {
     const rosters = [

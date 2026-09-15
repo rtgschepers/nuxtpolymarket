@@ -1,8 +1,8 @@
 /**
  * The prestige shop — permanent upgrades, mostly bought with Void Shards.
  *
- * Six tracks now: the two offline tracks and the four slot tracks the gachas and Loadouts each
- * unlock. What is still **not** here, and why:
+ * Six tracks: the two offline tracks and the four slot tracks the gachas and Loadouts each
+ * unlock. What is **not** here, and why:
  *
  * - Raid Key grant-rate tracks belong to Raids — Phase 4.
  * - Gear has **no** slot track at all. All six Forge slots are available from account start
@@ -18,11 +18,9 @@
  *
  * ## Two currencies
  *
- * Every track was Void Shards until Loadouts. `loadouts.md` §3 prices Loadout slots in **Gems**,
- * deliberately: every other slot track gates real party power, while a Loadout slot gates only
- * taps — a player with 2 slots can manually re-equip everything a 10-slot player can. That is
- * why `ShopTrack` carries a `currency` and the buy route branches on it, rather than the shop
- * assuming one balance.
+ * Loadout slots are priced in **Gems** (`loadouts.md` §3) — see `LOADOUT_SLOT_BASE_COST_GEMS` —
+ * and everything else in Void Shards. That is why `ShopTrack` carries a `currency` and the buy
+ * route branches on it.
  */
 
 import {
@@ -70,10 +68,8 @@ export interface ShopTrack {
     costGrowth: number
     currency: ShopCurrency
     /**
-     * True when the cost curve is steep enough that fractional shards would be silly. Both
-     * doc formulas round the long track and leave the short one exact; keeping the flag
-     * rather than always rounding preserves the doc's `cost(level) = BASE × 2^(level-1)`
-     * exactly for the 5-level track.
+     * Whether to round the price to a whole number. Only Offline Efficiency stays exact, which
+     * preserves the doc's `cost(level) = BASE × 2^(level-1)` for that 5-level track.
      *
      * Always true for a Gems track — `debitGems` takes an integer and rejects anything else.
      */
@@ -162,7 +158,7 @@ export function getShopTrack(id: ShopTrackId): ShopTrack {
 }
 
 /**
- * Void Shard price of the **next** level, given how many are already owned.
+ * Price of the **next** level in the track's `currency`, given how many are already owned.
  *
  *     cost(level) = BASE × GROWTH^(level-1)
  *

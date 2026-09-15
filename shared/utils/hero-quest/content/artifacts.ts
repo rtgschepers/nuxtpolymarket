@@ -20,18 +20,13 @@
  * rather than authored, and marked as such. They are the same class of stand-in the World roster
  * already ships with; the naming pass replaces `ARTIFACT_TITLES` and changes no code.
  *
- * Shipping all 48 rather than a subset is what let the rarity-folding scaffolding be deleted
- * outright (`implementation-plan.md`, Phase 3) — a partial roster would have kept every other
- * gacha paying for content this one had not authored yet.
- *
  * ## Every effect is rendered as a passive modifier, and several are approximations
  *
  * The pool describes machinery the engine does not have: buffs that ramp over a fight's duration,
  * procs on kill, a once-per-fight death save, cooldown refunds on crit. The averaged idle rate is
  * one frozen rate per window by construction (`tech-architecture.md` §4a) and has no notion of
- * "later in the fight" at all. Each such effect is rendered as the nearest honest modifier with a
- * comment saying what was dropped — the convention the ability-effects pass established
- * (`open-items.md` §15), and the reason each entry below carries its own note.
+ * "later in the fight" at all. Each such effect is rendered as the nearest honest modifier, with a
+ * `note` saying what was dropped.
  */
 
 import {
@@ -286,10 +281,10 @@ const ROSTER_RARITIES: readonly Rarity[] = [
  * required, and keeps it deliberately.
  *
  * **Fortune has only 7 effects and its slots reach index 6**, so the whole pool is used; the
- * other three categories have 8–9 and leave their tail unreached at these indices. That is the
- * consequence of one shared table rather than four bespoke ones, and it is the trade §3 already
- * accepts by giving the categories different pool sizes against an identical fill budget. The
- * unreached effects are live content the naming/assignment pass can promote.
+ * other three categories have 8–9 and leave their tail unreached — Defense Penetration and Cull,
+ * Crit Resistance, Double Cast and Unshaken sit in the pool but on no Artifact. That is the
+ * consequence of one shared table rather than four bespoke ones; the assignment pass can promote
+ * them.
  */
 const ARTIFACT_EFFECT_SLOTS: readonly (readonly number[])[] = [
     [0], [1],
@@ -315,8 +310,7 @@ export interface ArtifactDefinition {
  * Placeholder titles, twelve per category, in `ROSTER_RARITIES` order.
  *
  * **Not authored names.** `artifacts-dig-site-gacha.md` §3 defers Artifact naming to a content
- * pass that has not happened, and `docs/games/hero-quest/CLAUDE.md` §6 is explicit that 48 bespoke
- * names must not be invented to fill the gap. These are stand-ins in the register the game
+ * pass that has not happened, and 48 bespoke names must not be invented to fill the gap. These are stand-ins in the register the game
  * already uses — the same treatment the World roster ships with — chosen so the collection grid
  * reads as something rather than as `artifact_offense_mythic_1`.
  *
@@ -385,7 +379,7 @@ export function artifactsOfRarity(rarity: Rarity): ArtifactDefinition[] {
     return ARTIFACTS.filter(entry => entry.rarity === rarity)
 }
 
-/** All six rarities carry eight Artifacts each — no fold, which is what let the helper die. */
+/** All six rarities carry eight Artifacts each. */
 export function artifactRarityHasContent(rarity: Rarity): boolean {
     return ARTIFACTS.some(entry => entry.rarity === rarity)
 }
@@ -406,10 +400,10 @@ export function artifactFromRoll(rarity: Rarity, roll: number): ArtifactDefiniti
  *
  * §6 states outright that Artifact effect-line magnitudes "scale with the same
  * `(star × 10 + level)` scalar already reused for Champion leveling and the Champion passive",
- * which is why this is per-point where a Skill passive is flat.
+ * which is why this is proportional where a Skill's potency is identity-at-minimum.
  *
- * Economy lines are throttled by `ARTIFACT_ECONOMY_COEFFICIENT` — §3's "keep Gold-granting
- * bonuses small" principle, which applies project-wide rather than to Artifacts alone.
+ * Economy lines are throttled by `ARTIFACT_ECONOMY_COEFFICIENT` — `gold-economy.md` §5's "keep
+ * Gold-granting bonuses small".
  */
 export function artifactLineMagnitude(
     kind: ModifierKind,

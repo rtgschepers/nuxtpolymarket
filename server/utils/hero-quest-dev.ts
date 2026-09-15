@@ -3,15 +3,10 @@
  *
  * ## Why this exists
  *
- * `implementation-plan.md` Phase 1 ends with "**Stop here and actually play it before
- * continuing.**" That has now been deferred twice, and roughly 99 constants carry
- * `// UNTUNED ╧` waiting on the play data it would produce. The obstacle is not willingness —
- * it is that Hero Quest is an idle game measured in days. The campaign sim puts two prestiges
- * at three and a half days of wall clock, the free Seal grant is on a 24-hour timer, and the
- * Gold ladder resets on a date key. An evening of honest play reaches World 2.
- *
- * This collapses that. It is the difference between "we should playtest sometime" and
- * "playtest the offline cap right now, in a minute".
+ * Hero Quest is an idle game measured in days — a first prestige takes about a week, the free
+ * Seal grant is on a 24-hour timer, and the Gold ladder resets on a date key — and the
+ * `UNTUNED ╧` constants are waiting on play data. This collapses that wait, so "playtest the
+ * offline cap" takes a minute instead of a day.
  *
  * ## The one design rule here
  *
@@ -59,16 +54,9 @@ import type { GachaSystem } from '#shared/utils/hero-quest/gacha'
 import { D, fromStore, toStore } from '#shared/utils/hero-quest/numbers'
 import type { ClassId } from '#shared/utils/hero-quest/types'
 
-/**
- * Harness safety rails, not game tuning — which is why they live here rather than in
- * `shared/utils/hero-quest/constants.ts`.
- *
- * `docs/games/hero-quest/CLAUDE.md` §3 puts every constant in that file so the balance script and
- * playtest tuning stay a one-file edit. These are neither: nothing about game balance changes
- * if `MAX_SKIP_HOURS` moves, and the balance script has no opinion about them. `settle.ts`
- * already sets this precedent by keeping its float tolerance local, on the same reasoning —
- * it is a property of the tool, not of the game.
- */
+// Harness safety rails, not game tuning — which is why they live here rather than in
+// `constants.ts`. Nothing about game balance changes if these move, the same reasoning that
+// keeps `settle.ts`'s float tolerance local.
 
 /** A year. Generous enough for any prestige-depth test, small enough that a typo'd 1e9 stops. */
 const MAX_SKIP_HOURS = 24 * 365
@@ -379,8 +367,7 @@ export interface DevSet {
  * Two details that are easy to get wrong and both matter to what a playtest observes:
  *
  * - **`atBossGate` is derived, never taken from the caller.** It is `isBossStage(stage)` exactly
- *   as `settleHq` and `boss/engage` compute it. A hand-set flag that disagreed with the stage
- *   would let `boss/engage` resolve a fight against a trash stage.
+ *   as `settleHq` and `boss/engage` write it, so the stored flag never disagrees with the stage.
  * - **Setting `heroLevel` zeroes `heroXp`.** `applyXp` returns level plus the *remainder within
  *   that level*, so the pair is only coherent if the remainder is reset when the level is forced.
  *   Leaving a level-1000 remainder on a level-5 hero would level them straight back up on the

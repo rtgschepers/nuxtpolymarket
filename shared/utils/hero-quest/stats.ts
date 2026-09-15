@@ -91,12 +91,11 @@ export function baseSpreadFor(node: ClassNode): HqStatBlock {
 /**
  * Which per-level growth rate a stat rides.
  *
- * Two curves, not one. `STAT_PER_LEVEL_GROWTH` lags the enemy at `STAT_PACE_RATIO` — a
- * deliberate shortfall the gacha and prestige multipliers are meant to fill. PWR, DEF and VIT
- * ride `STAT_PER_LEVEL_GROWTH_PACED` instead, which tracks the enemy exactly, because each of
- * them is read against an enemy stat through a *clamp*: a shortfall there does not read as
- * "fall behind and catch up", it reads as a hundred identical stages followed by a cliff into
- * `MIN_DAMAGE`. See `STAT_PACES_ENEMY_CURVE` and `ENEMY_PACE_RATIO`.
+ * Two curves, not one. `STAT_PER_LEVEL_GROWTH` covers `XP_PACE_SLACK` of the enemy's growth per
+ * stage. PWR, DEF and VIT ride `STAT_PER_LEVEL_GROWTH_PACED` instead, which tracks the enemy
+ * exactly, because each is read against an enemy stat through a *clamp*: a shortfall there reads
+ * as a hundred identical stages followed by a cliff into `MIN_DAMAGE`. See
+ * `STAT_PACES_ENEMY_CURVE` and `ENEMY_PACE_RATIO`.
  */
 export function statGrowthFor(key: HqStatKey): number {
     return STAT_PACES_ENEMY_CURVE[key] ? STAT_PER_LEVEL_GROWTH_PACED : STAT_PER_LEVEL_GROWTH
@@ -105,18 +104,12 @@ export function statGrowthFor(key: HqStatKey): number {
 /**
  * statAtLevel(base, level) = (base + FLAT × (level-1)) × GROWTH^(level-1)
  *
- * `GROWTH` is derived from a pace ratio and sits just above 1.0, which is what the design
- * docs now describe — geometric, expressed as a fraction of the enemy curve
- * (`core-progression-and-prestige.md` §1). `FLAT` is 0 by design.
+ * `GROWTH` is derived from a pace ratio and sits just above 1.0 — geometric, expressed as a
+ * fraction of the enemy curve (`core-progression-and-prestige.md` §1). `FLAT` is 0 by design;
+ * additive growth falls behind a geometric enemy curve at any constant.
  *
- * `growth` defaults to the offensive curve so a caller with no stat in hand keeps the old
- * answer; go through `statAtLevelFor` whenever the key is known, since DEF and VIT ride a
- * different one.
- *
- * The flat-additive model this comment used to describe (GROWTH = 1.0) is not merely
- * out of date, it is provably unworkable: additive growth against a geometric ceiling
- * falls behind at any constant, and the campaign sim confirms it — a solo Hero stalls in
- * World 3 and never completes a prestige, at any XP rate.
+ * `growth` defaults to `STAT_PER_LEVEL_GROWTH`; go through `statAtLevelFor` whenever the key is
+ * known, since PWR, DEF and VIT ride the paced curve.
  */
 export function statAtLevel(base: DecimalSource, level: number, growth: number = STAT_PER_LEVEL_GROWTH): Decimal {
     const steps = Math.max(0, level - 1)
@@ -260,14 +253,8 @@ export function economyBonuses(hero: HeroSnapshot): {
  * Two axes, deliberately: the **Hero's level** supplies unbounded growth through the same
  * `statAtLevel` curve the Hero rides, and the Champion's own rarity × investment supplies a
  * bounded multiplier it earns through the gacha. Without the first, a Champion's PWR falls
- * behind an exponential curve and — because mitigation clamps at `DEF ≥ PWR × K` — stops
- * contributing *exactly zero* rather than merely less. Without the second, pulling and
- * starring Champions would not matter.
- *
- * The base spread and how `investment` converts to a multiplier are Phase 2 content
- * decisions the docs have not made (`champions-guild-gacha.md` §2 specifies neither base
- * magnitudes nor per-archetype spreads). This function owns the *shape* only: whatever those
- * turn out to be, they multiply a Hero-level-driven baseline rather than replacing it.
+ * behind an exponential curve until mitigation clamps it to `MIN_DAMAGE`. Without the second,
+ * pulling and starring Champions would not matter.
  */
 export function championStatBlock(
     base: HqStatBlock,
@@ -288,9 +275,8 @@ export function championStatBlock(
 }
 
 /**
- * `(star × 10 + level)` runs 1 → 60. Mapping it to a multiplier is a Phase 2 tuning call —
- * identity-at-minimum is the placeholder that makes an un-invested Champion exactly a
- * Hero-equivalent body and never a penalty.
+ * `(star × 10 + level)` runs 1 → 60. Identity at minimum, so an un-invested Champion is never a
+ * penalty. The rate is `CHAMPION_INVESTMENT_PER_POINT`.
  */
 export function championInvestmentMultiplier(investment: number): number {
     return 1 + Math.max(0, investment - 1) * CHAMPION_INVESTMENT_PER_POINT

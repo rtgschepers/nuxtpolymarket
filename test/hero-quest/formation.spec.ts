@@ -2,10 +2,9 @@
  * Formation, targeting order, and the survivability model it drives.
  *
  * These specs pin the resolution of `open-items.md` #11.2: the enemy is **one attack stream**
- * that chews through the front row before the back row is targetable at all. Before this,
- * incoming damage was summed across the whole party, so N bodies brought N× HP *and* took N×
- * damage and time-to-die was party-size-invariant — which left the Tank archetype with no
- * mechanical function.
+ * that chews through the front row before the back row is targetable at all. Summing incoming
+ * damage across the whole party instead would make time-to-die party-size-invariant and leave
+ * the Tank archetype with no mechanical function.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -200,8 +199,7 @@ describe('threat', () => {
     })
 
     it('is a stable no-op when nobody carries an aggro weight', () => {
-        // The pre-threat ordering has to survive untouched for a party with no anchor, or
-        // every existing survivability number would have quietly moved.
+        // With no aggro anchor fielded, the order is the plain row split in party order.
         const units = partyUnitStats(hero(10, [champion('front'), champion('front')]))
         expect(targetingOrder(units)).toEqual(units)
     })

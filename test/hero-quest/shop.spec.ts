@@ -23,8 +23,7 @@ import { offlineCapHours, offlineEfficiency } from '#shared/utils/hero-quest/set
 
 describe('hero-quest prestige shop', () => {
     it('exposes only the tracks with locked formulas — the offline pair plus four slot tracks', () => {
-        // Each slot track joins the shop when the system it unlocks exists: Champions in Phase 2,
-        // Skills / Artifacts / Loadouts in Phase 3. The remaining §4 sinks (Raid Keys,
+        // One slot track per system that has slots. The remaining §4 sinks (Raid Keys,
         // kill-count reduction, boss-timer extension) still have no formula, level count or
         // magnitude in any doc, and the global stat multiplier was cut outright — see
         // `content/shop.ts` and `open-items.md` #11.4.
@@ -41,7 +40,7 @@ describe('hero-quest prestige shop', () => {
     })
 
     it('prices Loadout slots in Gems and everything else in Void Shards', () => {
-        // The first non-Void-Shard track in the game. Loadout slots add zero combat power on
+        // The only non-Void-Shard track in the game. Loadout slots add zero combat power on
         // their own — pure convenience — which is why they take the convenience currency
         // (`loadouts.md` §3).
         for (const track of SHOP_TRACKS) {

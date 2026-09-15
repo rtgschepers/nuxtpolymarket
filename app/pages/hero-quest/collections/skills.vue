@@ -14,8 +14,8 @@
  * - **Training Grounds skills read as a separate system** from the Hero's innate class-tree
  *   skills (§7). The class tree uses square icon slots; these use round ones.
  *
- * Pulling moved to `/hero-quest/gacha` (session-1 playtest, finding 4). The Barracks / Archery
- * Range / Wizard Tower art (§1) went with it — it dressed the recruitment block, not the roster.
+ * Pulling lives at `/hero-quest/gacha` (session-1 playtest, finding 4). The Barracks / Archery
+ * Range / Wizard Tower art (§1) is still served as `training.art` but nothing renders it.
  */
 
 const { initialized, training, craft, setLoadout } = useHeroQuest()

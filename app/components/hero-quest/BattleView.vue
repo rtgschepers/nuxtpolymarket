@@ -2,21 +2,18 @@
 import { D, formatHq } from '#shared/utils/hero-quest/numbers'
 
 /**
- * The live battle. Presentation only — it renders, it never decides, and it no longer predicts.
+ * The live battle. Presentation only — it renders, it never decides, and it does not predict.
  *
  * **Everything on screen derives from one quantity, `killsFloat`** — kills into the current stage
  * attempt, fractional. The enemy bar, the enemy HP figure, the count of bodies still standing, the
- * Hero's HP and the stage counter are all functions of it, so they cannot disagree with each
- * other. They previously could, and did: the enemy bar swept on a free-running wall clock while
- * the HP figure beside it was a static per-enemy number that never moved.
+ * Hero's HP and the stage counter are all functions of it, so they cannot disagree with each other.
  *
- * `killsFloat` and every other field now arrive already walked forward by `useHqLiveRun`, which is
- * also what advances the stage, the world and the Hero's level underneath this component. Keeping
- * the walk in one place matters: a second predictor here would drift against that one within
- * seconds, and the stage rollover in particular has to happen exactly once.
+ * `killsFloat` and every other field arrive already walked forward by `useHqLiveRun`, which also
+ * advances the stage, the world and the Hero's level. Keep the walk there: a second predictor here
+ * would drift against it, and the stage rollover has to happen exactly once.
  *
- * Deliberately DOM rather than Pixi for Phase 1. The HP-bar contract here is the same one a Pixi
- * scene would consume, so swapping the renderer later touches no sim and no server code.
+ * DOM rather than Pixi for now. The HP-bar contract here is the same one a Pixi scene would
+ * consume, so swapping the renderer later touches no sim and no server code.
  */
 const props = defineProps<{
     run: {
@@ -35,9 +32,8 @@ const props = defineProps<{
          * The **pack** total, not one body's HP — what the player is actually fighting.
          *
          * `state.get.ts` also serves per-enemy `enemyHp`, `secondsPerPack` and `partyDps`; this
-         * component read none of them, so they are left out of the contract rather than declared
-         * and ignored. Showing the per-body figure next to a bar that tracked the whole pack is
-         * what made the encounter read as inconsistent in the first place.
+         * component reads none of them, so they are left out of the contract. A per-body figure
+         * next to a bar tracking the whole pack reads as inconsistent.
          */
         packHp: string
     }
@@ -93,8 +89,8 @@ const heroHpColor = computed(() => {
         {{ run.runCleared ? `${run.enemyName} is beaten` : `${run.enemyName} blocks the way` }}
       </p>
       <!--
-        The copy has to match what actually happens, and what happens now depends on whether the
-        run is finished. A boss engages itself while this tab is visible; a *cleared* run does
+        The copy has to match what actually happens, and that depends on whether the run is
+        finished. A boss engages itself while this tab is visible; a *cleared* run does
         not, or beating World 10 would re-fight the final boss on a loop.
       -->
       <p class="text-sm text-muted">

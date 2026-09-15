@@ -196,8 +196,8 @@ describe.skipIf(SKIP)('dev harness against the real settle path', () => {
 
     describe('devSet', () => {
         it('derives atBossGate from the landing stage instead of trusting the caller', async () => {
-            // The one genuine security-shaped detail in the harness: a hand-set flag that
-            // disagreed with the stage would let `boss/engage` resolve a fight on a trash stage.
+            // `atBossGate` is derived from the stage, never taken from the caller, so the stored
+            // flag cannot disagree with where the run actually stands.
             const boss = await devSet(USER_ID, { world: 2, stage: BOSS_STAGE })
             expect(boss.atBossGate).toBe(true)
 

@@ -1,10 +1,6 @@
 /**
- * Ability effects: what an ability actually *does*, and to whom.
- *
- * Until now every ability in the game — 16 class skills and 28 Champion abilities — resolved
- * as single-target damage on one shared placeholder cooldown and multiplier. The firing
- * framework existed (`open-items.md` #12); the effects did not. This module is the vocabulary
- * they are written in.
+ * Ability effects: what an ability actually *does*, and to whom — the vocabulary class skills,
+ * Champion abilities and Skill Actives are written in.
  *
  * ## Targeting is per-ability, and that is doc-mandated
  *
@@ -20,9 +16,9 @@
  * enemies in a row", "all enemies in the front column", "all enemies in each spot". Those
  * words describe the shape from the *player's* side of the board, where a "row" runs away from
  * you (so piercing) and a "column" runs across. The code deliberately uses unambiguous names
- * instead — `enemy_pierce`, `enemy_front_line`, `enemy_all` — because `EnemyPack` already has
- * a `row: 'front' | 'back'` axis and reusing the word for the perpendicular one would be a
- * standing trap.
+ * instead — `enemy_pierce`, `enemy_front_line`, `enemy_all` — because the encounter grid already
+ * has a `row: 'front' | 'back'` axis (`settle.enemyPosition`) and reusing the word for the
+ * perpendicular one would be a standing trap.
  *
  * Pure, like everything in `shared/`: this module decides *which* targets and *how much*, and
  * hands back indices. Applying anything is the caller's job.
@@ -38,7 +34,7 @@ import type { StatusKind } from './status'
  * `ally_*` against the fielded party.
  */
 export type EffectTarget =
-    /** The focus target alone — what every ability did before this module. */
+    /** The focus target alone — the default (`SINGLE_TARGET`). */
     | 'enemy_single'
     /** The focus target and everything sharing its column, front to back. Pierce. */
     | 'enemy_pierce'
@@ -127,10 +123,9 @@ export interface AbilityEffect {
      * Gambler's Strike family (`skills-gacha.md` §4¹, `gold-economy.md` §8).
      *
      * A flag rather than a magnitude: the factor is bounded by `WEALTH_FACTOR_MIN/MAX` for every
-     * skill that carries it, so the four of them differ only in their base multiplier. Scaling off
-     * PWR with a *bounded* wealth modulation is what makes the family work at every prestige —
-     * the original "% of current Gold" reading would have decayed toward irrelevance as Gold
-     * plateaued and enemy stats kept compounding.
+     * skill that carries it, so the family differs only in base multiplier. Scaling off PWR with a
+     * *bounded* wealth modulation keeps it relevant at every prestige, where a literal "% of
+     * current Gold" would decay as enemy stats kept compounding.
      */
     wealthScaled?: boolean
     /** Extend every hostile status already on the target — Unraveling Curse, exactly. */
@@ -155,7 +150,7 @@ export interface AbilityEffect {
     }
 }
 
-/** The default: a single-target hit, which is what every ability did before effects existed. */
+/** The default: a single-target hit. Also what an autoattack resolves as. */
 export const SINGLE_TARGET: AbilityEffect = { target: 'enemy_single' }
 
 /**
@@ -272,7 +267,7 @@ export function executeMultiplier(effect: AbilityEffect, hpFraction: number): nu
  * - `target`, `cleanse`, `alwaysCrits`, `extendDebuffs` — a pattern, two booleans and a duration.
  *
  * Returns the input unchanged at potency 1, object identity included, so an unlevelled copy costs
- * nothing and every pre-existing spec's numbers stay put.
+ * nothing.
  */
 export function scaleEffect(effect: AbilityEffect, potency: number): AbilityEffect {
     if (potency === 1 || !Number.isFinite(potency)) return effect

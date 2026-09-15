@@ -44,13 +44,11 @@ export function useHqLiveRun(
     /**
      * Seconds since the payload that supplied the anchor.
      *
-     * **It has to be reset when a payload lands.** An earlier version predicted from a clock that
-     * only ever counted up from mount, so the prediction grew without bound and the bars simply
-     * pinned to their ceilings — a stage bar reading 30/30 forever while the real count was
-     * elsewhere. Watching `killCount` alone is not enough now that the projection advances
-     * stages: a payload that lands exactly as the counter rolls over reports the same 0 it did a
-     * tick ago, so the world and stage are watched with it — and `killFraction` too, which is
-     * the only field that moves at all on a window too short to bank a whole kill.
+     * **It has to be reset when a payload lands**, or the projection grows without bound and the
+     * bars pin to their ceilings. Watching `killCount` alone is not enough because the projection
+     * advances stages: a payload that lands exactly as the counter rolls over reports the same 0
+     * it did a tick ago, so world and stage are watched with it — and `killFraction` too, the only
+     * field that moves on a window too short to bank a whole kill.
      */
     const sincePayload = ref(0)
     let ticker: ReturnType<typeof setInterval> | null = null

@@ -1,8 +1,8 @@
 /**
  * Rate-based accrual: kills, Gold, XP and stage advancement.
  *
- * This is the pure math half. The DB-writing `settleHq` — row lock as mutex, transaction,
- * `tx` threading — is a Phase 1 `server/utils/` file that calls into this one. There are no
+ * This is the pure math half. The DB-writing `settleHq` — row lock as mutex, transaction, `tx`
+ * threading — lives in `server/utils/hero-quest.ts` and calls into this one. There are no
  * background workers and no cron anywhere in this game; progress accrues lazily on read.
  */
 
@@ -80,13 +80,12 @@ export function curveIndex(prestige: number, world: number, stage: number): numb
 /**
  * The enemy power curve — the single swap point for the whole game.
  *
- *     b^n,  b = ENEMY_CURVE_T^(1/100)
+ *     ENEMY_STEP_BASE^n
  *
- * Replaces `5^prestige × 1.6^(world-1) × 1.15^(stage-1)` (`open-items.md` #10). Nothing
- * else in the codebase computes an enemy scalar, so replacing it again is one edit here.
+ * Nothing else in the codebase computes an enemy scalar, so replacing it is one edit here.
  *
- * `ENEMY_PRESTIGE_STEP_MULT` is 1 under the continuous curve; it is the documented lever
- * for restoring a prestige difficulty reset, and multiplies out to nothing otherwise.
+ * `ENEMY_PRESTIGE_STEP_MULT` is 1 under the continuous curve; it is the documented lever for
+ * restoring a prestige difficulty reset, and multiplies out to nothing otherwise.
  */
 export function enemyMultiplier(prestige: number, world: number, stage: number): Decimal {
     return decPow(ENEMY_STEP_BASE, curveIndex(prestige, world, stage))
@@ -124,9 +123,8 @@ export function stageStatMultiplier(stage: number): { hp: number; atk: number; d
  * **HP is the one enemy stat not in a matched pair.** PWR is read against the hero's DEF and
  * DEF against the hero's PWR, one stat against one stat, so both track the hero one-for-one on
  * the shared curve. HP is read against *DPS*, which is a product of two level-scaled stats and
- * therefore grows at `DPS_COVERAGE_PER_STAGE` — nearly twice as fast. Sharing the plain curve
- * meant the party outran enemy HP by nine tenths of a stage every stage, which is what pinned
- * every wave stage in the game to `MIN_SECONDS_PER_KILL`.
+ * therefore grows at `DPS_COVERAGE_PER_STAGE`. On the plain curve the party would outrun enemy
+ * HP every stage and pin every wave stage to `MIN_SECONDS_PER_KILL`.
  */
 export function enemyHpMultiplier(prestige: number, world: number, stage: number): Decimal {
     return decPow(ENEMY_STEP_BASE, curveIndex(prestige, world, stage) * ENEMY_HP_STEP_EXPONENT)
@@ -162,9 +160,7 @@ export function packSizeFor(stage: number): number {
  * A boss's escort: trash-tier bodies at the stage's own depth.
  *
  * Built from the same curve index as everything else but with the **wave** stat layer rather
- * than the boss layer, so a minion is an ordinary mob of that depth standing next to a ×3-HP
- * boss. Deriving them from the shared curve rather than a bespoke number is what keeps them
- * scaling automatically when `ENEMY_STEP_BASE` moves.
+ * than the boss layer, so a minion is an ordinary mob of that depth standing next to the boss.
  */
 function bossMinionStats(pos: RunPosition): EnemyStats {
     const mult = enemyMultiplier(pos.prestige, pos.world, pos.stage)
@@ -182,13 +178,11 @@ function bossMinionStats(pos: RunPosition): EnemyStats {
  * The encounter at a run position.
  *
  * Wave and elite stages are homogeneous. **Boss stages are not** — they hold the boss plus
- * `BOSS_MINION_COUNT` trash minions, which is the first genuinely mixed pack in the game and
- * exactly what the addressable `members[]` shape was built for.
+ * `BOSS_MINION_COUNT` trash minions.
  *
- * **Minions come first, the boss last.** The party chews through the escort before reaching
- * the boss, which matches the "lowest-HP% enemy" targeting three of the four class paths use,
- * and makes the member order the fight resolves in the same order `rawSecondsPerPack` sums —
- * so the projection and the fight can never disagree about how long an encounter takes.
+ * **Minions come first, the boss last.** `fight.ts` focuses the front-most living member, so the
+ * party chews through the escort before reaching the boss — the same order `rawSecondsPerPack`
+ * sums in.
  */
 export function enemyPackAt(pos: RunPosition): EnemyPack {
     const archetype = stageArchetype(pos.stage)
@@ -250,8 +244,7 @@ export function packHp(pack: EnemyPack): Decimal {
 /**
  * How many of a pack are swinging at once, averaged over a stage attempt.
  *
- * See `PACK_LIVE_STREAM_FRACTION`. Always exactly 1 at size 1, which is the property that
- * makes every pre-pack number reproduce bit-for-bit.
+ * See `PACK_LIVE_STREAM_FRACTION`. Always exactly 1 at size 1.
  */
 export function effectiveStreams(size: number): number {
     return 1 + (Math.max(1, size) - 1) * PACK_LIVE_STREAM_FRACTION
@@ -266,11 +259,7 @@ export function effectiveStreams(size: number): number {
 export function rawSecondsPerPack(
     units: readonly UnitStats[],
     pack: EnemyPack,
-    /**
-     * Pass the hero to fold **ability damage** into the rate as well as autoattacks. Omitted,
-     * this is the autoattack-only model it has always been — which is what keeps every caller
-     * that does not care about abilities behaving exactly as before.
-     */
+    /** Pass the hero to fold **ability damage** into the rate. Omitted, autoattacks only. */
     hero?: HeroSnapshot
 ): number {
     let total = 0
@@ -313,11 +302,10 @@ export function buffedUnits(units: readonly UnitStats[], mods: AbilityModifiers)
 /**
  * Everything the idle rate needs at one position, resolved once.
  *
- * `settle()`, the campaign sim and the projection specs all need the *same* four things —
- * projected modifiers, buffed party, debuffed pack, and the resulting seconds-per-kill — and
- * an earlier version of this had each of them assemble it independently. They drifted
- * immediately: a spec that skipped `buffedUnits` was measuring a party the game does not
- * field. One function, three callers.
+ * `settle()`, the campaign sim and the specs all need the *same* four things — projected
+ * modifiers, buffed party, debuffed pack, and the resulting seconds-per-kill. Assemble them here
+ * rather than by hand: skipping a step (say `buffedUnits`) measures a party the game does not
+ * field.
  */
 export interface RateContext {
     abilities: AbilityModifiers
@@ -421,11 +409,9 @@ export function secondsPerKill(
  * Incoming DPS against whoever is currently being targeted — the **front-most living unit**,
  * not the whole party.
  *
- * The enemy has one attack stream, so only one defender is taking damage at a time. This
- * used to sum across every fielded unit, which modelled the enemy as attacking all of them
- * simultaneously: N bodies then brought N× HP *and* took N× damage, and time-to-die came out
- * party-size-invariant (`open-items.md` #11.2). It also disagreed with `fight.ts`, which has
- * always resolved one stream against one target.
+ * The enemy has one attack stream, so only one defender takes damage at a time — matching
+ * `fight.ts`. Summing across the party would give N bodies N× HP *and* N× incoming, making
+ * time-to-die party-size-invariant.
  */
 export function incomingDps(units: readonly UnitStats[], pack: EnemyPack): Decimal {
     const target = targetingOrder(units)[0]
@@ -436,10 +422,8 @@ export function incomingDps(units: readonly UnitStats[], pack: EnemyPack): Decim
  * What one defender takes from a whole pack.
  *
  * **Every member focuses the same defender**, so this is the mean member's output times the
- * number still swinging — not a sum across members hitting different people. Spreading the
- * streams across the party would hand N bodies both N× HP and N× incoming, which is exactly
- * how time-to-die became party-size-invariant before (`open-items.md` #11.2) and how the Tank
- * archetype lost its function the first time.
+ * number still swinging (`effectiveStreams`) — not streams spread across the party, which
+ * would make time-to-die party-size-invariant and the Tank pointless.
  */
 function incomingDpsAgainst(pack: EnemyPack, defender: UnitStats): Decimal {
     const size = packSize(pack)
@@ -453,15 +437,13 @@ function incomingDpsAgainst(pack: EnemyPack, defender: UnitStats): Decimal {
  * How long the party survives one uninterrupted stage attempt, from full HP.
  *
  * One attack stream, front row first: the enemy spends `hp / dps` seconds on each defender
- * in turn, so the total is the sum over the targeting order. **Party size is now a real
+ * in turn, so the total is the sum over the targeting order. **Party size is a real
  * survivability lever** — and a high-DEF body standing in front is worth more than its own
  * HP suggests, because its own mitigation applies for the whole time it is the target.
  *
- * **No party is immortal any more.** Incoming damage floors at `MIN_DAMAGE` rather than 0, so
- * a fully-mitigated defender still takes chip damage and every unit is eventually worn down.
- * The remaining `Infinity` guards cover the degenerate cases only — an empty party, or HP so
- * large the division overflows a JS number — not "the enemy cannot hurt us", which used to be
- * reachable and no longer is.
+ * **No party is immortal.** Incoming damage floors at `MIN_DAMAGE` and healing is capped by
+ * `MAX_SUSTAIN_MITIGATION`, so every unit is eventually worn down. The `Infinity` guards cover
+ * degenerate cases only — an empty party, or HP so large the division overflows a JS number.
  */
 export function secondsToDie(
     units: readonly UnitStats[],
@@ -494,14 +476,12 @@ export function secondsToDie(
  * How many kills a wave stage yields before the party drops.
  *
  * **HP carries across the whole stage attempt** and refills only when the stage clears or
- * restarts — the answer to the question `scripts/hero-quest/sim.ts` parked as "no design doc
- * covers whether HP carries between kills". A wave wipe is not a fallback: the *same* stage
- * restarts at 0 kills, so the run never loses ground, it just stops gaining any.
+ * restarts (no design doc covers this). A wave wipe is not a fallback: the *same* stage restarts
+ * at 0 kills, so the run never loses ground, it just stops gaining any.
  *
- * That makes an unsurvivable wave a self-resolving wall rather than a dead end. Kills still
- * land at `secondsPerKill` right up to the wipe, so Gold and XP keep flowing at the usual
- * rate and the Hero levels its way out. Returns `Infinity` only for a party `secondsToDie`
- * calls undying, which since the `MIN_DAMAGE` floor means an empty party and nothing else.
+ * That makes an unsurvivable wave a self-resolving wall rather than a dead end. Kills still land
+ * at `secondsPerKill` right up to the wipe, so Gold and XP keep flowing and the Hero levels its
+ * way out. Returns `Infinity` only when `secondsToDie` does, i.e. the degenerate cases there.
  */
 export function killsBeforeWipe(
     units: readonly UnitStats[],
@@ -528,9 +508,8 @@ export function killsRequired(pos: RunPosition): number {
  * How much progress alone says a kill is worth, before the calendar gets a say.
  *
  * `GOLD_STEP_BASE^n` on the shared `curveIndex` — the same shape as `enemyMultiplier`, at a
- * far shallower base. Strictly increasing along the play order with no seam at a world or
- * prestige boundary, which the old table-times-two-bases form could not manage: it paid x11.6
- * across a run and only x2.8 for the prestige, so looping back to World 1 cut Gold per kill.
+ * far shallower base. Strictly increasing along the play order, so looping back to World 1 on
+ * prestige never cuts Gold per kill.
  *
  * Unbounded, and that is fine — `goldPerKill` mins it against the tenure ceiling, so the
  * ceiling is what bounds Gold at every position. This curve owns no cap of its own.
@@ -547,7 +526,7 @@ export function goldProgressionFactor(prestige: number, world: number, stage: nu
  * derived from grow geometrically — interpolating them linearly would sag between rungs.
  *
  * `GOLD_PLATFORM_DISCOUNT` is applied last, on the way out, so the table itself stays readable
- * as the platform curve and the discount stays one number rather than twelve.
+ * as the platform curve and the discount stays one number.
  *
  * See `GOLD_TENURE_CEILING` in `constants.ts` for why tenure is wall-clock account age and not
  * playtime, progression, or time-in-run.
@@ -596,10 +575,8 @@ export function goldPerKill(prestige: number, world: number, stage: number, tenu
 }
 
 /**
- * XP rides the same index as the enemy, at `XP_STEP_EXPONENT` relative growth. At exponent
- * 1 the two curves are the same shape, so XP per second neither decays nor climbs with
- * depth — the property the old three-base curve could not hold (it decayed ×0.91 per stage
- * and ×0.78 per world, so farming got strictly worse the deeper the run went).
+ * XP rides the same index as the enemy, at `XP_STEP_EXPONENT` relative growth — derived so a
+ * stage's income keeps pace with the price of the levels it hands out (`LEVELS_PER_STAGE`).
  */
 export function xpPerKill(prestige: number, world: number, stage: number): Decimal {
     return D(XP_BASE_PER_KILL).mul(decPow(XP_STEP_BASE, curveIndex(prestige, world, stage)))
@@ -743,25 +720,18 @@ export function offlineFarmStage(pos: RunPosition): RunPosition {
  * Run position still advances, because it has to: the boss wall is defined in terms of
  * kills carrying the run past a stage threshold. On reaching Stage 5 or Stage 10 accrual
  * stops advancing and the remainder loops the preceding wave stage. The player lands back
- * *at* the boss with the fight ready to engage manually.
+ * *at* the boss with the fight ready to engage.
  *
  * Wave stages have a second, softer stop: if the party dies before the stage's kill counter
  * fills (`killsBeforeWipe`), that stage restarts rather than advancing. Income continues at
  * the same rate, so the wall unsticks itself as the Hero levels.
  *
  * **A window is lossless.** Kills bank as integers, so the leftover fraction of a kill comes in
- * as `input.killFraction` and goes back out as `result.killFraction` for the caller to persist.
- * Dropping it made every settle cost up to one kill, and every read is a settle — see that
- * field for the measurements.
+ * as `input.killFraction` and goes back out as `result.killFraction` for the caller to persist
+ * (see `SettleInput.killFraction`).
  */
 export function settle(input: SettleInput): SettleResult {
-    /**
-     * Ability effects, averaged into the rate (`projection.ts`).
-     *
-     * Applied by rewriting the units and the pack rather than by threading multipliers through
-     * every formula: a buffed party is simply a stronger party, and a shredded pack a softer
-     * one, so pooled mitigation and everything downstream pick the change up for free.
-     */
+    // Ability effects, averaged into the rate (`projection.ts`) — see `buffedUnits`.
     const { abilities, units, pack: startPack, secondsPerKill: spk } = rateAt(input.hero, input.position)
 
     const effectiveSeconds = input.online
@@ -796,11 +766,8 @@ export function settle(input: SettleInput): SettleResult {
     }
     if (!Number.isFinite(spk) || spk <= 0 || effectiveSeconds <= 0) return empty
 
-    /**
-     * The window's kill budget, carry included, split into whole kills and the remainder that
-     * rides to the next window. Flooring without the carry is what made a settle lossy — see
-     * `SettleInput.killFraction`.
-     */
+    // The window's kill budget, carry included, split into whole kills and the remainder that
+    // rides to the next window.
     const budget = effectiveSeconds / spk + carriedIn
     const totalKills = Math.floor(budget)
     const killFraction = budget - totalKills
@@ -910,9 +877,8 @@ function isBossStage(stage: number): boolean {
 /**
  * The provable Gold/hour ceiling: bounded per-kill value × bounded kill rate.
  *
- * No position appears here any more. `goldProgressionFactor` grows without limit, so the `min`
- * in `goldPerKill` is the tenure ceiling for every position deep enough to matter — which makes
- * the ceiling the bound outright, rather than something evaluated at a hand-picked worst case.
+ * Takes no position: `goldProgressionFactor` grows without limit, so the `min` in `goldPerKill` is
+ * the tenure ceiling for every position deep enough to matter, which makes the ceiling the bound.
  *
  * Takes a horizon because `GOLD_TENURE_CRAWL` never goes flat, so "the maximum" is only
  * meaningful with a date attached. `GOLD_BOUND_HORIZON_DAYS` is ten years.

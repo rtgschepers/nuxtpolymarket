@@ -2,9 +2,8 @@
 /**
  * One entry in a collection grid — owned or not.
  *
- * The four grids were four near-copies of this card (session-1 playtest, finding 5), differing
- * only in the subtitle, the equip button, and which detail lines they printed. Those three are
- * slots; everything else — the name, the rarity colour, the star/level, the dupe bar and the
+ * Shared by all four grids (session-1 playtest, finding 5), which differ only in the subtitle, the
+ * equip button, and which detail lines they print. Those three are slots; everything else — the name, the rarity colour, the star/level, the dupe bar and the
  * craft button — is identical by construction, which is the same argument that makes
  * `gacha/pull.post.ts` one route.
  *

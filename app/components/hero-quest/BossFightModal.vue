@@ -84,7 +84,7 @@ const enemyHpPct = computed(() => {
  * absorbed hit is as much a thing that happened as a sword swing.
  *
  * `status_applied` / `status_expired` are deliberately excluded: they carry no damage and
- * would drown the eight-row feed in bookkeeping once Stage 3 starts applying effects.
+ * would drown the short feed in bookkeeping.
  */
 const FEED_KINDS = new Set(['attack', 'skill', 'enemy_attack', 'heal', 'shield', 'status_tick'])
 

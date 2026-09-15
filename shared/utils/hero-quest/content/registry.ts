@@ -1,18 +1,10 @@
 /**
  * One lookup table over the four gachas' content modules.
  *
- * ## Why this exists
- *
- * `gacha.ts` is already written once and parameterised by `system` — one rarity ladder, one
- * levelling curve, one drop table, one dupe formula (`docs/games/hero-quest/CLAUDE.md` §3). What it
- * could not be parameterised over was **content**: rolling a pull still needed to know that
- * `'champion'` means `championFromRoll` and `'gear'` means `gearFromRoll`. Phase 2 hard-coded
- * that in the Guild routes, which was fine while there was one gacha and would have meant four
- * near-identical copies of every route the moment there were four.
- *
- * This closes the gap. With it, `gacha/pull.post.ts`, `gacha/craft.post.ts` and
- * `gacha/buy-seals.post.ts` are each one file taking `system` in the body, exactly as
- * `tech-architecture.md` §5 specifies them.
+ * `gacha.ts` is parameterised by `system` for mechanics; this does the same for **content** —
+ * that `'champion'` means `championFromRoll` and `'gear'` means `gearFromRoll`. It is what lets
+ * `gacha/pull.post.ts`, `gacha/craft.post.ts` and `gacha/buy-seals.post.ts` each be one route
+ * taking `system` in the body (`tech-architecture.md` §5).
  *
  * ## What it deliberately does not hold
  *
@@ -54,9 +46,8 @@ export interface GachaContent {
     /**
      * Whether this roster populates a rarity.
      *
-     * All four return true for all six today, which is what made the rarity-folding scaffolding
-     * deletable. Kept as a predicate rather than removed because `content.spec.ts` asserts it —
-     * "no fold is needed" should be a tested claim, not a comment that rots.
+     * All four return true for all six today, and `content.spec.ts` asserts it — the drop table
+     * assumes every rarity is populated.
      */
     hasContent: (rarity: Rarity) => boolean
 }

@@ -2,10 +2,10 @@
 const route = useRoute()
 
 /**
- * Seven tabs, down from nine.
+ * Six tabs, plus Dev in dev builds.
  *
- * The four gacha tabs (Forge / Guild / Training / Dig-site) collapsed into **Gacha** and
- * **Collections** in the session-1 playtest (findings 4 and 5). The split is by action rather
+ * The four per-gacha tabs (Forge / Guild / Training / Dig-site) are **Gacha** and
+ * **Collections** since the session-1 playtest (findings 4 and 5). The split is by action rather
  * than by system: every pull button is on one screen, everything you own is on the other. The
  * four names survive as the cards on one and the submenu on the other — this is a navigation
  * change, not a content one.

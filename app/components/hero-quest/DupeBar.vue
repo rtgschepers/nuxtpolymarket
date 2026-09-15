@@ -2,8 +2,7 @@
 /**
  * Duplicate progress toward the next level-up, as a bar with the count inside it.
  *
- * Replaces the `3/5 dupes` text every collection grid used to print (session-1 playtest,
- * finding 7). The count stays *in* the bar rather than beside it because the two are one fact —
+ * Session-1 playtest, finding 7. The count stays *in* the bar rather than beside it because the two are one fact —
  * a bar with the numbers next to it reads as two things to look at, and at this size there is no
  * room for both.
  *

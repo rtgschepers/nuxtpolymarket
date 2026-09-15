@@ -151,7 +151,7 @@ export function emptyCollections(): HqCollections {
 /**
  * All four collections in **one query**, not four.
  *
- * Every party-stat read now needs all four — Gear and Skills feed the Hero's stats, Artifacts
+ * Every party-stat read needs all four — Gear and Skills feed the Hero's stats, Artifacts
  * feed the whole party's, Champions feed both the party and the §7 passive — and the table is
  * indexed on `(userId, system)`, so a single `WHERE userId = ?` and a bucketing pass is strictly
  * cheaper than four round trips. Inside `settleHq` it also matters for correctness: four separate
@@ -283,21 +283,6 @@ export function ownedChampionsFor(collection: readonly HqCollectionRow[]) {
 }
 
 /**
- * The complete player snapshot the whole math layer runs on.
- *
- * All four gachas feed it, each through the channel its own doc specifies:
- *
- * | System | What is read | Why |
- * |---|---|---|
- * | Champions | fielded party + **whole collection** | The party fights; the collection pays the §7 passive |
- * | Gear | **whole collection** + the equipped map | An unequipped piece still pays a smaller passive (§3) |
- * | Skills | equipped only | The slots are the whole mechanic (§5) |
- * | Artifacts | equipped only | Same, and party-wide in effect rather than Hero-only (§1) |
- *
- * `bankedGold` is optional and only the Gambler's Strike family reads it. Callers that do not
- * have it hand back a wealth-neutral Hero, which is exactly what every pre-Phase-3 caller got.
- */
-/**
  * Wall-clock age of the account in days, as of the row's own settle clock.
  *
  * Feeds the Gold tenure ceiling. Measuring it against `lastSettledAt` rather than `Date.now()`
@@ -310,6 +295,21 @@ export function tenureDaysOf(state: HqStateRow): number {
     return Math.max(0, (state.lastSettledAt.getTime() - state.createdAt.getTime()) / 86_400_000)
 }
 
+/**
+ * The complete player snapshot the whole math layer runs on.
+ *
+ * All four gachas feed it, each through the channel its own doc specifies:
+ *
+ * | System | What is read | Why |
+ * |---|---|---|
+ * | Champions | fielded party + **whole collection** | The party fights; the collection pays the §7 passive |
+ * | Gear | **whole collection** + the equipped map | An unequipped piece still pays a smaller passive (§3) |
+ * | Skills | equipped only | The slots are the whole mechanic (§5) |
+ * | Artifacts | equipped only | Same, and party-wide in effect rather than Hero-only (§1) |
+ *
+ * `bankedGold` is optional and only the Gambler's Strike family reads it. Callers that do not
+ * have it get a wealth-neutral Hero.
+ */
 export function heroSnapshotOf(
     state: HqStateRow,
     shopLevels: Record<string, number>,
@@ -432,14 +432,10 @@ export interface SettleOutcome {
      * The shop levels and collection rows this settle read **inside its lock**, handed back so a
      * caller that needs them does not query for them a second time.
      *
-     * `state.get.ts` needs exactly this pair to serialize its response, and used to re-fetch both
-     * immediately after the transaction committed — two extra round trips, one of them the
-     * heaviest query in the request (every owned row across all four gachas).
-     *
-     * Reusing them is also *more* consistent, not less. The returned `state` comes from inside the
-     * transaction, so pairing it with rows read after the commit could show a payload where a
-     * concurrent pull's new item is present but the gacha level that pull advanced is not. Both
-     * halves now come from the same snapshot.
+     * `state.get.ts` needs exactly this pair to serialize its response. Reusing them saves two
+     * round trips (one of them every owned row across all four gachas) and is *more* consistent:
+     * the returned `state` comes from inside the transaction, so rows re-read after the commit
+     * could show a concurrent pull's new item without the gacha level that pull advanced.
      *
      * **Optional because the no-op path returns before reading them.** When `elapsedMs <= 0` there
      * is nothing to settle and the function returns early, so a caller that wants these must be
@@ -461,7 +457,7 @@ export interface SettleOutcome {
  * 3. Classify the chunk as online or offline — that is what decides whether the offline cap
  *    and efficiency apply at all.
  * 4. Run the pure `settle()`. It stops at boss gates and never resolves one.
- * 5. Credit Gold through `balance.ts` **with the tx**, then write the new position back.
+ * 5. Write the new position back, then credit Gold through `balance.ts` **with the tx**.
  *
  * Battle Speed is Phase 4; `settle()` already takes the boost window, so wiring it later is
  * a call-site change here and nothing else.
@@ -499,7 +495,7 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
         const shopLevels = await getShopLevels(userId, tx)
         // Read inside the lock: the party's power depends on collection rows a concurrent
         // pull may be writing, and a stale read would settle the window at the wrong rate.
-        // All four systems now, in one query — every one of them moves the rate.
+        // All four systems, in one query — every one of them moves the rate.
         const collections = await getCollections(userId, tx)
         const hero = heroSnapshotOf(state, shopLevels, collections, bankedGold)
         // Read off the pre-update row, so the window is priced at the tenure it opened with.
@@ -557,8 +553,8 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
 /**
  * Reset the run and start the next prestige.
  *
- * **Writes four columns and increments `prestige`.** `heroLevel`, `heroXp`, `heroNodeId`,
- * `seenNodeIds`, `voidShards` and every shop row are untouched — hero level persists across
+ * **Resets the run-position columns and increments `prestige`.** `heroLevel`, `heroXp`,
+ * `heroNodeId`, `seenNodeIds`, `voidShards` and every shop row are untouched — hero level persists across
  * prestige *and* across class switches, and there is no relevel anywhere in the game
  * (`core-progression-and-prestige.md` §3). Everything else survives by simply not being
  * written, which is why this is a domain function and not a schema concern.
@@ -585,20 +581,16 @@ export function pickableClasses(state: HqStateRow): ClassId[] {
 
 // ── Serializers ────────────────────────────────────────────────────────────────────────
 //
-// `state.get.ts` has two consumers — the composable and the AI agent's executor overview —
-// so it returns derived display values rather than raw rows. Decimals go out as strings and
-// are formatted client-side by `numbers.ts`.
+// `state.get.ts` returns derived display values rather than raw rows, so the client holds no
+// formula it does not need. Decimals go out as strings and are formatted client-side by
+// `numbers.ts`.
 
 export function serializeRun(state: HqStateRow, hero: HeroSnapshot) {
     const position = positionOf(state)
     const tenureDays = tenureDaysOf(state)
     /**
-     * Through `rateAt`, not by assembling the pipeline here.
-     *
-     * The displayed rate and the settled rate have to be the same number, and this used to build
-     * its own units and pack — which meant the screen showed an unbuffed party against an
-     * unshredded pack while `settle` earned at the buffed rate. `rateAt` is the one helper
-     * `settle()`, the campaign sim and the specs already share, for exactly this reason.
+     * Through `rateAt`, not by assembling the pipeline here: the displayed rate and the settled
+     * rate have to be the same number, buffs and shreds included.
      */
     const { abilities, units, pack, secondsPerKill: spk } = rateAt(hero, position)
     // Per-enemy stats, unmodified — the client shows what one body *is*, and `packSize` says how
@@ -778,13 +770,6 @@ function shopTrackEffect(id: ShopTrackId, level: number): { current: string; nex
 }
 
 /**
- * The Guild tab: every Champion in the roster, with the player's copy state folded in.
- *
- * Returns the **whole roster**, owned or not, so the client can render a collection grid with
- * locked entries rather than having to know the roster itself. Un-owned entries carry
- * `owned: false` and no progress.
- */
-/**
  * How many Seals of one gacha were bought with Gold today, treating a stale date as zero.
  *
  * Shared by the serializers and the buy route so the price the client is shown and the price it
@@ -800,9 +785,8 @@ export function sealsBoughtToday(state: HqStateRow, system: GachaSystem = 'champ
 /**
  * The block every gacha tab shares: currencies, level, drop odds, prices, ladder rung.
  *
- * One function for all four because `gacha-shared-system.md` makes them deliberately parallel and
- * the Phase 3 brief is explicit that these are written once and take `system` as an argument. What
- * differs per tab is the *roster*, which each serializer below adds on top.
+ * One function for all four because `gacha-shared-system.md` makes them deliberately parallel.
+ * What differs per tab is the *roster*, which each serializer below adds on top.
  */
 export interface GachaCommonPayload {
     system: GachaSystem
@@ -924,14 +908,8 @@ export function serializeGachaCommon(state: HqStateRow, system: GachaSystem): Ga
         gachaLevel,
         gachaProgress: progress[system] ?? 0,
         pullsToNextLevel: pullsToNextLevel(gachaLevel),
-        /**
-         * The designed table, straight — which is now also the *effective* one.
-         *
-         * This used to be served through `effectiveDropRates`, because a partial roster made
-         * unshipped rarities fold down into their nearest shipped neighbour and showing the raw
-         * table would have advertised a 60% Epic chance the roster could not honour. All four
-         * rosters are complete, so the two are the same table and the fold is gone.
-         */
+        // The designed table is also the effective one, because every roster populates all six
+        // rarities (see the drop-table note in `gacha.ts`).
         dropRates: dropRatesFor(gachaLevel),
         singleCost: pullCost(1).seals,
         tenPullCost: pullCost(TEN_PULL_SIZE).seals,
@@ -970,10 +948,9 @@ function copyStateOf(row: HqCollectionRow | undefined, rarity: Rarity): CopyStat
  * One Champion as the Guild tab sees it — roster content with the player's copy folded in.
  *
  * Spelled out rather than inferred, and the reason is mechanical: Nitro wraps every handler's
- * return in `SerializeObject<...>` to derive the client-side type, and the inference gave up
- * once this payload grew past a certain size, silently degrading array elements to `never`
- * and scalars to `undefined` at the call sites in `guild.vue`. An explicit annotation both
- * fixes that and gives a payload with two consumers a contract worth reading.
+ * return in `SerializeObject<...>` to derive the client-side type, and past a certain payload
+ * size that inference gives up, silently degrading array elements to `never` and scalars to
+ * `undefined` at the call sites.
  */
 export interface GuildRosterEntry extends CopyState {
     id: string
@@ -995,6 +972,13 @@ export interface GuildPayload extends GachaCommonPayload {
     roster: GuildRosterEntry[]
 }
 
+/**
+ * The Guild tab: every Champion in the roster, with the player's copy state folded in.
+ *
+ * Returns the **whole roster**, owned or not, so the client can render a collection grid with
+ * locked entries rather than having to know the roster itself. Un-owned entries carry
+ * `owned: false` and no progress.
+ */
 export function serializeGuild(
     state: HqStateRow,
     collection: readonly HqCollectionRow[],
@@ -1126,9 +1110,7 @@ export interface TrainingRosterEntry extends CopyState {
     /**
      * What this copy's `(star × 10 + level)` scalar multiplies its magnitudes by — 1.0 at 0★/Lv1.
      *
-     * Sent so the collection grid can show that levelling did something. Without it a player has
-     * no way to tell a 3★ copy from a fresh one beyond the star count itself, which is exactly the
-     * gap this scaling was added to close.
+     * Sent so the collection grid can show what levelling bought, beyond the star count itself.
      */
     potency: number
     /**

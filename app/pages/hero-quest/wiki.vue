@@ -9,9 +9,9 @@
  * - **The reference** — Content. Rendered straight from the content modules, so a roster edit
  *   updates it and nobody has to remember to.
  *
- * That split is the whole design. A hand-maintained wiki over ~99 constants that are still being
- * tuned and six rosters that are still being authored would be wrong within a week; one that is
- * *generated* cannot say anything the code does not.
+ * That split is the whole design. A hand-maintained wiki over constants that are still being tuned
+ * and rosters that are still changing would be wrong within a week; one that is *generated* cannot
+ * say anything the code does not.
  *
  * What generation cannot fix is prose that describes a mechanic which later changes shape. So the
  * prose deliberately describes *shape* — "a clamped ratio, not a curve" — and leaves magnitudes

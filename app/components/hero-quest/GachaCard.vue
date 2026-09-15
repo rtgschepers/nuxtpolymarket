@@ -2,12 +2,11 @@
 /**
  * One gacha, as a card in the 2×2 hub.
  *
- * Replaces `GachaHeader.vue`, which was a full-width block on a page of its own per gacha
- * (session-1 playtest, finding 4: "the gacha pages are very cluttered"). Four of these tile
- * instead, so every pull button in the game is on one screen and the collection grids that used
- * to sit underneath moved to `/hero-quest/collections`.
+ * Four of these tile on one screen (session-1 playtest, finding 4: "the gacha pages are very
+ * cluttered"), so every pull button in the game is in one place; the collection grids live at
+ * `/hero-quest/collections`.
  *
- * Still one component rather than four, for the same reason `gacha/pull.post.ts` is one route:
+ * One component rather than four, for the same reason `gacha/pull.post.ts` is one route:
  * `gacha-shared-system.md` makes the four deliberately parallel, so everything except the labels
  * and the icon is identical by construction.
  *
@@ -40,7 +39,7 @@ const props = defineProps<{
     sealName: string
     /** Player-facing name of its crafting currency. */
     essenceName: string
-    /** Where this gacha's collection lives, now that it is no longer on this page. */
+    /** Route to this gacha's collection grid. */
     collectionTo: string
     owned: number
     total: number

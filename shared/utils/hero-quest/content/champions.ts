@@ -2,9 +2,7 @@
  * Champion roster and archetype rules (`champions-guild-gacha.md`).
  *
  * **All 48** — 2 per archetype per rarity across all six rarities, the complete roster §1
- * describes. Phase 2 shipped twelve of these (Common/Rare/Mythic, one per archetype); the
- * remaining 36 landed with the roster fill, which also retired the rarity-folding scaffolding
- * that partial content had required.
+ * describes.
  *
  * The roster is **assembled from two tables** rather than written out entry by entry — names
  * and titles in `ROSTER`, ability draws in `ABILITY_SLOTS`. That makes the three structural
@@ -61,11 +59,8 @@ import type {
 // ── Rarity ─────────────────────────────────────────────  gacha-shared-system.md §1, §2
 
 /**
- * Re-exported from `gacha.ts`, which owns all three because **all four gachas share them** —
- * the multiplier is reused verbatim by Gear and Artifacts, and the epithet ladder now names
- * Gear's entire 36-piece roster. They lived here while Champions were the only caller; Phase 3
- * made that accidental. Kept re-exported so Champion-facing callers still have one import for
- * everything rarity-related.
+ * Re-exported from `gacha.ts`, which owns all three because every gacha shares them, so
+ * Champion-facing callers have one import for everything rarity-related.
  */
 export { RARITIES, RARITY_EPITHET, RARITY_STAT_MULTIPLIER }
 
@@ -86,7 +81,7 @@ export interface ArchetypeDefinition {
     name: string
     /** §8.1 — Tank is the only front-row default. */
     defaultRow: FormationRow
-    /** §8.2. Stored for the ability pass; the plain autoattack model has no ally targeting yet. */
+    /** §8.2. Not yet read by combat — see `AutoTarget`. */
     autoTarget: AutoTarget
     /**
      * §7 — which Hero stat(s) owning this Champion buffs, in or out of the party. Coverage is
@@ -325,10 +320,9 @@ export const CHAMPION_ABILITY_EFFECTS: Readonly<Record<string, AbilityEffect>> =
  * Stable ID from an ability's display name — `Guardian's Reflect` →
  * `champ_ability_guardians_reflect`.
  *
- * Apostrophes are dropped rather than turned into a separator, matching `skillIdFor`. The
- * docstring said this before the code did: the previous slug produced `guardian_s_reflect`.
- * Harmless to correct — unlike a Skill or Gear id, an ability id is never persisted; it appears
- * only in a `FightEvent`, which lives as long as one replay.
+ * Apostrophes are dropped rather than turned into a separator, matching `skillIdFor`. Unlike a
+ * Skill or Gear id, an ability id is never persisted — it appears only in a `FightEvent` — so
+ * the slug can change freely.
  */
 export function abilityId(name: string): string {
     const slug = name
@@ -345,7 +339,7 @@ export function abilityId(name: string): string {
  * `champions-guild-gacha.md` §2 gives Support and Control their own formula shapes
  * (`healAmount` and `debuffPotency`, both `PWR × abilityMultiplier`) rather than routing them
  * through the damage formula, so a Support ability that also swung a weapon would be reading
- * the doc wrong. This is what finally makes the two archetypes mechanically distinct.
+ * the doc wrong.
  */
 const UTILITY_ABILITIES = new Set([
     'Provoke', 'Bulwark Stance', "Guardian's Reflect", 'Rallying Shout', 'Iron Skin',
@@ -383,12 +377,9 @@ export interface ChampionDefinition {
 }
 
 /**
- * Given Names are authored content, "pre-decided per Champion" per §5 — not generated. These
- * twelve are original to this pass and follow the doc's own worked examples in register.
- *
- * Ability picks follow §6's method: the first is always archetype-pure, Mythics take three,
- * and no ability is reused more than 3 times within an archetype (the structural rule that
- * sized the pool at 7). `test/hero-quest/content.spec.ts` enforces both.
+ * Ability picks follow §6's method: Mythics take three, and no ability is reused more than 3
+ * times within an archetype (the structural rule that sized the pool at 7). See `ABILITY_SLOTS`;
+ * `test/hero-quest/content.spec.ts` enforces it.
  */
 function champion(
     id: string,
@@ -409,15 +400,6 @@ function champion(
     }
 }
 
-/**
- * **One per archetype per rarity, across Common / Rare / Mythic — twelve.**
- *
- * The full 48-Champion roster is 2 per archetype per rarity across all six rarities (§1).
- * This is the Phase 2 subset, sized to `implementation-plan.md`'s explicit 8–12 bound, and it
- * exercises every mechanic: four archetypes, three rarity multipliers, and both the
- * 1-ability and 3-ability kit shapes. Uncommon, Epic and Legendary are deliberately absent —
- * they add no mechanic the three below do not already cover.
- */
 /**
  * The twelve slots every archetype fills, in order: two per rarity, ascending.
  *
@@ -487,9 +469,11 @@ const ABILITY_SLOTS: readonly (readonly number[])[] = [
 /**
  * Given names and titles, twelve per archetype, in `ROSTER_RARITIES` order.
  *
- * Authored content, "pre-decided per Champion" per §5 — not generated. The twelve that shipped
- * in Phase 2 keep their **id, rarity and title** so existing collection rows stay valid; only
- * their ability draws moved, and those are not persisted.
+ * Authored content, "pre-decided per Champion" per §5 — not generated.
+ *
+ * ⚠ The given name *is* the persisted id (`championIdFor`), and the slot decides rarity. Never
+ * rename or reorder an existing entry — collection rows would orphan or change rarity. Ability
+ * draws are not persisted and may move freely.
  */
 const ROSTER: Readonly<Record<ChampionArchetype, readonly (readonly [string, string])[]>> = {
     damage: [
@@ -575,24 +559,14 @@ export function championsOfRarity(rarity: Rarity): ChampionDefinition[] {
     return CHAMPIONS.filter(entry => entry.rarity === rarity)
 }
 
-/**
- * Which rarities this roster populates — **all six**, since the roster completed.
- *
- * Kept as a function rather than deleted because it is what `content.spec.ts` asserts against:
- * the claim "no fold is needed" is only true while this returns true for every rarity, and that
- * deserves a test rather than a comment. All four systems now expose the same predicate for the
- * same reason.
- */
+/** Whether this roster populates a rarity — all six today, asserted in `content.spec.ts`. */
 export function championRarityHasContent(rarity: Rarity): boolean {
     return CHAMPIONS.some(entry => entry.rarity === rarity)
 }
 
 /**
- * Resolve a rolled rarity to a Champion.
- *
- * **No fold.** The rarity-folding scaffolding that partial rosters needed is gone from
- * `gacha.ts` entirely now that all four rosters populate all six rarities — see the note there
- * for why rounding down was the right repair while it was needed.
+ * Resolve a rolled rarity to a Champion. Throws if the rarity is unpopulated — see the drop-table
+ * note in `gacha.ts` before ever shipping a partial roster.
  *
  * `roll` is supplied by the caller because `shared/` must stay pure — the entropy is the
  * server's.

@@ -190,8 +190,8 @@ export const useHeroQuest = () => {
     }
 
     /**
-     * Set any part of the live loadout. Every field is optional — the Forge page sends only
-     * `gear`, the Guild page only `championIds` and `formation`.
+     * Set any part of the live loadout. Every field is optional — the Gear page sends only
+     * `gear`, the Champions page only `championIds` and `formation`.
      *
      * Party and formation still travel together when either changes, because a formation is only
      * valid against a specific party and the server validates row capacity across both.

@@ -113,9 +113,8 @@ describe('hero-quest combat math', () => {
 
     describe('attack rate', () => {
         it('starts at the base interval when SPD is zero', () => {
-            // Both halves read the constant rather than restating it. These used to hard-code
-            // `1 / 3`, which quietly encoded a tuning value in a spec about a *shape* — and duly
-            // failed the moment the base interval was retuned, for no reason a reader could see.
+            // Both halves read the constant rather than restating it, so a spec about a *shape*
+            // does not encode a tuning value.
             expect(attackIntervalFor(0)).toBe(BASE_ATTACK_INTERVAL_SECONDS)
             expect(attacksPerSecondFor(0)).toBeCloseTo(1 / BASE_ATTACK_INTERVAL_SECONDS, 10)
         })
@@ -130,7 +129,7 @@ describe('hero-quest combat math', () => {
         })
 
         it('is hard-capped by the floor interval, however high SPD climbs', () => {
-            // The property is "SPD cannot buy an unbounded rate", not "the cap is 3/sec".
+            // The property is "SPD cannot buy an unbounded rate", not a particular cap.
             const cap = 1 / MIN_ATTACK_INTERVAL_SECONDS
             for (const spd of [400, 4_000, 1e9]) {
                 expect(attacksPerSecondFor(spd)).toBeLessThanOrEqual(cap)
@@ -168,7 +167,8 @@ describe('hero-quest combat math', () => {
         })
 
         it('rides the same SPD curve the autoattack interval does', () => {
-            // One stat, one shape — a skill base of 3s must track attackIntervalFor exactly.
+            // One stat, one shape — a skill base equal to the attack interval must track
+            // attackIntervalFor exactly.
             for (const spd of [0, 10, 100]) {
                 expect(cooldownFor(BASE_ATTACK_INTERVAL_SECONDS, spd)).toBeCloseTo(attackIntervalFor(spd), 10)
             }
@@ -252,9 +252,8 @@ describe('hero-quest combat math', () => {
             const wall = solo.pwr.mul(K)
 
             // What a party of N looks like once DEF is so far past the clamp that every unit
-            // is pinned to MIN_DAMAGE. Since the floor replaced the hard zero, "shut out" is
-            // this value rather than 0 — measured rather than hardcoded so it survives a
-            // retune of MIN_DAMAGE or the crit constants.
+            // is pinned to MIN_DAMAGE. "Shut out" is this value rather than 0 — measured rather
+            // than hardcoded so it survives a retune of MIN_DAMAGE or the crit constants.
             const floored = (size: number) => partyDps(party(size), D('1e300')).toNumber()
 
             // The DEF that pins one unit to the floor leaves a party of three still cutting.

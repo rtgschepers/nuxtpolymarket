@@ -78,7 +78,7 @@ describe('hero-quest class content', () => {
             expect(node.skill.name.length, node.id).toBeGreaterThan(0)
             expect(node.skill.cooldownSeconds, node.id).toBeGreaterThan(0)
 
-            // Damage is no longer the only way to matter: Haste, Enrage, Totem Storm, Raise
+            // Damage is not the only way to matter: Haste, Enrage, Totem Storm, Raise
             // Dead, Disciple and Man's Best Friend are pure utility and deal none by design.
             // What every skill must have is *some* payload — a skill with neither damage nor
             // an effect is a cooldown that does nothing, which is the real bug this catches.
@@ -200,8 +200,7 @@ describe('hero-quest class content', () => {
  */
 describe('champion roster', () => {
     it('carries two Champions per archetype per rarity — forty-eight in all', () => {
-        // The complete roster (§1). Phase 2 shipped twelve of these — Common/Rare/Mythic, one
-        // per archetype — and the rest landed with the roster fill.
+        // The complete roster (§1).
         for (const rarity of RARITIES) {
             for (const archetype of ARCHETYPES) {
                 const matching = CHAMPIONS.filter(c => c.rarity === rarity && c.archetype === archetype)
@@ -212,9 +211,8 @@ describe('champion roster', () => {
     })
 
     it('populates every rarity, which is what makes the rarity fold unnecessary', () => {
-        // `foldToAvailableRarity` existed because a partial roster left better than half of all
-        // high-level rolls naming a rarity with nothing in it. The Champion gacha stopped
-        // calling it when this became true, so this is the assertion holding that up.
+        // The drop table assumes every rarity is populated; a gap would make a pull at that
+        // rarity throw (see the drop-table note in `gacha.ts`).
         for (const rarity of RARITIES) {
             expect(championRarityHasContent(rarity), rarity).toBe(true)
         }
@@ -474,9 +472,7 @@ describe('hero-quest skill content', () => {
     it('keeps every skill universal — no effect names anything class-specific', () => {
         /**
          * §3's core rule. Every line must land on a stat every class has, or on an external
-         * resource (Gold, XP, offline efficiency) that has nothing to do with class at all. The
-         * rule is nearly self-enforcing since the STR/DEX/INT to PWR merge left no path-specific
-         * stat to reference by accident — but it outlives the merge that made it easy.
+         * resource (Gold, XP, offline efficiency) that has nothing to do with class at all.
          */
         const universal = new Set<string>(['pwr', 'spd', 'lck', 'imp', 'vit', 'def'])
         for (const entry of SKILLS) {

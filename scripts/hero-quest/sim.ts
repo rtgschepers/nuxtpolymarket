@@ -7,7 +7,7 @@
  *
  * Crit-averaged, matching how offline settle resolves (`idle-mechanics.md` §4). There is no
  * per-hit rolling and therefore no variance or win-rate: a verdict here means "wins on
- * expected values", not "wins 60% of the time". Rolled fights are `fight.ts`, Phase 1.
+ * expected values", not "wins 60% of the time". Rolled fights are `fight.ts`.
  *
  * Importable directly if you'd rather write your own scratch analysis:
  *
@@ -85,26 +85,23 @@ export function makeHero(classId: ClassId, heroLevel: number, overrides: Partial
 }
 
 /**
- * A party of `size` total units: the Hero plus `size - 1` Champion stand-ins, each an
- * un-invested clone riding the Hero's level.
- *
- * Deliberately the *weakest* Champion the model allows — rarity 1.0 and investment 1 means
- * no rarity bonus and no dupes — so a measured party gain is a floor, not a best case. Real
- * party size runs 3 (Hero + 2) to 6 (`champions-guild-gacha.md` §1).
- */
-/**
  * The order stand-in Champions are added in, and therefore what `--party=N` actually fields.
  *
  * A Tank first, because that is the build a player is steered toward — Tank is the only
  * front-row default (`champions-guild-gacha.md` §8.1) and, since the enemy resolves as one
  * attack stream front-row-first, it is the body that actually buys survival time. Projecting
  * an all-Damage party would understate what a real party is worth.
- *
- * Every stand-in is Common (×1.0) and un-invested (scalar 1), so this measures what *slots*
- * are worth, never what a lucky pull is worth.
  */
 const STAND_IN_ARCHETYPES: readonly ChampionArchetype[] = ['tank', 'damage', 'support', 'control', 'damage']
 
+/**
+ * A party of `size` total units: the Hero plus `size - 1` Champion stand-ins riding the Hero's
+ * level.
+ *
+ * Deliberately the *weakest* Champion the model allows — Common (×1.0) and un-invested (scalar
+ * 1) — so this measures what *slots* are worth, never what a lucky pull is worth. Real party size
+ * runs 3 (Hero + 2) to 6 (`champions-guild-gacha.md` §1).
+ */
 export function makeParty(classId: ClassId, heroLevel: number, size: number, overrides: Partial<HeroSnapshot> = {}): HeroSnapshot {
     const champions = Array.from({ length: Math.max(0, Math.floor(size) - 1) }, (_unused, index) => {
         const archetype = STAND_IN_ARCHETYPES[index % STAND_IN_ARCHETYPES.length]!
@@ -117,12 +114,8 @@ export function makeParty(classId: ClassId, heroLevel: number, size: number, ove
             row: getArchetype(archetype).defaultRow,
             /**
              * **One** ability, the first from its archetype's pool — the Common shape, since a
-             * Common is what a stand-in is.
-             *
-             * These used to be empty, on the grounds that `settle.ts` had no skill term so an
-             * ability list would change nothing. That stopped being true when the projection
-             * landed: a party whose Champions bring no kit now *understates* every real party,
-             * because a real Common Champion has exactly one ability and it counts.
+             * Common is what a stand-in is. An empty kit would understate every real party: the
+             * idle rate counts abilities (`projection.ts`).
              */
             abilities: [ability(CHAMPION_ABILITY_POOL[archetype][0]!)]
         }
@@ -130,9 +123,10 @@ export function makeParty(classId: ClassId, heroLevel: number, size: number, ove
     return makeHero(classId, heroLevel, { champions, ...overrides })
 }
 
-/** Full picture for one stage: can the party kill it, how fast, and does it survive doing so. */
 /**
- * `tenureDays` is account age, which Gold now reads through its ceiling. Callers that are
+ * Full picture for one stage: can the party kill it, how fast, and does it survive doing so.
+ *
+ * `tenureDays` is account age, which Gold reads through its ceiling. Callers that are
  * asking a pure combat question pass `SIM_MATURE_TENURE_DAYS`; the campaign walk passes its
  * own accumulated clock, which is the only place the ceiling can be seen binding.
  */
@@ -168,11 +162,9 @@ export function analyzeStage(hero: HeroSnapshot, prestige: number, world: number
     /**
      * How long the party must stay alive without a break.
      *
-     * **Phase 1 answered the question this used to park.** HP is one pool that carries
-     * across a whole stage attempt and refills only on a clear or a wipe — so a wave stage
-     * is the same continuous fight a boss is, just against 30 bodies instead of one. The
-     * window is the full clear either way, and the earlier one-kill reading (which assumed
-     * the party got a breather between enemies) is gone.
+     * HP is one pool that carries across a whole stage attempt and refills only on a clear or
+     * a wipe — so a wave stage is the same continuous fight a boss is, just against 30 bodies.
+     * The window is the full clear either way.
      *
      * A wave wipe restarts that stage rather than falling the run back one, so this is a
      * wall the run sits at and levels out of, not a loss of ground (`settle.killsBeforeWipe`).
@@ -418,8 +410,8 @@ export interface CampaignReport {
  * Tenure to answer combat-only questions at.
  *
  * Gate searches, class comparisons and single-stage reports all care about verdicts, which do
- * not read Gold at all — but `analyzeStage` reports a Gold figure regardless, and it now needs
- * an account age. A mature account keeps the ceiling clear of the progression term so those
+ * not read Gold at all — but `analyzeStage` reports a Gold figure regardless, and that needs an
+ * account age. A mature account keeps the ceiling clear of the progression term so those
  * reports show what the *position* is worth. The campaign walk is the exception and passes its
  * own clock, which is where the ceiling is supposed to be visible.
  */
@@ -430,14 +422,12 @@ export const DEFAULT_CAMPAIGN_MAX_PRESTIGE = 10
 /**
  * How long a single blocked stage may be farmed before the walk calls it a wall.
  *
- * Raised 24h → 72h with the one-week-per-prestige retune. It is a **threshold for "this has
- * stopped being progress"**, so it has to be read against how long a prestige loop is meant to
- * take: against a 20-minute loop a day of farming was obviously a wall, and against a
- * seven-day one it is an ordinary evening. The intended shape now puts a real gate in front of
- * each Stage 10 — 17h at World 7, 2d 4h at World 10 — and at 24h the walk reported those as
- * walls while the run was in fact pacing exactly as designed.
+ * A **threshold for "this has stopped being progress"**, so it has to be read against how long a
+ * prestige loop is meant to take — about a week. The intended shape puts a grind of many hours
+ * to a couple of days in front of late Stage 10 gates, and a tighter budget would report those
+ * as walls while the run is pacing as designed.
  *
- * Still a genuine ceiling rather than a rubber stamp: `FIGHT_LENGTH_DRIFT` above 0.35 blows
+ * Still a genuine ceiling rather than a rubber stamp: `FIGHT_LENGTH_DRIFT` much above 0.35 blows
  * straight through it.
  */
 export const DEFAULT_GRIND_BUDGET_SECONDS = 72 * 3600
@@ -472,16 +462,11 @@ function banksKills(row: StageReport): boolean {
  * when that stage is also unfarmable, crossing world boundaries if it has to. Gates are
  * skipped: a boss is one kill on a one-way door, not a farm.
  *
- * ⚠ **The blocked stage is the first candidate, not the first stage skipped.** Requiring a
- * `clear` verdict here made the walker model a game nobody plays: a party that wipes at kill
- * 21 of 30 was reported as earning nothing at all, so a lethal World 1 came back `unfarmable`
- * — "nowhere left to earn XP" — when the real answer is a few minutes of wiping. Farming in
- * place is also what a player would actually do, and the *fastest* way out, since XP per kill
- * rises with depth.
+ * ⚠ **The blocked stage is the first candidate, not the first stage skipped.** A wave stage the
+ * party wipes on still banks kills (see `banksKills`), so requiring a `clear` here would report
+ * a lethal stage as earning nothing. Farming in place is also what a player would actually do.
  *
- * Note this is the *deepest* farmable stage, not the XP-optimal one. Under the current
- * curve XP/second actually falls with depth (XP rides 1.05^stage, enemy HP 1.15^stage), so
- * a player min-maxing would farm shallower and grind faster than this reports.
+ * Note this is the *deepest* farmable stage, not necessarily the XP-optimal one.
  */
 function farmStageFor(hero: HeroSnapshot, prestige: number, world: number, stage: number, tenureDays: number): StageReport | null {
     let w = world
@@ -509,8 +494,8 @@ function farmStageFor(hero: HeroSnapshot, prestige: number, world: number, stage
  * when farming stops working — which is the wall this is built to find. Three shapes it
  * takes, and they want different fixes:
  *
- * - `unclearable` — no level clears the stage. The enemy curve has outrun stat growth
- *   outright, usually via DEF reaching `PWR × K` (see the `STALLED` verdict).
+ * - `unclearable` — no level inside the search ceiling clears the stage. The enemy curve has
+ *   outrun the hero outright.
  * - `grind_budget` — clearable, but the hours needed exceed `grindBudgetSeconds`. A pacing
  *   problem, not a math one; XP or stat growth is the dial.
  * - `unfarmable` — nowhere left to earn XP at all. Rare, and means the wall is behind you.

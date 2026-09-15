@@ -1,12 +1,8 @@
 /**
  * Ability effects, averaged into the idle rate.
  *
- * ## Why this exists
- *
- * Abilities only ever fired in `fight.ts`, which resolves boss stages. `settle.ts` had no
- * skill term at all — so a Support's heal and a Control's armour shred did nothing during the
- * ~97% of playtime that is idle wave farming, and two archetypes stayed decorative outside a
- * gate. This is the bridge.
+ * `fight.ts` resolves abilities for real on boss stages. Without this, a Support's heal and a
+ * Control's armour shred would do nothing during idle wave farming, which is most of playtime.
  *
  * ## The hard constraint: settle is rate math, not a tick loop
  *
@@ -55,11 +51,9 @@ interface ArmedUnit {
 /**
  * The party's kits, in the order `partyUnitStats` builds them — Hero first, then Champions.
  *
- * Deliberately mirrors `fight.ts`: the same two sources, the same order, and since Phase 3 the
- * *same function* for the Hero's half (`heroKit`, which appends equipped Training Grounds Actives
- * to the class tree's accumulated kit). If these ever disagreed, the projection and the fight
- * would be describing different parties — which is precisely the bug that made `rateAt` a shared
- * helper in the first place.
+ * Deliberately mirrors `fight.ts`: the same two sources in the same order, and the same
+ * `heroKit` for the Hero's half. If these disagreed, the projection and the fight would be
+ * describing different parties.
  */
 export function armedParty(hero: HeroSnapshot, units: readonly UnitStats[]): ArmedUnit[] {
     const kits: readonly (readonly ClassSkill[])[] = [
@@ -131,8 +125,7 @@ export interface AbilityModifiers {
      * Multiplier on party SPD from buff uptime.
      *
      * SPD does two jobs (`classes-and-combat.md` §3): it shortens cooldowns and it raises the
-     * autoattack rate. The rate half is what shows up in a DPS projection, and it is why Haste
-     * — the one ability magnitude any doc states — is worth anything here at all.
+     * autoattack rate. `settle.buffedUnits` recomputes the attack rate from the buffed SPD.
      */
     spdFactor: number
     /**
@@ -183,12 +176,12 @@ export const NO_ABILITIES: AbilityModifiers = {
 }
 
 /**
- * Collapse every kit in the party into four scalars.
+ * Collapse every kit in the party into the scalars of `AbilityModifiers`.
  *
- * Stacking is counted at **one stack**, not `STATUS_MAX_STACKS`: an averaged model cannot know
- * how long a fight runs, and assuming every stacking effect sits at its cap would flatter the
- * projection badly on a wave that dies in two swings. Conservative by choice — the projection
- * should under-promise against a real fight rather than over-promise.
+ * Stacking counts **one application's stacks**, not a built-up `STATUS_MAX_STACKS`: an averaged
+ * model cannot know how long a fight runs, and assuming every stacking effect sits at its cap
+ * would flatter the projection badly on a wave that dies in two swings. The projection should
+ * under-promise against a real fight rather than over-promise.
  */
 export function projectAbilities(
     hero: HeroSnapshot,
@@ -363,10 +356,8 @@ export function partyAbilityDps(
 /**
  * Incoming damage after the party's own sustain is subtracted.
  *
- * **Floored at `MAX_SUSTAIN_MITIGATION`**, so healing can never fully cancel a wave. Letting it
- * reach zero would make a party with one Support immortal in the projection — quietly
- * restoring exactly the immortality `MIN_DAMAGE` was introduced to remove, and doing it in the
- * one place no fight would ever contradict it.
+ * Healing may cancel at most `MAX_SUSTAIN_MITIGATION` of the stream, so it can never fully
+ * cancel a wave — see that constant for why an immortal projection is the failure mode.
  */
 export function sustainedIncoming(incoming: Decimal, healingPerSecond: Decimal): Decimal {
     if (healingPerSecond.lte(0) || incoming.lte(0)) return incoming

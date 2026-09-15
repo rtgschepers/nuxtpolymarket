@@ -164,10 +164,8 @@ describe('agreement with the settle it is drawing', () => {
             })
 
             // The same bound the server puts in the payload (`server/utils/hero-quest.ts`),
-            // not `null`. Passing `null` asserted "this stage never wipes", which stopped being
-            // true for a level-1 Hero when `BASE_HP` came down to 150 — and then the two walks
-            // disagreed because they were walking different stages, not because the projection
-            // was wrong.
+            // not `null`. `null` would assert "this stage never wipes", which is not true for a
+            // level-1 Hero, and the two walks would then disagree about which stage they are on.
             const units = partyUnitStats(hero)
             const pack = enemyPackAt(served.position)
             const wipeAt = killsBeforeWipe(units, pack, served.secondsPerKill)

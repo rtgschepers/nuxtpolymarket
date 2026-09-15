@@ -67,7 +67,7 @@ const levelUp = !flag('no-levelup')
 const maxPrestige = Number(arg('max-prestige', String(DEFAULT_CAMPAIGN_MAX_PRESTIGE)))
 const grindHours = Number(arg('grind-hours', String(DEFAULT_GRIND_BUDGET_SECONDS / 3600)))
 const maxLevel = Number(arg('max-level', String(DEFAULT_CAMPAIGN_MAX_LEVEL)))
-/** Total units, Hero included. 1 is the solo Phase 1 Hero; real parties run 3–6. */
+/** Total units, Hero included. 1 is a solo Hero; real parties run 3–6. */
 const party = Math.max(1, Number(arg('party', '1')))
 /** `--sweep-levels=1,20,50` — the scaling view on `--report=stats`. Empty means single-level. */
 const sweepLevels = arg('sweep-levels', '')

@@ -25,12 +25,11 @@ import { fromStore } from '#shared/utils/hero-quest/numbers'
  * The one read the client makes.
  *
  * Settles first, always, so every read sees a settled world. Returns derived display values
- * rather than raw rows — it has two consumers (the composable and the AI agent's executor
- * overview) and neither should be re-deriving game math. Decimals go out as strings.
+ * rather than raw rows, so the client never re-derives game math. Decimals go out as strings.
  *
  * All four gacha tabs are served from one call rather than one endpoint each, because they share
- * a settle and three of them read the same `hqCollection` query. Splitting them would mean four
- * settles per page load, and a settle is a write.
+ * a settle and the same `hqCollection` query. Splitting them would mean four settles per page
+ * load, and a settle is a write.
  */
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)

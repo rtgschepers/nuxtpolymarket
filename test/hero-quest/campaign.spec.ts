@@ -14,21 +14,16 @@ const hero = makeHero('class_beginner', 1)
 
 /**
  * Enough prestiges for a solo Hero to actually run out of road. Where that lands moves with
- * STAT_PACE_RATIO, so specs that need a real wall walk far rather than naming a depth.
+ * tuning, so specs that need a real wall walk far rather than naming a depth.
  */
 const TO_THE_WALL = { maxPrestige: 6 }
 
 /**
- * The shortest walk that still contains a blocked stage, and therefore a grind event.
+ * A short walk that still contains a blocked stage, and therefore a grind event.
  *
- * Was `{ maxPrestige: 0 }`, on the reasoning that one loop was the cheapest fixture that
- * still hit a blocker. The session-2 enemy cut (`BASE_ENEMY_HP` 30 → 10, `BASE_ENEMY_PWR`
- * 10 → 3) removed every blocker from the first loop: prestige 0 is now a clean 31-minute
- * walk to W10S10 with zero grinding. That made three of the specs below vacuous rather than
- * failing — "every grind raises the level" passes trivially over an empty list — so the whole
- * file moves together rather than only the two that went red.
- *
- * One prestige, not six: the walk is still cheap, and grinding is what these specs are about.
+ * ⚠ It must keep containing one. Over an empty grind list several specs below pass vacuously
+ * rather than failing — "every grind raises the level" is trivially true of nothing — so if a
+ * retune clears the walk, lengthen it.
  */
 const PAST_A_BLOCKER = { maxPrestige: 1 }
 
@@ -89,9 +84,8 @@ describe('analyzeCampaign', () => {
             (report.wall.prestige * WORLD_COUNT + report.wall.world) * STAGES_PER_WORLD + report.wall.stage
 
         // `TO_THE_WALL`, not `PAST_A_BLOCKER`: this spec needs the tight budget to be what
-        // actually stops the walk, and one prestige of road no longer contains a grind an hour
-        // cannot pay for. `ENEMY_PACE_RATIO` is why — the walk used to end on a wipe, and now
-        // ends on income, so the wall sits deeper.
+        // actually stops the walk, so the walk must be long enough to contain a grind an hour
+        // cannot pay for.
         const tight = analyzeCampaign(hero, 0, { ...TO_THE_WALL, grindBudgetSeconds: 3600 })
         const loose = analyzeCampaign(hero, 0, { ...TO_THE_WALL, grindBudgetSeconds: 3.2e10, maxLevel: 100000 })
 

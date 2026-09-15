@@ -133,20 +133,13 @@ describe('the settle projection', () => {
         const MAX_OVER_PROMISE = 0.7
 
         /**
-         * The fixture every spec in this block measures against. W4/60 → W3/13 in session 2,
-         * then W3/13 → W10/204 when `K` went to 4 and every fight got shorter.
+         * The fixture every spec in this block measures against.
          *
-         * Re-found the way the last one was: scan prestige 0–1 × every world × boss, super-boss
-         * and representative wave and elite stages × levels 1–250, keep the cells where the cast
-         * spec holds and all four classes land inside the band, and take the widest joint
-         * margin. 766 cells qualify; this is the best of them.
-         *
-         * **It is a much better-conditioned fixture than the one it replaces.** The old cell
-         * ran the marksman at 1.62 against a 1.70 ceiling — a knife edge that the comment
-         * flagged as such. Here the four ratios are 1.02 / 1.03 / 1.04 / 0.92, and the whole
-         * level band 195–250 stays inside the tolerance, so this is a plateau rather than a
-         * point. A deeper stage is what buys that: the enemy pool is large enough that the
-         * fight runs its full timer, which is the regime the projection is actually modelling.
+         * To re-find it: scan positions (boss, super-boss, representative wave and elite stages)
+         * × levels, keep the cells where the cast spec holds and all four classes land inside
+         * the band, and take the widest joint margin — a plateau, not a knife edge. A deep stage
+         * is what buys that: the enemy pool is large enough that the fight runs its full timer,
+         * which is the regime the projection is actually modelling.
          */
         const FIXTURE = { level: 204, position: at(10, SUPER_BOSS_STAGE) }
 
@@ -220,8 +213,7 @@ describe('the settle projection', () => {
         })
 
         it('turns Haste into a real attack-rate gain', () => {
-            // The one ability magnitude any doc states, and it was worth nothing to the idle
-            // rate until this stage.
+            // The one ability magnitude any doc states, and it has to reach the idle rate.
             const mods = projectAbilities(hero(20), partyUnitStats(hero(20)), 6)
             expect(mods.spdFactor).toBeGreaterThan(1)
         })

@@ -2,16 +2,13 @@
  * The part-kill a settle could not bank survives to the next one — end to end, through the
  * column.
  *
- * `settle()`'s own spec pins the arithmetic; this pins the wiring, which is where the bug
- * actually lived. Kills bank as integers, so a window shorter than one `secondsPerKill` used to
- * floor to zero while `lastSettledAt` advanced to `now` regardless — and *every state read is a
- * settle*. The client polls once a minute, every mutation refreshes, and a page reload is another
- * one, so a player reloading faster than they killed made no progress at all, ever, while the
- * same player closing the tab for an hour made plenty.
+ * `settle()`'s own spec pins the arithmetic; this pins the wiring. Kills bank as integers and
+ * *every state read is a settle*, so if the remainder were not persisted, a window shorter than
+ * one `secondsPerKill` would floor to zero while `lastSettledAt` still advanced — a player
+ * reloading faster than they killed would never progress.
  *
- * Written against the real `settleHq` rather than the pure function on purpose: the failure was
- * that nothing persisted the remainder, and only a round trip through the row can show that it
- * now does.
+ * Written against the real `settleHq` rather than the pure function on purpose: only a round
+ * trip through the row can show the remainder is persisted.
  *
  * Needs the local Postgres from .env. Skips when DATABASE_URL is unset.
  */
@@ -69,8 +66,7 @@ describe.skipIf(SKIP)('the carried part-kill, through the database', () => {
         const { state } = await settleHq(USER_ID)
 
         expect(state.killCount).toBe(0)
-        // The window bought a quarter of a body. Before the fix it bought nothing, and the
-        // clock moved anyway.
+        // The window bought a quarter of a body, and it is kept even though the clock moved.
         expect(state.killFraction).toBeGreaterThan(0.2)
         expect(state.killFraction).toBeLessThan(1)
     })
@@ -78,8 +74,7 @@ describe.skipIf(SKIP)('the carried part-kill, through the database', () => {
     it('completes the kill those windows add up to', async () => {
         const spk = await secondsPerKill()
 
-        // Four quarter-windows, settled separately, are one kill. Under the old floor they were
-        // four times nothing.
+        // Four quarter-windows, settled separately, are one kill — not four times nothing.
         for (let i = 0; i < 4; i++) {
             await rewind(spk / 4)
             await settleHq(USER_ID)

@@ -25,10 +25,9 @@ import { getShopTrack, isShopTrackId, shopTrackCost } from '#shared/utils/hero-q
  *
  * ## Two currencies
  *
- * Every track was Void Shards until Loadouts. `loadouts.md` §3 prices Loadout slots in **Gems**
- * because they add zero combat power on their own — a player with 2 slots can manually re-equip
- * everything a 10-slot player can, just with more taps. Gems are a shared platform balance, so
- * that path goes through `balance.ts` with the transaction threaded, never `user.gems` directly.
+ * Loadout slots are priced in **Gems** (`loadouts.md` §3), every other track in Void Shards. Gems
+ * are a shared platform balance, so that path goes through `balance.ts` with the transaction
+ * threaded, never `user.gems` directly.
  */
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)

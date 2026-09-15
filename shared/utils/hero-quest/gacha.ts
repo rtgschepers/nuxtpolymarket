@@ -4,9 +4,8 @@
  * **Written once, parameterised by `system`.** Gear, Champions, Skills and Artifacts are
  * deliberately parallel — one rarity ladder, one leveling curve, one drop table, one dupe
  * formula, one Essence ladder — so this module takes a `GachaSystem` argument rather than
- * being copied per gacha. That is the same reasoning that made `hqCollection` one table
- * instead of four (`tech-architecture.md` §3). Phase 2 builds only the Champion caller;
- * Phase 3 adds the other three with no change here.
+ * being copied per gacha — the same reasoning that made `hqCollection` one table instead of
+ * four (`tech-architecture.md` §3).
  *
  * Pure: no DB, no auth, no `#server` imports. The server calls in to decide what a pull
  * *would* produce and what a spend *would* cost; only the server applies anything.
@@ -47,17 +46,12 @@ export const RARITIES: readonly Rarity[] = [
 /**
  * Flat power multiplier by rarity — Common 1.0 → Mythic 2.5.
  *
- * First written for Champions (`champions-guild-gacha.md` §2) and then reused *verbatim* by
- * Gear (`gear-equipment.md` §2) and Artifacts, which is what moved it here from
- * `content/champions.ts`: three systems reading one table means the table is not Champion
- * content. Keyed off the ordered ladder above so the constants file holds a plain array and the
- * rarity→value mapping exists in exactly one place.
+ * Read by Champions (`champions-guild-gacha.md` §2), Gear (`gear-equipment.md` §2) and
+ * Artifacts, so it is not Champion content. Keyed off the ordered ladder above so the constants
+ * file holds a plain array and the rarity→value mapping exists in exactly one place.
  *
- * ⚠ **Adjacent tiers must stay under a 6× ratio.** That is Gear's Rarity Progression Guarantee
- * (`gear-equipment.md` §2): it is what makes a maxed current-tier piece beat a freshly-levelled
- * next-tier one, so a player is never punished for having invested. The current table's worst
- * adjacent ratio is 1.25×, so there is wide headroom — but a retune has to respect the ceiling,
- * and `test/hero-quest/content.spec.ts` asserts it rather than trusting this comment.
+ * ⚠ **Adjacent tiers must stay under `RARITY_ADJACENT_RATIO_CEILING`** — Gear's Rarity
+ * Progression Guarantee. The worst adjacent ratio today is 1.25×; `content.spec.ts` asserts it.
  */
 export const RARITY_STAT_MULTIPLIER: Readonly<Record<Rarity, number>> = Object.fromEntries(
     RARITIES.map((rarity, index) => [rarity, RARITY_STAT_MULTIPLIERS[index]!])
@@ -66,9 +60,8 @@ export const RARITY_STAT_MULTIPLIER: Readonly<Record<Rarity, number>> = Object.f
 /**
  * The rarity epithet ladder from `champions-guild-gacha.md` §5.
  *
- * Also moved out of Champion content, and for a sharper reason than the multiplier: Gear's
- * entire 36-piece roster is *named* by it (`gear-equipment.md` §1 — "`<Rarity Epithet> <Slot
- * Name>`"), so the ladder is now load-bearing for two rosters rather than flavour for one.
+ * Shared rather than Champion content: Gear's entire 36-piece roster is *named* by it
+ * (`gear-equipment.md` §1 — "`<Rarity Epithet> <Slot Name>`").
  */
 export const RARITY_EPITHET: Readonly<Record<Rarity, string>> = Object.fromEntries(
     RARITIES.map((rarity, index) => [rarity, RARITY_EPITHETS[index]!])
@@ -175,27 +168,10 @@ export function rarityFromRoll(level: number, roll: number): Rarity {
 }
 
 /**
- * ## `foldToAvailableRarity` — deleted, and the reason is recorded rather than lost
- *
- * A helper used to live here that folded a rolled rarity *down* to the nearest rarity a partial
- * roster actually populated, because the §3 drop table weights all six and assumes all six
- * exist. Phase 2's Champions covered Common / Rare / Mythic only, so better than half of all
- * rolls at gacha level 7+ named a rarity with nothing in it.
- *
- * **All four rosters now populate all six rarities** — Champions 48, Gear 36, Skills 36,
- * Artifacts 48 — which made the fold the identity function everywhere, the exact condition its
- * own docstring named for removal (`implementation-plan.md`, Phase 3: "deleted outright the day
- * every roster is complete"). `content.spec.ts` asserts the population per system, so the claim
- * "no fold is needed" is tested rather than commented.
- *
- * Worth keeping the *reasoning* even though the code is gone, because it is the answer to a
- * question a future partial roster will ask again: rounding **down** was the conservative
- * repair. Picking uniformly from whatever exists inverts the curve — with 4 of 12 Champions
- * Mythic, every unshipped roll became 33% Mythic and pushed the effective level-10 Mythic rate
- * from a designed 3.0% to 28.7%. Folding downward can never pay better than the roll earned.
- *
- * `effectiveDropRates` went with it: the effective table and the designed table are now the
- * same table, so serving one through a fold would only hide that fact.
+ * The drop table assumes every roster populates all six rarities, and `content.spec.ts` asserts
+ * that per system. If a future roster ships with gaps, repair a roll by folding **down** to the
+ * nearest populated rarity: picking uniformly from whatever exists inverts the curve and can pay
+ * far better than the roll earned.
  */
 
 // ── Pull cost ──────────────────────────────────────────  §4

@@ -1,7 +1,7 @@
 /**
  * Loadout validation (`loadouts.md`, and the equip rules of all four gacha docs).
  *
- * `validateLiveLoadout` is the security boundary for everything Phase 3 added: it is the one
+ * `validateLiveLoadout` is the security boundary for the live loadout: it is the one
  * place a client-supplied party, skill list, artifact list or gear map is checked before it
  * becomes the state the settle math runs on. Every assertion below is really the same question —
  * **can the client claim this?** — asked of a different component.
@@ -208,7 +208,7 @@ describe.skipIf(SKIP)('hero-quest loadout validation', () => {
 
     describe('partial updates', () => {
         it('touches only the components actually supplied', async () => {
-            // The Forge page sends `gear` alone and knows nothing about the party.
+            // The Gear page sends `gear` alone and knows nothing about the party.
             await own('gear', 'gear_weapon_common')
             const writes = await validate({ gear: { weapon: 'gear_weapon_common' } })
             expect(Object.keys(writes)).toEqual(['equippedGear'])

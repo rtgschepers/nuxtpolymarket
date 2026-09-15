@@ -2,10 +2,9 @@
 /**
  * The Hero Quest playtest harness. **Development only.**
  *
- * `implementation-plan.md` Phase 1 ends with "stop here and actually play it", and roughly 99
- * constants carry `// UNTUNED ╧` waiting on what that play would reveal. The obstacle was never
- * willingness — an idle game measured in days cannot be felt in an evening. This page is the
- * shortest path between a question about the curve and an answer.
+ * An idle game measured in days cannot be felt in an evening, and the `// UNTUNED ╧` constants
+ * are waiting on play data. This page is the shortest path between a question about the curve
+ * and an answer.
  *
  * Every control here moves an *input* and lets the real server path do the work. Nothing on this
  * page computes a reward, and it deliberately reads the same `state.get` payload as every other

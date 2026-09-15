@@ -40,7 +40,7 @@ const minutesOnline = Math.round(ONLINE_THRESHOLD_MS / 60_000)
     </div>
 
     <!--
-      The honesty banner. Roughly a hundred constants carry an `// UNTUNED` marker in source, and
+      The honesty banner. Dozens of constants carry an `// UNTUNED` marker in source, and
       that marker lives in a comment rather than in a value, so no page can render the list.
       Saying so once, at the top, is the accurate thing to do.
     -->

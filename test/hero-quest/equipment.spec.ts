@@ -199,10 +199,8 @@ describe('skills', () => {
 /**
  * A levelled Skill copy is stronger than a freshly-pulled one.
  *
- * The gap this closes: `gacha-shared-system.md` §6 makes `(star × 10 + level)` the universal
- * per-copy power scalar and Gear, Artifacts and the Champion passive all read it, but
- * `skills-gacha.md` never says Skills do — so before this, consuming 1,065 duplicates to max a
- * Skill bought exactly nothing.
+ * `gacha-shared-system.md` §6 makes `(star × 10 + level)` the universal per-copy power scalar;
+ * without potency, the dupes spent maxing a Skill would buy nothing.
  *
  * The shape is **identity at minimum**, which is the load-bearing choice: a 0★/Lv1 copy is exactly
  * §4's authored magnitude, so the doc's qualitative ladder stays the reference point. Artifacts'
@@ -211,7 +209,7 @@ describe('skills', () => {
  */
 describe('skill potency', () => {
     it('is exactly 1.0 for a freshly-pulled copy', () => {
-        // So §4's authored bands remain the reference, and no pre-existing number moves.
+        // So §4's authored bands remain the reference.
         expect(skillPotency(0, 1)).toBe(1)
     })
 
@@ -321,7 +319,7 @@ describe('skill potency', () => {
 
 describe('scaleEffect', () => {
     it('returns the input untouched at potency 1, identity included', () => {
-        // So an unlevelled copy allocates nothing and every pre-existing spec's numbers stay put.
+        // So an unlevelled copy allocates nothing.
         const effect: AbilityEffect = { target: 'enemy_single', heal: 1.5 }
         expect(scaleEffect(effect, 1)).toBe(effect)
     })
@@ -416,7 +414,7 @@ describe('the wealth factor', () => {
     })
 
     it('is exactly neutral for a caller that supplies nothing', () => {
-        // Which is what keeps every pre-Phase-3 spec's numbers unmoved.
+        // A caller that knows nothing about banked Gold gets the neutral factor.
         expect(wealthFactorFor(undefined)).toBe(1)
     })
 

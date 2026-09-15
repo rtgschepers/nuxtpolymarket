@@ -39,7 +39,7 @@ import type { HqStatKey } from './types'
  * Deliberately small. Every effect in all three rosters lands on one of these, and where a
  * doc describes machinery the engine does not have — a buff that ramps during a fight, a proc
  * on kill, a once-per-fight death save — the content module renders it as the nearest kind and
- * says so in a comment, exactly as the ability-effects pass did (`open-items.md` §15).
+ * says so in a comment.
  */
 export type ModifierKind =
     /** Multiplies one of the six stats. `stat` is required. */
@@ -65,12 +65,10 @@ export type ModifierKind =
     /**
      * Fraction by which control effects landed on the party are shortened.
      *
-     * **Declared and summed, currently inert** — and that is a statement about the enemy model,
-     * not an omission here. `EnemyStats` has no abilities at all, so nothing in the game applies
-     * a stun, silence or freeze to the party; there is literally nothing to resist. It goes live
-     * the day enemies gain kits, and until then the content that declares it (Artifacts'
-     * Unshaken, Skills' Unbreakable Will and Immortal Vanguard) is honest about *what* it does
-     * rather than being silently re-pointed at a stat that happens to be wired up.
+     * **Declared and summed, currently inert.** Enemies have no abilities, so nothing applies
+     * control to the party. It goes live when enemies gain kits; until then the content that
+     * declares it (Artifacts' Unshaken, Skills' Unbreakable Will and Immortal Vanguard) says what
+     * it does rather than being re-pointed at a stat that happens to be wired up.
      */
     | 'controlResist'
     /** Fraction of incoming damage reflected back at the attacker. */

@@ -22,9 +22,9 @@ import type { HqStatKey } from '#shared/utils/hero-quest/types'
  * tell which one is out of date. Both render from these tables.
  *
  * **Every number is interpolated from `constants.ts`, never typed out.** That is the whole
- * reason this is a module rather than prose in a template: roughly a hundred of those constants
- * are still `// UNTUNED ╧` and will move during the tuning pass, and a wiki that quietly keeps
- * quoting the old value is worse than no wiki. Prose describes *shape*; numbers come from the
+ * reason this is a module rather than prose in a template: constants move during tuning (many
+ * are still `// UNTUNED ╧`), and a wiki that quietly keeps quoting the old value is worse than
+ * no wiki. Prose describes *shape*; numbers come from the
  * source of truth or are not stated.
  *
  * What this cannot do is know *which* constants are still untuned — that lives in a comment, not
@@ -118,8 +118,8 @@ export const HQ_STAT_DOC_BY_KEY: Readonly<Record<string, HqStatDoc>> = Object.fr
 /**
  * Currencies, and — deliberately — which of them this build actually has.
  *
- * `economy-and-currencies.md` specifies eleven. Phase 3 implements nine; Trait Gems, Raid Keys
- * and Arena Medals belong to systems that do not exist yet. A wiki that describes all eleven as
+ * Trait Gems, Raid Keys and Arena Medals (`economy-and-currencies.md`) belong to systems that do
+ * not exist yet. A wiki that describes all eleven as
  * though they work is a wiki that sends players hunting for a currency they cannot earn, so the
  * unbuilt ones are listed and marked rather than hidden — a player who reads about Raids in a
  * design doc should find out here that they are not in yet.

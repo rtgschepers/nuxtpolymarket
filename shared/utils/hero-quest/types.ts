@@ -1,10 +1,9 @@
 /**
  * Shared shapes for Hero Quest.
  *
- * Structural only — no behaviour lives here. This file is an addition to the directory
- * listing in `tech-architecture.md` §2: every downstream module needs the same types, and
- * housing them in `stats.ts` would force `content/classes.ts` to import upward from its
- * own consumer.
+ * Structural only — no behaviour lives here. Every downstream module needs the same types, and
+ * housing them in `stats.ts` would force `content/classes.ts` to import upward from its own
+ * consumer.
  */
 
 import type { Decimal } from './numbers'
@@ -19,11 +18,9 @@ export type StatTier = 'low' | 'mid' | 'mid_high' | 'high'
  * The 6 main stats, identical for Hero and Champions. HP and EVA are secondary — HP is
  * derived from VIT, EVA is granted only by external sources (Traits, Phase 4).
  *
- * **Decimal, not `number`** — `docs/games/hero-quest/CLAUDE.md` §3 requires it and, since stat
- * growth became geometric (`STAT_PER_LEVEL_GROWTH`), a float block overflows to `Infinity`
- * somewhere around hero level 10,400. In a game with unbounded prestige that is a reachable
- * ceiling rather than a theoretical one, and everything downstream — damage, HP, mitigation —
- * was already Decimal, so this was the last float in the chain (`open-items.md` #11.1).
+ * **Decimal, not `number`** — stat growth is geometric (`STAT_PER_LEVEL_GROWTH`), so a float
+ * block overflows to `Infinity` at a hero level unbounded prestige reaches. Everything
+ * downstream — damage, HP, mitigation — is Decimal too.
  */
 export type HqStatBlock = Record<HqStatKey, Decimal>
 
@@ -57,7 +54,12 @@ export type ClassId =
 
 export type ClassTier = 'beginner' | 'base' | 'elite' | 'master'
 
-/** Autoattack target selection (`classes-and-combat.md` §7). */
+/**
+ * Autoattack target selection (`classes-and-combat.md` §7).
+ *
+ * ⚠ Authored on every class node and archetype but **not yet read by combat** — `fight.ts`
+ * focuses the front-most living enemy regardless. Only the wiki displays it.
+ */
 export type AutoTarget = 'lowest_hp_pct' | 'highest_pwr'
 
 /**
@@ -94,23 +96,13 @@ export interface OwnedCopy {
     level: number
 }
 
-/**
- * A class node's named ability.
- *
- * **Single-target damage only, deliberately.** `classes-and-combat.md` §7 sketches
- * distinctive behaviour for several of these — Ethereal Bouncebolt chains, Lightning Storm
- * and Meteor Shower hit multiple targets, Totem Storm and Raise Dead affect the party or
- * battlefield, Disciple and Man's Best Friend summon, Haste doubles SPD, Enrage trades max
- * HP — but assigns no magnitude, no cooldown and no targeting rule to any of them. Those
- * behaviours are an undesigned content pass; this shape covers what every skill does have.
- */
+/** A named ability — a class node's skill, a Champion ability, or an equipped Skill Active. */
 export interface ClassSkill {
     /**
      * What this ability does beyond raw damage, and who it lands on.
      *
-     * Optional, defaulting to `effects.SINGLE_TARGET` — the behaviour every ability had before
-     * effects existed — so a content entry that has nothing distinctive to say stays a one-line
-     * declaration rather than boilerplate.
+     * Optional, defaulting to `effects.SINGLE_TARGET`, so a content entry with nothing
+     * distinctive to say stays a one-line declaration.
      */
     effect?: AbilityEffect
     /** Stable string ID — DB rows and loadouts reference IDs only, never indices. */
@@ -131,7 +123,7 @@ export interface ClassNode {
     spread: Record<HqStatKey, StatTier>
     /** Specialization shift, applied cumulatively down the class path. */
     delta: HqStatDelta
-    /** Baked into the kit, not a stat: Hunter 3, Beast Master 4, everyone else 1. */
+    /** Baked into the kit, not a stat — see each node in `content/classes.ts`. */
     strikesPerAttack: number
     autoTarget: AutoTarget
     /** Suggested row only — every slot stays manually reassignable (`classes-and-combat.md` §6). */
@@ -185,8 +177,8 @@ export interface UnitStats {
 /**
  * One enemy's stats. **Not** a claim about how many are present — see `EnemyPack`.
  *
- * Every pairwise formula in `combat.ts` resolves against exactly one of these, which is what
- * lets packs be introduced without touching the damage model at all.
+ * Every pairwise formula in `combat.ts` resolves against exactly one of these, so packs never
+ * touch the damage model.
  */
 export interface EnemyStats {
     hp: Decimal
@@ -200,10 +192,8 @@ export interface EnemyStats {
  * Members are **individually addressable** rather than a `{ template, count }` pair, because
  * every targeting rule the docs specify selects *among* enemies — "lowest-HP% enemy",
  * "highest-PWR enemy", "chains between enemies", "hits 3 random enemies". A count cannot
- * express a mixed pack, and a mixed pack is what per-ability targeting eventually needs.
- * Packs are homogeneous today; this shape is what lets that change without a signature moving.
- *
- * Boss and super-boss encounters hold exactly one member.
+ * express a mixed pack, and boss encounters are mixed: `BOSS_MINION_COUNT` minions, then the
+ * boss (`settle.enemyPackAt`).
  */
 export interface EnemyPack {
     readonly members: readonly EnemyStats[]
@@ -224,12 +214,7 @@ export interface RunPosition {
  * Champions have **no XP level of their own** — they level only by consuming duplicates, on
  * the `(star × 10 + level)` scalar shared by all four gachas (`gacha-shared-system.md` §6),
  * which is bounded at 60. Their unbounded axis is the Hero's level, which is what keeps them
- * from becoming dead weight against a curve that never stops (`champions-guild-gacha.md` §2
- * says only "the other stats scale with level the same way the Hero's do", and never
- * reconciles the two quantities — this is that reconciliation).
- *
- * Phase 1 defines the shape and nothing more: no roster, no archetype spreads, no base stat
- * magnitudes. Those are Phase 2 and the docs do not specify them yet.
+ * from becoming dead weight against a curve that never stops.
  */
 export interface ChampionSnapshot {
     /** Stable string ID, never an index. */
@@ -251,13 +236,8 @@ export interface ChampionSnapshot {
      * way (`archetype`, `rarityMultiplier`, `strikesPerAttack`) — the server resolves content
      * once at the boundary and the sim hands the shape whatever it wants to measure.
      *
-     * **Required, deliberately.** Making it optional would let a caller omit it and quietly
-     * reproduce the exact bug this field exists to fix: abilities authored in content that
-     * never reach combat. An omission should be a type error.
-     *
-     * Effects are still the shared placeholder cooldown/multiplier pair every class skill
-     * uses — see `ClassSkill`. What lands here is the plumbing that lets a Mythic's three
-     * abilities actually fire; the distinctive behaviours are a later content pass.
+     * **Required, deliberately.** If optional, a caller could omit it and abilities authored in
+     * content would silently never reach combat. An omission should be a type error.
      */
     abilities: readonly ClassSkill[]
 }
@@ -342,20 +322,17 @@ export interface SettleInput {
      * Progress toward the *next* kill carried in from the previous window, in kills — always
      * in `[0, 1)`.
      *
-     * Without it a settle is lossy by up to one whole kill, and every read is a settle: the
-     * client polls once a minute, every mutation refreshes, and a page reload is another one.
-     * Measured, at World 1 Stage 1's 1.88s/kill, one hour of presence paid 1918 kills settled
-     * in a single window and 1680 settled in sixty — and a player refreshing every second
-     * earned *nothing at all*, forever, because `floor(1 / 1.88)` is zero every time.
+     * Without it a settle is lossy by up to one whole kill, and every read is a settle (polling,
+     * mutations, reloads). A player refreshing faster than `secondsPerKill` would earn nothing
+     * at all, because each window floors to zero kills.
      *
-     * Carried in **kills rather than seconds**, which is what makes it safe to bank. Seconds
-     * are only worth kills at the rate that measured them, so a player parked at a wall
-     * (`secondsPerKill` is unbounded — see `firstStallingPosition` in the settle spec) would
-     * accumulate hours of unspent time and cash all of it the moment an upgrade cut the rate.
-     * A fraction of a kill is a fraction of a kill at any rate, and can never exceed one.
+     * Carried in **kills rather than seconds**, which is what makes it safe to bank. Seconds are
+     * only worth kills at the rate that measured them, so a player parked at a wall would
+     * accumulate hours of unspent time and cash it all the moment an upgrade cut the rate. A
+     * fraction of a kill is a fraction of a kill at any rate, and can never exceed one.
      */
     killFraction?: number
-    /** Battle Speed — Phase 4. Callers pass `undefined` until then. */
+    /** Battle Speed. Not wired up yet — every caller passes `undefined`. */
     speedBoost?: { multiplier: number; overlapSeconds: number }
 }
 

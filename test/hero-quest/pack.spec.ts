@@ -181,10 +181,8 @@ describe('enemy packs', () => {
                 //
                 // Compared to 9 decimal places rather than bit-exactly: the claim is that the
                 // pack size cancels, and `packHp / dps / size` divides and re-multiplies, so the
-                // last ULP is not guaranteed to survive the round trip. It failed at size 8 on a
-                // one-ULP difference after an unrelated retune — a stronger assertion than the
-                // property being tested. The sibling spec below already measures this family
-                // with `toBeCloseTo` for the same reason.
+                // last ULP is not guaranteed to survive the round trip — bit-exact would be a
+                // stronger assertion than the property being tested.
                 expect(secondsPerKill(units, pack), `size ${size}`).toBeCloseTo(baseline, 9)
             }
         })

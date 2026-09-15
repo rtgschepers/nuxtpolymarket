@@ -11,8 +11,8 @@
  * Every source is reported in **stages of enemy curve** as well as in its own units. That is the
  * only common denominator the game has: enemies grow `ENEMY_STEP_BASE^n` over one index `n`, and
  * a stat multiplier is worth however many steps of that it cancels. It converts the question
- * "is ×1.36 from my collection a lot?" — unanswerable — into "my collection is worth 4 stages",
- * which is directly comparable to the 100 stages a prestige loop costs.
+ * "is ×1.36 on this stat a lot?" — unanswerable — into "it is worth 4 stages", which is directly
+ * comparable to the 100 stages a prestige loop costs.
  *
  * See `stagesOfCurve`. The conversion runs through `DPS_STAT_EXPONENT`, because damage rides the
  * stat curve more than once and a source that lifts every stat by 36% is worth more than 36%.
@@ -89,11 +89,7 @@ export const STAT_LABELS: Readonly<Record<HqStatKey, string>> = {
  *
  * ⚠ `DPS_STAT_EXPONENT` is the *asymptotic* 2, true once attack rate has hit its ceiling;
  * below it SPD scales too and the real exponent is nearer 3. So this **understates** early-game
- * sources. Its own comment says as much — this inherits the caveat rather than papering over it.
- *
- * It understated them by more when LCK rode the level curve and the early exponent was nearer 4.
- * `STAT_SCALES_WITH_LEVEL` took LCK off the curve, so that term is gone and the conversion is
- * now closer to honest over the range anyone actually plays.
+ * sources.
  */
 export function stagesOfCurve(factor: Decimal | number, exponent = DPS_STAT_EXPONENT): number {
     const value = D(factor)
@@ -178,7 +174,7 @@ export interface StatsExplanation {
     /** Cross-cutting pacing facts, the same for every unit. */
     pacing: {
         statGrowthPerLevel: number
-        /** DEF and VIT only — the curve that paces the enemy exactly. */
+        /** PWR, DEF and VIT — the curve that paces the enemy exactly (`STAT_PACES_ENEMY_CURVE`). */
         defenceGrowthPerLevel: number
         enemyStepBase: number
         dpsStatExponent: number
@@ -241,9 +237,9 @@ function baseStage(key: HqStatKey, tier: StatTier, deltaSources: readonly { name
  * report be read as a table, and "Level 200 · ×1.0000" states the fact that levelling buys this
  * stat nothing far more plainly than a missing column would.
  *
- * DEF and VIT report a *different* base in the formula than the other three — they ride
- * `STAT_PER_LEVEL_GROWTH_PACED` (`statGrowthFor`), which is the whole of why a stage attempt
- * costs the same share of the party's HP at every depth.
+ * PWR, DEF and VIT ride `STAT_PER_LEVEL_GROWTH_PACED` (`statGrowthFor`) and SPD and IMP the
+ * ordinary curve, so the formula's base can differ between them (they coincide while
+ * `XP_PACE_SLACK` is 1.0).
  */
 function levelStage(key: HqStatKey, base: Decimal, heroLevel: number): StatStage {
     if (!STAT_SCALES_WITH_LEVEL[key]) {

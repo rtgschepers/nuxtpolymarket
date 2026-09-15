@@ -38,13 +38,7 @@ export const GEAR_SLOTS: readonly GearSlot[] = [
 ]
 
 /**
- * Slot → stat, one-to-one and onto (§1).
- *
- * Weapon is a flat PWR slot like any other. It was previously specified as "the one dynamic
- * slot", resolving to whichever of STR/DEX/INT the Hero's class used — that special case died
- * with the STR/DEX/INT → PWR merge (`classes-and-combat.md` §2) and the doc's own footnote is
- * gone with it.
- */
+/** Slot → stat, one-to-one and onto (§1). */
 export const GEAR_SLOT_STAT: Readonly<Record<GearSlot, HqStatKey>> = {
     weapon: 'pwr',
     boots: 'spd',
@@ -84,9 +78,7 @@ export function gearIdFor(slot: GearSlot, rarity: Rarity): string {
 }
 
 /**
- * **All 36.** Six slots × six rarities, fully populated — which is exactly why Gear never
- * needed the rarity fold that partial rosters used, and part of why that helper is now gone
- * (`implementation-plan.md`, Phase 3: "Gear should simply not call it").
+ * **All 36.** Six slots × six rarities, fully populated.
  *
  * Generated from the two axes rather than written out. There is nothing a hand-written table
  * would add here: the name is a template, the stat is fixed by the slot, and the magnitude is a

@@ -116,7 +116,7 @@ describe('which sources have no ceiling', () => {
     it('leaves LCK with no compounding source whatsoever', () => {
         // The crit retune, stated as an assertion rather than as a constant. Crit chance is
         // `LCK × rate` clamped to 100%, so any unbounded source behind LCK makes the cap a
-        // question of when and never of whether — which is exactly what it used to be.
+        // question of when and never of whether.
         const unit = explainStats(hero({ classId: 'class_marksman', heroLevel: 50 })).units[0]!
         const lck = unit.stats.find(stat => stat.key === 'lck')!
         expect(lck.stages.some(stage => stage.unbounded)).toBe(false)
@@ -250,7 +250,7 @@ describe('the derived values', () => {
 
         // The level at which the compounding half of the pool — VIT on the defensive curve —
         // overtakes the flat half. Derived rather than pinned, because it is precisely what a
-        // retune of `BASE_HP` moves, and it moved from ~20 to ~128 when BASE_HP went to 1500.
+        // retune of `BASE_HP` moves.
         const baseVit = opening.stats.find(stat => stat.key === 'vit')!.final.toNumber()
         const parityLevel = 1 + Math.ceil(
             Math.log(BASE_HP / (baseVit * HP_PER_VIT)) / Math.log(STAT_PER_LEVEL_GROWTH_PACED)
@@ -267,9 +267,9 @@ describe('the derived values', () => {
     })
 
     it('says when crit chance has hit its ceiling — which now takes a build, not a level', () => {
-        // Three maxed Precision Edge Artifacts, out of the five Offense slots §4 allows. That
-        // is what reaching 100% costs now; levelling to 400 does not come close, which is the
-        // whole intent of taking LCK off the curve.
+        // Three maxed Artifacts carrying Precision Edge, out of the five slots §4 allows. That is
+        // what reaching 100% costs; levelling to 400 does not come close, which is the whole
+        // intent of taking LCK off the curve.
         const built = hero({
             classId: 'class_archer',
             equippedArtifacts: ['artifact_offense_1', 'artifact_offense_7', 'artifact_offense_10']

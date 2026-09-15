@@ -4,9 +4,8 @@
  * One formula, one stat, for every unit in the game — Hero, Champions and enemies all
  * resolve damage the same way.
  *
- * This module holds the *crit-averaged* path, which is what `settle.ts` consumes offline
- * and online alike. The per-hit rolled path (seeded boss and Arena fights) is `fight.ts`
- * in Phase 1 and does not exist yet.
+ * This module holds the *crit-averaged* path, which is what `settle.ts` consumes offline and
+ * online alike. The per-hit rolled path for seeded boss fights is `fight.ts`.
  */
 
 import {
@@ -98,11 +97,10 @@ export function maxHpFor(vit: DecimalSource): Decimal {
 }
 
 /**
- * Every unit attacks once per 3s at SPD 0; higher SPD shortens the interval down to a hard
- * floor of 1/3s, i.e. 3 attacks per second. Basic attacks only — skill cooldowns are a
- * separate model.
+ * Every unit attacks once per `BASE_ATTACK_INTERVAL_SECONDS` at SPD 0; higher SPD shortens the
+ * interval down to `MIN_ATTACK_INTERVAL_SECONDS`. Basic attacks only — see `cooldownFor`.
  *
- *     attackInterval(spd) = clamp(3 / (1 + spd × rate), 1/3, 3)
+ *     attackInterval(spd) = clamp(BASE / (1 + spd × rate), MIN, BASE)
  */
 export function attackIntervalFor(spd: DecimalSource): number {
     // Clamped at both ends, so the result is always a small real number however large SPD
@@ -117,21 +115,15 @@ export function attacksPerSecondFor(spd: DecimalSource): number {
 }
 
 /**
- * A skill's cooldown after SPD shortens it — the same curve `attackIntervalFor` rides, with
- * the skill's own base in place of the flat 3s and its own floor.
+ * A skill's cooldown after SPD shortens it — the same curve `attackIntervalFor` rides, with the
+ * skill's own base and `MIN_COOLDOWN_SECONDS` as the floor. Sharing the rate constant keeps SPD
+ * one stat with one shape (see `MIN_COOLDOWN_SECONDS`).
  *
  *     cooldownFor(base, spd) = clamp(base × factor / (1 + spd × rate), MIN_COOLDOWN_SECONDS, base)
  *
- * `classes-and-combat.md` §3 gives SPD exactly one job — "reduces cooldown duration across
- * the board, for every skill on every path" — which is this. Sharing the rate constant with
- * the autoattack interval is what keeps SPD one stat with one shape rather than two dials
- * that happen to share a name.
- *
- * `factor` is the flat cooldown reduction passive modifiers grant (Artifacts' Tempo category —
- * Quickening, Slipstream, Chain Reaction, Double Cast). Deliberately a **separate multiplicand
- * rather than folded into SPD**: SPD also drives the autoattack rate, so routing a cooldown-only
- * bonus through it would silently speed up basic attacks too. `MIN_COOLDOWN_SECONDS` still
- * floors the result, so stacking Tempo can shorten a cooldown but never invert it.
+ * `factor` is the flat cooldown reduction from passive modifiers (Artifacts' Tempo category).
+ * A **separate multiplicand rather than folded into SPD**: SPD also drives the autoattack rate,
+ * so a cooldown-only bonus routed through it would speed up basic attacks too.
  */
 export function cooldownFor(baseSeconds: number, spd: DecimalSource, factor = 1): number {
     const base = Math.max(0, baseSeconds)
@@ -150,8 +142,8 @@ export function cooldownFor(baseSeconds: number, spd: DecimalSource, factor = 1)
  * family either trivialises combat for a hoarder or decays to nothing for a spender, and
  * `gold-economy.md` §8 rejected both readings.
  *
- * A caller that has no idea what the player has banked passes nothing and gets 1.0 — the
- * wealth-neutral answer, which is also what keeps every pre-existing spec's numbers unmoved.
+ * A caller that has no idea what the player has banked passes nothing and gets 1.0, the
+ * wealth-neutral answer.
  */
 export function wealthFactorFor(bankedHours?: number): number {
     if (bankedHours === undefined || !Number.isFinite(bankedHours)) return 1
@@ -176,9 +168,6 @@ export function expectedHitDamage(attacker: UnitStats, defenderDef: DecimalSourc
 /**
  * `1 + chance × (multiplier − 1)` — the crit-averaged multiplier `settle` and the DPS
  * projections use, as opposed to `fight.ts` which rolls it.
- *
- * Extracted because it is derived identically in two places and the Decimal form is no
- * longer a one-liner either reader can check at a glance.
  */
 export function expectedCritFactor(unit: UnitStats): Decimal {
     return ONE.add(unit.critMultiplier.sub(ONE).mul(unit.critChance))
@@ -200,14 +189,11 @@ export function unitDps(unit: UnitStats, defenderDef: DecimalSource, defenderEva
  * The party's mitigation, resolved **once** from its summed PWR.
  *
  * The clamp is a subtraction in disguise — a unit deals `PWR − DEF/K` — so evaluating it per
- * attacker means N units multiply whatever survives *below* the zero-damage threshold while
- * the threshold itself never moves. Measured on the old model: at World 9 a solo Hero and a
- * four-unit party had identical depth ceilings, and the party was worth about a third of a
- * stage. Champions could never open a wall the Hero could not.
+ * attacker means N units multiply whatever survives below the threshold while the threshold
+ * itself never moves, and Champions could never open a wall the Hero could not.
  *
- * Pooling makes the party one body with `PWR = Σ`. Unit count now moves the ceiling, worth a
- * constant `ln(N)/ln(ENEMY_STEP_BASE)` stages at *every* depth rather than collapsing to
- * nothing at the clamp.
+ * Pooling makes the party one body with `PWR = Σ`, so unit count moves the threshold, worth a
+ * constant `ln(N)/ln(ENEMY_STEP_BASE)` stages at every depth.
  *
  * Offense only, deliberately: incoming damage stays per-defender (`expectedIncomingDps`), so
  * party size does not silently become a survivability stat too.
@@ -256,9 +242,7 @@ export function expectedIncomingDps(enemy: EnemyStats, defender: UnitStats): Dec
  * An empty front row is legal, in which case the back row is targetable immediately — the
  * concatenation handles that with no special case.
  *
- * This is the whole mechanical basis of the Tank archetype. Both docs specified it from the
- * start; the Phase 1 model simply never implemented it, which is what left Tank as a
- * cosmetic tag (`open-items.md` #11.2).
+ * This is the whole mechanical basis of the Tank archetype.
  */
 export function targetingOrder(units: readonly UnitStats[]): UnitStats[] {
     return [
@@ -276,7 +260,7 @@ export function targetingOrder(units: readonly UnitStats[]): UnitStats[] {
  * exactly as the doc requires, without needing a special case anywhere.
  *
  * A stable sort matters — with no aggro anchor fielded every unit carries `BASE_THREAT`, and
- * the order has to come out identical to the plain row split it replaced.
+ * the order must then be the party's own order within each row.
  */
 function byThreat(units: readonly UnitStats[]): UnitStats[] {
     return units

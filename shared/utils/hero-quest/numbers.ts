@@ -2,8 +2,8 @@
  * Big-number layer for Hero Quest.
  *
  * This is the only module in the game that imports `break_eternity.js` directly, so
- * swapping the library is a one-file edit. Enemy multipliers reach `5^1000` in an
- * infinite-prestige game, which no native number and no Postgres `numeric` can hold —
+ * swapping the library is a one-file edit. Enemy multipliers grow without bound in an
+ * infinite-prestige game, past what any native number or Postgres `numeric` can hold —
  * all math happens here in TS, and the DB only ever stores the `text` form.
  */
 

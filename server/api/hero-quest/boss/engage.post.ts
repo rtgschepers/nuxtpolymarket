@@ -29,11 +29,10 @@ import { randomInt } from '#shared/utils/random'
  * never engages one, win or lose, which is also why Void Shards can never be earned purely
  * from idle time (`idle-mechanics.md` §5).
  *
- * The client now calls this **automatically** while `document.visibilityState` reads `visible`
- * (`useHqAutoBoss`), so most requests arrive without anyone pressing anything. Nothing here
- * changes for that: presence is still what gates a boss, visibility is just a more direct reading
- * of it than a button press was. ⚠ The one consequence worth knowing is that the 400 below is now
- * a **routine** response rather than a misuse — the client projects kills fractionally and settles
+ * The client calls this **automatically** while `document.visibilityState` reads `visible`
+ * (`useHqAutoBoss`), so most requests arrive without anyone pressing anything. Presence is still
+ * what gates a boss; visibility is just a direct reading of it. ⚠ The consequence worth knowing
+ * is that the 400 below is a **routine** response rather than a misuse — the client projects kills fractionally and settles
  * floored, so it can reach a gate a beat before this route agrees, and it retries rather than
  * reporting. Do not "fix" that rejection into something softer; it is the check that stops a
  * client's optimism from moving the run.
@@ -68,7 +67,7 @@ export default defineEventHandler(async (event) => {
         const shopLevels = await getShopLevels(userId, tx)
         // Both read inside the lock — the boss is a DPS check against the *fielded party*, and a
         // stale collection would resolve it with the wrong Champions, the wrong Gear, the wrong
-        // equipped Skills or the wrong Artifacts. All four move the outcome now.
+        // equipped Skills or the wrong Artifacts.
         const collections = await getCollections(userId, tx)
         const hero = heroSnapshotOf(state, shopLevels, collections, parseFloat(bankedGold) || 0)
 
@@ -77,8 +76,8 @@ export default defineEventHandler(async (event) => {
         const seed = randomInt(1, 0x7FFFFFFF)
         const fight = runFight({ hero, position, seed })
 
-        // Win advances; anything else falls back one stage to farm. No auto-retry — the
-        // player chooses when to re-engage (`core-progression-and-prestige.md` §2).
+        // Win advances; anything else falls back one stage to farm (`core-progression-and-
+        // prestige.md` §2). No retry here — the run farms back up to the gate and engages again.
         const won = fight.outcome === 'win'
         const landing = won ? nextStage(position) : fallbackStage(position)
 
@@ -121,8 +120,8 @@ export default defineEventHandler(async (event) => {
                 heroLevel: hero.heroLevel,
                 classId: hero.classId,
                 enemyMaxHp: fight.enemyMaxHp,
-            /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
-            enemyMaxHps: fight.enemyMaxHps,
+                /** Per body, escort first — the replay needs it to track a mixed pack's HP bar. */
+                enemyMaxHps: fight.enemyMaxHps,
                 secondsElapsed: fight.secondsElapsed,
                 landing: { world: landing.world, stage: landing.stage }
             }

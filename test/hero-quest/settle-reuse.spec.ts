@@ -1,9 +1,6 @@
 /**
- * `settleHq` hands back what it already read, so `state.get.ts` stops querying for it twice.
- *
- * The endpoint used to re-fetch the shop levels and the whole collection immediately after the
- * settle transaction committed — the same two queries the settle had just run inside its lock,
- * one of them the heaviest in the request.
+ * `settleHq` hands back the shop levels and collection it already read inside its lock, so
+ * `state.get.ts` does not run those two queries a second time.
  *
  * Two properties are worth pinning, and neither is "it is faster":
  *

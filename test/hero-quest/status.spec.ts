@@ -1,9 +1,9 @@
 /**
  * The status engine (`shared/utils/hero-quest/status.ts`).
  *
- * No ability uses any of this yet — Stage 2 builds the engine, Stage 3 authors effects onto
- * it. So these specs test the *rules* rather than any content: stacking, refresh, expiry,
- * cadence, cleanse, immunity, shields, and the control kinds.
+ * These specs test the *rules* rather than any content — ability content is covered in
+ * `effects.spec.ts` and `fight.spec.ts`: stacking, refresh, expiry, cadence, cleanse, immunity,
+ * shields, and the control kinds.
  *
  * Every rule here was decided rather than transcribed, because no design doc defines a status
  * system while both ability rosters assume one. Each spec names the rule it pins down, so a

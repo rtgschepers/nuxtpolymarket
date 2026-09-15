@@ -84,7 +84,7 @@ describe('party composition', () => {
         const wall = solo[0]!.pwr.mul(K)
         const trio = partyUnitStats(hero(30, [champion(), champion()]))
 
-        // "Shut out" means pinned to MIN_DAMAGE since the floor landed, not zero. Measured
+        // "Shut out" means pinned to MIN_DAMAGE, not zero. Measured
         // against an unreachable DEF rather than hardcoded, so it survives a retune.
         expect(partyDps(solo, wall).toNumber()).toBe(partyDps(solo, D('1e300')).toNumber())
         expect(partyDps(trio, wall).toNumber()).toBeGreaterThan(partyDps(trio, D('1e300')).toNumber())

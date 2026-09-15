@@ -3,9 +3,8 @@
  *
  * **Placeholders, and deliberately so.** World and enemy design is the last genuinely
  * greenfield pass in the project (`open-items.md` #6) and has not happened — no themes, no
- * art direction, no enemy rosters, no boss identities. Phase 1 is testing the *curve*, and
- * the curve does not read any of this: every stat comes from `settle.enemyStatsAt`, which
- * knows only the run index. Nothing here affects a single number.
+ * art direction, no enemy rosters, no boss identities. Nothing here affects a single number:
+ * every stat comes from `settle.enemyStatsAt`, which knows only the run index.
  *
  * What is real and must survive the design pass: **World 10 is The Void.** Void Shards are
  * named after it (`economy-and-currencies.md` §3), so the world pass either keeps the name

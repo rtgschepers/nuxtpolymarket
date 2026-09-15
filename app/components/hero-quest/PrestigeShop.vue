@@ -2,10 +2,9 @@
 /**
  * The prestige shop.
  *
- * **Two currencies, since Loadouts.** Every track was Void Shards until `loadouts.md` §3 priced
- * Loadout slots in Gems — deliberately, because every other slot track gates real party power
- * while a Loadout slot gates only taps. So affordability is checked against whichever balance the
- * track names, and the icon says which one is being spent.
+ * **Two currencies.** Loadout slots are priced in Gems (`loadouts.md` §3), everything else in
+ * Void Shards, so affordability is checked against whichever balance the track names and the icon
+ * says which one is being spent.
  */
 defineProps<{
     tracks: {

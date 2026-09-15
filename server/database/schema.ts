@@ -897,8 +897,8 @@ export const hackHistory = pgTable('hack_history', {
  * Two things settle never does. It never resolves a boss — Stage 5 and Stage 10 park the run
  * and wait for a live `boss/engage` (which is why Void Shards can never be earned offline) —
  * and it never resets `heroLevel`/`heroXp`, which persist across prestige and class switches.
- * Prestige writes four columns and increments `prestige`; everything else survives by simply
- * not being written.
+ * Prestige resets the run-position group and increments `prestige`; everything else survives by
+ * simply not being written.
  *
  * Gold lives on the shared `user.balance` and is only ever touched through
  * server/utils/balance.ts. Only Void Shards are Hero Quest's own currency, and it is `text`
@@ -927,18 +927,11 @@ export const hqState = pgTable('hq_state', {
    * Progress toward the *next* kill, in kills — always `[0, 1)`. The remainder a settle could
    * not bank as a whole kill, carried so the next one can.
    *
-   * Load-bearing, not a rounding nicety. Every state read settles, and a settle without this
-   * discards up to one kill each time: an hour of presence settled in sixty polls paid 12%
-   * less than the same hour settled in one window, and a player reloading faster than their
-   * `secondsPerKill` progressed *never*, since `floor()` of a sub-1 budget is zero every time.
-   *
-   * Kills and not seconds, deliberately. Banked seconds are only worth kills at the rate that
-   * measured them, so a player stalled at a wall would pile up hours of unspent time and cash
-   * it all the instant an upgrade cut the rate. A fraction of a kill is worth the same
-   * fraction at any rate, and is bounded by one by construction.
+   * Load-bearing, not a rounding nicety — see `SettleInput.killFraction` for why, and why it is
+   * kills rather than seconds.
    */
   killFraction: doublePrecision('kill_fraction').notNull().default(0),
-  /** Parked at an unengaged Stage 5/10, waiting for the player to start the fight. */
+  /** Parked at an unengaged Stage 5/10. Always written as `isBossStage(stage)`; readers derive it from `stage`. */
   atBossGate: boolean('at_boss_gate').notNull().default(false),
   /**
    * The World 10 / Stage 10 super boss has been beaten, so prestige is available.
@@ -976,8 +969,7 @@ export const hqState = pgTable('hq_state', {
 
   // ── The rest of the live loadout (`loadouts.md` §1) ──────────────────────────────
   //
-  // A Loadout is a snapshot of five things: party, formation, Skills, Artifacts and Gear. The
-  // first two shipped with Champions; these three arrive with the gachas that fill them. IDs
+  // A Loadout is a snapshot of five things: party, formation, Skills, Artifacts and Gear. IDs
   // only, same as the party — star/level live in `hqCollection` and are never duplicated here.
   //
   // `hqLoadouts` mirrors this exact column group per saved slot, which is why they are grouped.
@@ -992,18 +984,14 @@ export const hqState = pgTable('hq_state', {
    * Gear slot → item ID, for all six slots from account start (`gear-equipment.md` §1, §3).
    *
    * Persisted rather than derived because equip is **manual**: the strongest owned piece and the
-   * equipped one are allowed to differ, and closing that gap is the player's decision. An
-   * auto-equip design would have needed no column at all, which is exactly why the doc's revision
-   * to manual added one.
+   * equipped one are allowed to differ, and closing that gap is the player's decision.
    */
   equippedGear: jsonb('equipped_gear').$type<Record<string, string>>().notNull().default({}),
 
   // ── Gacha currencies (`tech-architecture.md` §3) ─────────────────────────────────
   //
   // Plain integers, not Decimal: Seal and Essence balances are bounded by real spending, not
-  // by the exponential curve. All four of each are declared together because §3 specifies
-  // them as one group and `hqCollection` already serves all four systems — Phase 3 adds Gear,
-  // Skills and Artifacts with no migration. Only the Guild pair is written in Phase 2.
+  // by the exponential curve. One Seal and one Essence column per gacha system.
   forgeSeals: integer('forge_seals').notNull().default(0),
   guildSeals: integer('guild_seals').notNull().default(0),
   skillSeals: integer('skill_seals').notNull().default(0),
@@ -1115,10 +1103,9 @@ export const hqLoadouts = pgTable('hq_loadouts', {
 ])
 
 /**
- * Every purchasable track in the game, whatever currency pays for it. Deliberately generic:
- * Phase 2's party-slot tracks and Phase 4's raid-key tracks are new `upgradeId` values, not
- * new tables. `level` is an integer, so the conditional bump is a safe compare-and-swap and
- * doubles as the claim-then-reward mutex for the purchase.
+ * Every purchasable track in the game, whatever currency pays for it. Deliberately generic: a new
+ * track is a new `upgradeId` value, not a new table. `level` is an integer, so the conditional
+ * bump is a safe compare-and-swap and doubles as the claim-then-reward mutex for the purchase.
  */
 export const hqShopUpgrades = pgTable('hq_shop_upgrades', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
