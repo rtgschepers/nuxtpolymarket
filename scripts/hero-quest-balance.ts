@@ -12,6 +12,7 @@
  */
 
 import {
+    BASE_ATTACK_INTERVAL_SECONDS,
     BASE_KILL_COUNT,
     BOSS_TIMER_SECONDS,
     BASE_GOLD,
@@ -19,6 +20,7 @@ import {
     GOLD_TENURE_CRAWL,
     GOLD_TENURE_DAYS,
     MAX_OFFLINE_EFFICIENCY_LEVEL,
+    MIN_ATTACK_INTERVAL_SECONDS,
     MIN_SECONDS_PER_KILL,
     STAGES_PER_WORLD,
     WORLD_COUNT
@@ -235,12 +237,14 @@ function tenureCurve() {
 }
 
 function attackRate() {
-    console.log('\nSPD → attack rate (basic attacks; 1 per 3s at SPD 0, hard cap 3/sec)\n')
+    const capPerSecond = 1 / MIN_ATTACK_INTERVAL_SECONDS
+    console.log(`\nSPD → attack rate (basic attacks; 1 per ${BASE_ATTACK_INTERVAL_SECONDS}s at SPD 0, hard cap ${capPerSecond}/sec)\n`)
     console.table([0, 10, 25, 50, 100, 200, 400, 800, 10_000].map(spd => ({
         SPD: spd,
         'interval (s)': (1 / attacksPerSecondFor(spd)).toFixed(3),
         'attacks/sec': attacksPerSecondFor(spd).toFixed(3),
-        'at cap': attacksPerSecondFor(spd) >= 2.999 ? 'yes' : ''
+        // Tolerance, not an exact compare: the rate is a reciprocal of a clamped float.
+        'at cap': attacksPerSecondFor(spd) >= capPerSecond - 0.001 ? 'yes' : ''
     })))
 }
 
