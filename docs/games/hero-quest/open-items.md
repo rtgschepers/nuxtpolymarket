@@ -389,7 +389,7 @@ Two bugs, both of the "progress silently disappears" kind.
 **Decided in code rather than in a doc revision**, the same situation as #20 — recorded here so the locked text is not taken at face value. The details worth knowing:
 
 - **One kill of grace** (`AUTO_ENGAGE_GRACE_KILLS`, clamped 1–10s). The client projects kills fractionally and the server floors them, so the screen reaches a gate before the server agrees. The early engage is rejected with a 400, which is now routine: swallowed and retried after 3s, never shown. **Do not soften the rejection server-side.**
-- **Holds on a cleared run.** A won super boss leaves the run parked on its gate with `runCleared` set; firing there would re-fight it forever and pay Milestone Seals each time. ⚠ **Manual re-engage has the same shape and was flagged, not fixed** — worth checking whether a cleared run's gate still accepts a manual engage.
+- **Holds on a cleared run.** A won super boss leaves the run parked on its gate with `runCleared` set; firing there would re-fight it forever and pay Milestone Seals each time. ~~**Manual re-engage has the same shape and was flagged, not fixed.**~~ **Confirmed and fixed 2026-09-15.** `boss/engage` never checked `runCleared`, so a cleared run's final boss could be re-fought indefinitely by button or by script, each win paying the boss and world-clear Milestone Seals again (4 of every type) — and a burst on the *first* clear paid once per queued request, since the lock serializes them but a win there does not move the run. The fight now lives in `resolveBossEngage` (`server/utils/hero-quest.ts`), which rejects a cleared run under the row lock; the button is hidden on a cleared run; `boss-engage.spec.ts` bursts it against a real lock (verified to fail with the guard removed: 10 of 10 paid).
 - An auto-engaged replay closes itself after 2.5s; a manual one waits for the player.
 
 Decision logic is pure and specced (`app/utils/hero-quest-auto-boss.ts`, `auto-boss.spec.ts`). For the watchlist: whether an unattended boss loop reads as "the game plays itself" or as losing the one moment the game asked for attention.
@@ -478,7 +478,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - **Play a session against the tuned loop** and log it in `playtest-notes.md`. The predictions table there is refreshed; session 1 is the only one on record.
    - **Decide the Gold consequences (#23)** — first-week income, the lost calendar anchors, and whether the Seal ladder is re-derived now or after world design.
    - **Confirm the solo shape (#22.1)** — no prestige without a party is a consequence of the design, not yet a stated choice.
-   - **Check the cleared-run manual re-engage** flagged in #25.
+   - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
 3. **World & Enemy Design (#6)** — the largest remaining greenfield design item. Resolves #5 (world naming). The curve values are no longer parked on it (#10), but enemy kits that change fight length have to be re-measured against #22.
 4. **The four remaining quick calls (#1-4)** — all answerable in one short pass, none depend on anything else.
 5. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus the two things Phase 3 deliberately left: `global-power-number.md` and `loadouts.md` §4's per-raid auto-apply. GPN is the natural first piece: it was a Phase 3 exit criterion, and Arena matchmaking (#2) cannot be decided without it.
