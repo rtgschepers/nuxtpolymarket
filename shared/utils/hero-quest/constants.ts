@@ -1269,6 +1269,21 @@ export const SEAL_LADDER_GROWTH: Readonly<Record<string, number>> = {
     artifact: 1.0007
 }
 
+// ── Global Power Number ────────────────────────────  global-power-number.md §2
+
+/**
+ * How much DEF multiplies effective HP in the Global Power Number:
+ *
+ *     memberEHP = maxHp × (1 + DEF / EHP_DEF_CONSTANT) / (1 − EVA)
+ *
+ * **Not combat's `K`.** Mitigation is relative to an attacker's PWR and means nothing without one;
+ * GPN needs an absolute "how much punishment can this party take", so DEF converts straight into
+ * an EHP multiplier. At 10 a level-1 Hero's DEF doubles its EHP. DEF rides the level curve like HP
+ * does, so EHP grows as the stat curve squared — the same order as DPS, which keeps the geometric
+ * mean from leaning on either side.
+ */
+export const EHP_DEF_CONSTANT = 10 // UNTUNED ╧
+
 // ── Prestige currency ──────────────────────────────  economy-and-currencies.md §3
 
 /**

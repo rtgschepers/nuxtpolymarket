@@ -17,6 +17,7 @@
 import { describe, expect, it } from 'vitest'
 import {
     HQ_CURRENCY_DOCS,
+    HQ_POWER_DOC,
     HQ_STAT_DOCS,
     HQ_STAT_DOC_BY_KEY
 } from '../../app/utils/hero-quest-wiki'
@@ -24,8 +25,10 @@ import {
     BASE_HP,
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
+    EHP_DEF_CONSTANT,
     HP_PER_VIT,
     K,
+    MAX_EVASION,
     MIN_DAMAGE
 } from '../../shared/utils/hero-quest/constants'
 import type { HqStatKey } from '../../shared/utils/hero-quest/types'
@@ -93,6 +96,18 @@ describe('formulas track the live constants', () => {
             // wandered into the wrong field.
             expect(doc.formula, doc.key).toMatch(/\d/)
         }
+    })
+})
+
+describe('the Global Power entry', () => {
+    it('quotes the live EHP constant and evasion cap', () => {
+        expect(HQ_POWER_DOC.formula).toContain(`DEF ÷ ${EHP_DEF_CONSTANT})`)
+        expect(HQ_POWER_DOC.formula).toContain(`at most ${MAX_EVASION * 100}%`)
+    })
+
+    it('keeps numbers out of the tooltip line, like the stats', () => {
+        expect(HQ_POWER_DOC.short).not.toMatch(/\d/)
+        expect(HQ_POWER_DOC.short.length).toBeLessThan(120)
     })
 })
 

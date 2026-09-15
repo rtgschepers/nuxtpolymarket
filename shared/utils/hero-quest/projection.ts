@@ -318,13 +318,27 @@ export function partyAbilityDps(
     defenderDef: DecimalSource,
     packSize: number
 ): Decimal {
-    if (units.length === 0) return ZERO
+    return partyAbilityDpsByUnit(hero, units, defenderDef, packSize)
+        .reduce((total, unitDps) => total.add(unitDps), ZERO)
+}
+
+/**
+ * `partyAbilityDps`, one entry per unit in `partyUnitStats` order — for callers that itemise a
+ * party (the Global Power Number) and need each body's share rather than only the total.
+ */
+export function partyAbilityDpsByUnit(
+    hero: HeroSnapshot,
+    units: readonly UnitStats[],
+    defenderDef: DecimalSource,
+    packSize: number
+): Decimal[] {
+    if (units.length === 0) return []
     const party = armedParty(hero, units)
     const penetration = ONE.sub(partyMitigation(units, defenderDef))
     const wealth = wealthFactorFor(hero.wealthHours)
 
-    return party.reduce((total, { stats, kit }) => {
-        if (stats.pwr.lte(0)) return total
+    return party.map(({ stats, kit }) => {
+        if (stats.pwr.lte(0)) return ZERO
         const critFactor = expectedCritFactor(stats)
 
         return kit.reduce((unitTotal, entry) => {
@@ -349,8 +363,8 @@ export function partyAbilityDps(
                 : critFactor
 
             return unitTotal.add(perHit.mul(crit).mul(bodies).div(cooldown))
-        }, total)
-    }, ZERO)
+        }, ZERO)
+    })
 }
 
 /**

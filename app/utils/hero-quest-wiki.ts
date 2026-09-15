@@ -3,8 +3,10 @@ import {
     BASE_HP,
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
+    EHP_DEF_CONSTANT,
     HP_PER_VIT,
     K,
+    MAX_EVASION,
     MIN_ATTACK_INTERVAL_SECONDS,
     MIN_COOLDOWN_SECONDS,
     MIN_DAMAGE,
@@ -114,6 +116,23 @@ export const HQ_STAT_DOCS: readonly HqStatDoc[] = [
 export const HQ_STAT_DOC_BY_KEY: Readonly<Record<string, HqStatDoc>> = Object.fromEntries(
     HQ_STAT_DOCS.map(doc => [doc.key, doc])
 )
+
+/**
+ * The Global Power Number (`global-power-number.md`) — one glossary entry, read by the battle
+ * screen's tooltip and the wiki's Combat page, on the same one-definition rule as the stats.
+ */
+export const HQ_POWER_DOC = {
+    name: 'Global Power',
+    short: 'Your whole fielded party\'s strength, as one number.',
+    detail: 'Global Power reads the real stats your party fights with — damage per second and '
+        + 'effective health — and combines them. Everything that makes the party stronger moves '
+        + 'it: levels, Champions fielded and owned, equipped and collected Gear, Skills and '
+        + 'Artifacts. It is a live reading, so benching a strong Champion or unequipping an '
+        + 'Artifact lowers it. Because the two multiply, a party that is all damage and no '
+        + 'health — or the reverse — scores lower than a balanced one with the same totals.',
+    formula: `power = party DPS × party effective HP; effective HP = HP × (1 + DEF ÷ ${EHP_DEF_CONSTANT}) `
+        + `÷ (1 − evasion, at most ${pct(MAX_EVASION)})`
+} as const
 
 /**
  * Currencies, and — deliberately — which of them this build actually has.

@@ -169,6 +169,19 @@ const awayReport = computed(() => {
           <span class="text-sm text-muted">Level {{ liveHero.level }}</span>
         </div>
 
+        <!--
+          The payload's power, not a projection: it needs the full snapshot, which only the
+          server has. It moves when the next payload lands — every poll, pull, equip and level
+          the server has settled.
+        -->
+        <HeroQuestGlobalPower
+          v-if="hero?.power"
+          class="mb-4"
+          :gpn="hero.power.gpn"
+          :dps="hero.power.dps"
+          :ehp="hero.power.ehp"
+        />
+
         <div class="mb-4">
           <div class="flex items-center justify-between text-xs text-muted mb-1">
             <span>Experience</span>

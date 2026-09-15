@@ -53,6 +53,21 @@ import { ARCHETYPE_DEFINITIONS } from '#shared/utils/hero-quest/content/champion
     </HeroQuestWikiSection>
 
     <HeroQuestWikiSection
+      :title="HQ_POWER_DOC.name"
+      icon="i-lucide-zap"
+      lead="The headline number on the battle screen."
+    >
+      <div class="rounded-lg border border-default bg-elevated/40 p-4 space-y-2">
+        <p class="text-sm text-muted">
+          {{ HQ_POWER_DOC.detail }}
+        </p>
+        <p class="font-mono text-xs text-default bg-background rounded px-2 py-1.5 overflow-x-auto whitespace-nowrap">
+          {{ HQ_POWER_DOC.formula }}
+        </p>
+      </div>
+    </HeroQuestWikiSection>
+
+    <HeroQuestWikiSection
       title="How a hit is worked out"
       icon="i-lucide-swords"
     >

@@ -107,6 +107,7 @@ import {
 import { runFight } from '#shared/utils/hero-quest/fight'
 import { randomInt } from '#shared/utils/random'
 import { economyBonuses, partyUnitStats } from '#shared/utils/hero-quest/stats'
+import { globalPower } from '#shared/utils/hero-quest/power'
 import type { StatsExplanation } from '#shared/utils/hero-quest/explain'
 import { D, ZERO, decPow, fromStore, toStore } from '#shared/utils/hero-quest/numbers'
 import { CLASS_NODES, childrenOf, getClass, kitFor } from '#shared/utils/hero-quest/content/classes'
@@ -816,7 +817,22 @@ export function serializeHero(state: HqStateRow, hero: HeroSnapshot) {
             /** A probability, genuinely a number — not a Decimal that needs stringifying. */
             critChance: self.critChance,
             critMultiplier: self.critMultiplier.toString()
-        }
+        },
+        /**
+         * The Global Power Number (`global-power-number.md`) and the two sums it is the geometric
+         * mean of. Computed on read from the same snapshot the stats above come from, so it moves
+         * with every level, pull and equip the moment the next payload lands.
+         */
+        power: serializePower(hero)
+    }
+}
+
+function serializePower(hero: HeroSnapshot) {
+    const power = globalPower(hero)
+    return {
+        gpn: power.gpn.toString(),
+        dps: power.dps.toString(),
+        ehp: power.ehp.toString()
     }
 }
 
