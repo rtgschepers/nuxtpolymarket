@@ -12,8 +12,7 @@ import { WORLDS } from '#shared/utils/hero-quest/content/worlds'
  * Every table below is a `v-for` over the content module the game itself rolls against. Nothing
  * here is transcribed, so a roster edit updates this page and there is no second copy to forget.
  * That is the entire reason this page exists as code rather than as a markdown doc: rosters still
- * change, and one of them (Artifacts) ships with placeholder names that a later pass will
- * replace wholesale.
+ * change.
  *
  * One roster at a time. Rendering all 200-odd entries at once is a page nobody scrolls, and the
  * chips double as the table of contents.
@@ -70,15 +69,6 @@ function parentName(parentId: string | null) {
         exists; if it changes, this changes with it.
       </p>
     </div>
-
-    <UAlert
-      color="neutral"
-      variant="subtle"
-      icon="i-lucide-pencil-ruler"
-      title="Some names are placeholders"
-      description="Artifact names are stand-ins awaiting a naming pass. Their mechanics are real;
-        their names are not final."
-    />
 
     <div class="flex flex-wrap gap-1">
       <UButton

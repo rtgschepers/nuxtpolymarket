@@ -15,10 +15,9 @@
  * progression (§7).
  *
  * **Not specified:** Artifact *names* and the per-item rarity assignment of pool effects — §3
- * leaves both "to implementation", the same deferral Champions had. The names below are
- * therefore **placeholders**, derived from the item's own primary effect and rarity epithet
- * rather than authored, and marked as such. They are the same class of stand-in the World roster
- * already ships with; the naming pass replaces `ARTIFACT_TITLES` and changes no code.
+ * leaves both "to implementation", the same deferral Champions had. Names were authored in the
+ * 2026-09-15 naming pass (`ARTIFACT_NAMES`); the effect assignment is still a shared distribution
+ * table (`ARTIFACT_EFFECT_SLOTS`) rather than 48 authored choices.
  *
  * ## Every effect is rendered as a passive modifier, and several are approximations
  *
@@ -36,7 +35,6 @@ import {
 import {
     RARITIES,
     RARITY_EFFECT_LINES,
-    RARITY_EPITHET,
     RARITY_STAT_MULTIPLIER,
     investmentScalar
 } from '../gacha'
@@ -298,7 +296,7 @@ const ARTIFACT_EFFECT_SLOTS: readonly (readonly number[])[] = [
 export interface ArtifactDefinition {
     /** Stable string ID. Save data references this, never an index. */
     id: string
-    /** **Placeholder** — see the module header. `ARTIFACT_TITLES` is the naming pass's one edit. */
+    /** Authored in `ARTIFACT_NAMES`. Display only — saves reference `id`. */
     name: string
     category: ArtifactCategory
     rarity: Rarity
@@ -307,32 +305,79 @@ export interface ArtifactDefinition {
 }
 
 /**
- * Placeholder titles, twelve per category, in `ROSTER_RARITIES` order.
+ * Artifact names, twelve per category, in `ROSTER_RARITIES` order — so each name sits beside the
+ * effect slot in `ARTIFACT_EFFECT_SLOTS` it was written for.
  *
- * **Not authored names.** `artifacts-dig-site-gacha.md` §3 defers Artifact naming to a content
- * pass that has not happened, and 48 bespoke names must not be invented to fill the gap. These are stand-ins in the register the game
- * already uses — the same treatment the World roster ships with — chosen so the collection grid
- * reads as something rather than as `artifact_offense_mythic_1`.
+ * **Relics dug out of the ten worlds** (`content/worlds.ts`). Commons are frontier odds and ends
+ * from Thornwick Vale and Mirewood; a relic that belonged to a world's boss or super boss sits
+ * higher than that world's rank-and-file; and every Mythic comes from Duskspire (World 6) or
+ * deeper. Each name points at what its effects do: the
+ * war drum ramps, the distress bell is Overdrive's last-member-standing speed, the grave robber's
+ * spade is a Gold-on-kill dig.
  *
- * Every one is a plain noun evoking its category's domain, deliberately generic so nothing here
- * looks like a decided identity. Replacing this table is the entire naming pass; no code moves.
+ * **Rules, enforced in `content.spec.ts`:** every name is unique (§4 — one owned instance per named
+ * Artifact), none repeats a pool effect's name, and none reuses a Champion given name or title.
+ * No rarity epithet: the card already shows rarity as colour and label, and "Exalted Citadel" was
+ * the Gear-style stand-in this replaces.
+ *
+ * Changing a name here never touches a save — collections and loadouts reference the ID.
  */
-const ARTIFACT_TITLES: Readonly<Record<ArtifactCategory, readonly string[]>> = {
+const ARTIFACT_NAMES: Readonly<Record<ArtifactCategory, readonly string[]>> = {
     offense: [
-        'Fang', 'Cinder', 'Edge', 'Ember', 'Talon', 'Spark',
-        'Warbrand', 'Ruin', 'Wrath', 'Sunder', 'Cataclysm', 'Apex'
+        'Goblin Cudgel', // Might Surge
+        "Tracker's Flint", // Precision Edge
+        "Slagjaw's Tooth", // Killing Blow
+        'Frostbound War Drum', // Momentum
+        'Dawnbreak Arrowhead', // Opening Strike
+        'Last Legion Standard', // Last Stand
+        "Hrimgar's Icebreaker", // Might Surge + Shattering Blow
+        'Eye of Pyrrhax', // Precision Edge + Killing Blow
+        'Stormcrown Talon', // Momentum + Shattering Blow
+        'Banner of the Bonefields', // Opening Strike + Last Stand
+        "Ithren's Burning Sigil", // Might Surge + Precision Edge + Killing Blow
+        'Key to the Last Door' // Momentum + Opening Strike + Last Stand
     ],
     defense: [
-        'Shell', 'Ward', 'Plate', 'Anchor', 'Bastion', 'Bulwark',
-        'Aegis', 'Redoubt', 'Citadel', 'Keystone', 'Immutable', 'Bedrock'
+        'Hedgeknight Buckler', // Iron Ward
+        'Mireroot Charm', // Vital Bloom
+        'Cinderscale Shard', // Deflection
+        'Rimeholt Hearthstone', // Steady Ground
+        'Tideglass Pendant', // Bulwark's Legacy
+        "Mother Leech's Vial", // Guardian's Echo
+        "Grave Marshal's Pauldron", // Iron Ward + Unbroken
+        'Rotheart Barkshield', // Vital Bloom + Deflection
+        "Glacier Titan's Heart", // Steady Ground + Unbroken
+        "Maerith's Pearl", // Bulwark's Legacy + Guardian's Echo
+        "Ossuar's Bone Mantle", // Iron Ward + Vital Bloom + Deflection
+        "Vesper's Forgotten Hymn" // Steady Ground + Bulwark's Legacy + Guardian's Echo
     ],
     tempo: [
-        'Feather', 'Current', 'Quill', 'Eddy', 'Gale', 'Rush',
-        'Slipknot', 'Cascade', 'Tempo', 'Zephyr', 'Continuum', 'Instant'
+        'Bramblefoot Sandals', // Swift Current
+        'Marsh Hourglass', // Quickening
+        'Ashwalker Anklet', // Flow State
+        'Frostbite Horn', // Alacrity Surge
+        "Sailor's Distress Bell", // Overdrive
+        "Acolyte's Prayer Beads", // Slipstream
+        "Halvane's Spellglass", // Swift Current + Chain Reaction
+        "Korr's Marching Drum", // Quickening + Flow State
+        'Skyshard Prism', // Alacrity Surge + Chain Reaction
+        'Zephyrax Wingbone', // Overdrive + Slipstream
+        'Fraying Thread', // Swift Current + Quickening + Flow State
+        "Herald's Stopped Clock" // Alacrity Surge + Overdrive + Slipstream
     ],
     fortune: [
-        'Coin', 'Nugget', 'Trinket', 'Ledger', 'Hoard', 'Cache',
-        'Reliquary', 'Vault', 'Fortune', 'Bounty', 'Treasury', 'Providence'
+        'Thornwick Copper', // Prospector's Fortune
+        'Hedge-Witch Almanac', // Scholar's Boon
+        'Mirewood Night Lantern', // Night Owl
+        'Kobold Prospecting Pick', // Lucky Dig
+        'Rimeholt Saga Stone', // Quick Study
+        'Amarath Tide Ledger', // Compound Interest
+        'Sunken Doubloon', // Prospector's Fortune + Windfall
+        'Duskspire Star Chart', // Scholar's Boon + Night Owl
+        "Grave Robber's Spade", // Lucky Dig + Windfall
+        'Tome of Unfinished Lessons', // Quick Study + Compound Interest
+        'Hoard of the Shattered Sky', // Prospector's Fortune + Scholar's Boon + Night Owl
+        'Last Coin of the Void' // Lucky Dig + Quick Study + Compound Interest
     ]
 }
 
@@ -344,7 +389,7 @@ function artifactIdFor(category: ArtifactCategory, slot: number): string {
 /**
  * **All 48.** Four categories × two per rarity × six rarities (§3).
  *
- * Assembled from `ARTIFACT_TITLES` and `ARTIFACT_EFFECT_SLOTS` rather than written out — the same
+ * Assembled from `ARTIFACT_NAMES` and `ARTIFACT_EFFECT_SLOTS` rather than written out — the same
  * two-table construction the Champion roster uses, and for the same reason: the structural rules
  * become consequences of one distribution instead of 48 opportunities to break one.
  */
@@ -353,7 +398,7 @@ export const ARTIFACTS: readonly ArtifactDefinition[] = ARTIFACT_CATEGORIES.flat
         const pool = ARTIFACT_EFFECT_POOL[category]
         return {
             id: artifactIdFor(category, slot),
-            name: `${RARITY_EPITHET[rarity]} ${ARTIFACT_TITLES[category][slot]}`,
+            name: ARTIFACT_NAMES[category][slot]!,
             category,
             rarity,
             effects: ARTIFACT_EFFECT_SLOTS[slot]!.map(index => pool[index]!)

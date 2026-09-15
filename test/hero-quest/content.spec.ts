@@ -658,6 +658,32 @@ describe('hero-quest artifact content', () => {
         expect(new Set(ARTIFACTS.map(entry => entry.id)).size).toBe(ARTIFACTS.length)
     })
 
+    describe('Artifact names', () => {
+        it('gives every Artifact its own name — §4 owns one instance per named Artifact', () => {
+            expect(new Set(ARTIFACTS.map(entry => entry.name)).size).toBe(ARTIFACTS.length)
+        })
+
+        it('never names an Artifact after a pool effect, which would read as the effect itself', () => {
+            const effectNames = new Set(
+                ARTIFACT_CATEGORIES.flatMap(category => ARTIFACT_EFFECT_POOL[category]).map(effect => effect.name)
+            )
+            for (const entry of ARTIFACTS) {
+                expect(effectNames.has(entry.name), entry.id).toBe(false)
+            }
+        })
+
+        it('never reuses a Champion given name or title', () => {
+            const championWords = new Set(
+                CHAMPIONS.flatMap(champion => [champion.givenName, champion.title]).map(word => word.toLowerCase())
+            )
+            for (const entry of ARTIFACTS) {
+                // Split on the possessive too, so "Warden's Seal" would still count as "Warden".
+                const clashes = entry.name.split(/[\s,-]+|'s\b/).filter(word => championWords.has(word.toLowerCase()))
+                expect(clashes, `${entry.id}: ${entry.name}`).toEqual([])
+            }
+        })
+    })
+
     it('scales an effect line with rarity and with the copy own investment', () => {
         // §6: magnitudes ride the same `(star × 10 + level)` scalar as Gear and the Champion
         // passive. Both axes, since only one of them is stated in the shared doc.
