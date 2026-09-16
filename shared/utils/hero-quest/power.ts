@@ -4,7 +4,7 @@
  *     partyEffectiveDPS = Σ member DPS                      (autoattacks + ability kit, crit-averaged)
  *     memberEHP         = maxHp × (1 + DEF / EHP_DEF_CONSTANT) / (1 − EVA)
  *     partyEffectiveEHP = Σ memberEHP
- *     GPN               = partyEffectiveDPS × partyEffectiveEHP
+ *     GPN               = √(partyEffectiveDPS × partyEffectiveEHP) × GPN_DISPLAY_SCALE
  *
  * **A pure function of the fielded party's real stats, and nothing else.** There is no collection
  * term and no progress term: everything that makes the party stronger — levels, class, the
@@ -13,10 +13,13 @@
  * case. That is the whole design (§1): a separate weighted formula would drift from what the party
  * can actually do.
  *
- * **A product, not the geometric mean** (changed 2026-09-15). The doc took `sqrt` of it to keep
- * the display the same size as either input. A square root is monotonic, so it never changed which
- * party ranks above which — only how big the number reads — and the number is meant to be big. The
- * product still rewards balance: for a fixed budget it peaks when neither side is neglected.
+ * **The geometric mean, lifted by a flat scale** (the root was dropped 2026-09-15 and restored
+ * 2026-09-16). The bare product blows the display far past either stat it is made of, which reads
+ * as a balance rather than as a power rating; the root holds it to the same order of magnitude as
+ * DPS and EHP, and `GPN_DISPLAY_SCALE` then puts daylight between it and them so it is not
+ * mistaken for one. Both steps are monotonic, so neither changes which party ranks above which —
+ * only how big the number reads. The mean still rewards balance: for a fixed budget it peaks when
+ * neither side is neglected.
  *
  * **It can go down** (§3). Benching a Champion or unequipping an Artifact drops it, which is what
  * lets Arena matchmaking compare it with a defender's Defense GPN.
@@ -32,7 +35,7 @@
  * recompute it from the same snapshot.
  */
 
-import { EHP_DEF_CONSTANT, MAX_EVASION } from './constants'
+import { EHP_DEF_CONSTANT, GPN_DISPLAY_SCALE, MAX_EVASION } from './constants'
 import { partyDps } from './combat'
 import { partyAbilityDpsByUnit } from './projection'
 import { partyUnitStats } from './stats'
@@ -41,7 +44,7 @@ import type { Decimal } from './numbers'
 import type { HeroSnapshot, UnitStats } from './types'
 
 export interface GlobalPower {
-    /** `dps × ehp`. */
+    /** `√(dps × ehp) × GPN_DISPLAY_SCALE`. */
     gpn: Decimal
     /** The whole fielded party's effective DPS, against zero DEF. */
     dps: Decimal
@@ -73,5 +76,5 @@ export function globalPower(hero: HeroSnapshot): GlobalPower {
 
     const dps = unitRows.reduce((total, row) => total.add(row.dps), ZERO)
     const ehp = unitRows.reduce((total, row) => total.add(row.ehp), ZERO)
-    return { gpn: dps.mul(ehp), dps, ehp, units: unitRows }
+    return { gpn: dps.mul(ehp).sqrt().mul(GPN_DISPLAY_SCALE), dps, ehp, units: unitRows }
 }

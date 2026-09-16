@@ -4,6 +4,7 @@ import {
     CRIT_CHANCE_PER_POINT,
     CRIT_DAMAGE_PER_POINT,
     EHP_DEF_CONSTANT,
+    GPN_DISPLAY_SCALE,
     HP_PER_VIT,
     K,
     MAX_EVASION,
@@ -130,8 +131,8 @@ export const HQ_POWER_DOC = {
         + 'Artifacts. It is a live reading, so benching a strong Champion or unequipping an '
         + 'Artifact lowers it. Because the two multiply, a party that is all damage and no '
         + 'health — or the reverse — scores lower than a balanced one with the same totals.',
-    formula: `power = party DPS × party effective HP; effective HP = HP × (1 + DEF ÷ ${EHP_DEF_CONSTANT}) `
-        + `÷ (1 − evasion, at most ${pct(MAX_EVASION)})`
+    formula: `power = √(party DPS × party effective HP) × ${GPN_DISPLAY_SCALE}; `
+        + `effective HP = HP × (1 + DEF ÷ ${EHP_DEF_CONSTANT}) ÷ (1 − evasion, at most ${pct(MAX_EVASION)})`
 } as const
 
 /**

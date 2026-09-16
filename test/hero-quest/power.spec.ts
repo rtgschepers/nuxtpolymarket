@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { makeHero, makeParty } from '../../scripts/hero-quest/sim'
 import { globalPower, memberEhp } from '#shared/utils/hero-quest/power'
 import { economyBonuses, heroModifierTotals, partyUnitStats } from '#shared/utils/hero-quest/stats'
-import { EHP_DEF_CONSTANT, MAX_EVASION } from '#shared/utils/hero-quest/constants'
+import { EHP_DEF_CONSTANT, GPN_DISPLAY_SCALE, MAX_EVASION } from '#shared/utils/hero-quest/constants'
 import { SKILLS } from '#shared/utils/hero-quest/content/skills'
 import { ARTIFACTS } from '#shared/utils/hero-quest/content/artifacts'
 import { D } from '#shared/utils/hero-quest/numbers'
@@ -30,9 +30,14 @@ const PWR_ARTIFACT = ARTIFACTS.find(artifact =>
     artifact.effects.some(line => line.kind === 'stat' && line.stat === 'pwr'))!
 
 describe('globalPower', () => {
-    it('is the product of party DPS and party effective HP — no square root, the number is meant to be big', () => {
+    it('is the geometric mean of party DPS and party effective HP, lifted by the display scale', () => {
         const power = globalPower(makeHero('class_beginner', 40))
-        expect(power.gpn.toNumber()).toBeCloseTo(power.dps.mul(power.ehp).toNumber(), 6)
+        expect(power.gpn.toNumber())
+            .toBeCloseTo(power.dps.mul(power.ehp).sqrt().mul(GPN_DISPLAY_SCALE).toNumber(), 6)
+        // The root holds it to the same order as the stats it is made of; the scale keeps it clear
+        // of them. A fresh Hero opens in the hundreds rather than the tens of thousands.
+        expect(globalPower(makeHero('class_beginner', 1)).gpn.toNumber()).toBeGreaterThan(100)
+        expect(globalPower(makeHero('class_beginner', 1)).gpn.toNumber()).toBeLessThan(10_000)
     })
 
     it('reads effective HP as HP stretched by DEF and by evasion', () => {

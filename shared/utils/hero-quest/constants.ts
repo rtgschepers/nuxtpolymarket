@@ -1284,6 +1284,23 @@ export const SEAL_LADDER_GROWTH: Readonly<Record<string, number>> = {
  */
 export const EHP_DEF_CONSTANT = 10 // UNTUNED ╧
 
+/**
+ * The flat multiplier on the Global Power Number's display value:
+ *
+ *     GPN = √(partyEffectiveDPS × partyEffectiveEHP) × GPN_DISPLAY_SCALE
+ *
+ * **Presentation only.** The root keeps GPN the same order of magnitude as either input rather
+ * than their product, so it still reads as a stat rather than as a balance; the scale then lifts
+ * it clear of the stats it is made of, so nobody mistakes it for one. Both are monotonic, so
+ * neither changes which party ranks above which — only how big the number reads. At 10 a fresh
+ * level-1 Hero opens just under 1,000 and crosses it in the first few levels, which is the
+ * intended feel: a number that is already big and visibly climbs.
+ *
+ * Arena matchmaking bands are taken on this value, so a percentage band means the same thing
+ * before and after the scale — a flat factor cancels in a ratio.
+ */
+export const GPN_DISPLAY_SCALE = 10 // UNTUNED ╧
+
 // ── Prestige currency ──────────────────────────────  economy-and-currencies.md §3
 
 /**
