@@ -179,7 +179,7 @@ export const HQ_CURRENCY_DOCS: readonly HqCurrencyDoc[] = [
     },
     {
         name: 'Seals (four kinds)',
-        source: 'A daily grant, boss and world-clear milestones, prestige, or bought with Gold.',
+        source: 'Boss and world-clear milestones, prestige, or bought with Gold.',
         sink: 'Pulls. Each gacha has its own Seal and they are never interchangeable.',
         live: true
     },

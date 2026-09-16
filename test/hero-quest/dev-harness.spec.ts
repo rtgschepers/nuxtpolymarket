@@ -299,16 +299,6 @@ describe.skipIf(SKIP)('dev harness against the real settle path', () => {
             expect(result.chunksRun).toBeLessThan(skipPlan(1, 'online').chunks)
         })
 
-        it('rewinds the free Seal grant clock so a skipped day pays its Seals', async () => {
-            // Every clock moves together or the skip is a lie in the player's favour: a day of
-            // combat handed back without the Seals that day owed.
-            await devSkip(USER_ID, 1, 'offline')
-            const before = (await readState()).guildSeals
-
-            await devSkip(USER_ID, 48, 'offline')
-            expect((await readState()).guildSeals).toBeGreaterThan(before)
-        })
-
         it('clears the Gold ladder counters once the skip is a day or more', async () => {
             // The ladder is keyed on a real calendar date that skipping cannot move, so clearing
             // it is the honest approximation of "a new day started".

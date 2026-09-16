@@ -19,12 +19,7 @@ import { db } from '#server/database'
 import { hqCollection, hqState } from '#server/database/schema'
 import { claimFreePull, ensureHqState } from '#server/utils/hero-quest'
 import { freePullState, ladderDateKey, nextDayResetAt } from '#shared/utils/hero-quest/gacha'
-import {
-    FREE_PULLS_PER_DAY,
-    FREE_PULL_COOLDOWN_MINUTES,
-    SEAL_GRANT_AMOUNT,
-    TEN_PULL_COST
-} from '#shared/utils/hero-quest/constants'
+import { FREE_PULLS_PER_DAY, FREE_PULL_COOLDOWN_MINUTES } from '#shared/utils/hero-quest/constants'
 import { SKIP, burst, cleanupUser, seedUser } from '../setup/db-helpers'
 
 const NOW = Date.UTC(2026, 7, 17, 12, 0, 0)
@@ -56,7 +51,7 @@ describe('freePullState', () => {
     })
 
     it('points a spent allowance at the next UTC day, not at the cooldown', () => {
-        // The two gates answer different questions and the wrong one would show a 30-minute
+        // The two gates answer different questions and the wrong one would show a cooldown
         // countdown that expires into another refusal.
         const spent = freePullState(FREE_PULLS_PER_DAY, TODAY, NOW, NOW)
         expect(spent.unlocksAt).toBe(nextDayResetAt(NOW))
@@ -64,7 +59,7 @@ describe('freePullState', () => {
 
     it('takes the later gate when the allowance resets while a cooldown is still running', () => {
         // Claim the last one just before midnight: the day rolls over first, but the cooldown
-        // has not. A naive `nextDayResetAt` would hand out a pull 30 seconds early.
+        // has not. A naive `nextDayResetAt` would hand out a pull a minute early.
         const nearMidnight = nextDayResetAt(NOW) - 60_000
         const state = freePullState(FREE_PULLS_PER_DAY, TODAY, nearMidnight, nearMidnight)
         expect(state.unlocksAt).toBe(nearMidnight + COOLDOWN_MS)
@@ -106,14 +101,6 @@ describe('freePullState', () => {
     })
 })
 
-describe('the daily Seal grant', () => {
-    it('is exactly one 10-pull, and tracks the price rather than restating it', () => {
-        // Tied to TEN_PULL_COST on purpose: the grant means "a free 10-pull", so if the price
-        // ever moves the grant must move with it rather than silently becoming 9 of 11.
-        expect(SEAL_GRANT_AMOUNT).toBe(TEN_PULL_COST)
-    })
-})
-
 describe.skipIf(SKIP)('free pull claiming', () => {
     const USER_ID = 'test-hero-quest-freepull-user'
 
@@ -126,6 +113,13 @@ describe.skipIf(SKIP)('free pull claiming', () => {
     async function readState() {
         const [row] = await db.select().from(hqState).where(eq(hqState.userId, USER_ID))
         return row!
+    }
+
+    /** Spends today's whole Champion allowance, one claim per cooldown, all within the same day. */
+    async function exhaustTodaysAllowance() {
+        for (let claim = 0; claim < FREE_PULLS_PER_DAY; claim++) {
+            await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS * claim))
+        }
     }
 
     beforeEach(async () => {
@@ -177,7 +171,8 @@ describe.skipIf(SKIP)('free pull claiming', () => {
         // shape that once turned one rakeback claim into ten. With the lock, the first writes a
         // claim timestamp and the other nine read it and refuse.
         //
-        // One winner, not two, even though the allowance is 2: the cooldown gates the second.
+        // One winner, not two, even though the allowance is more than one: the cooldown
+        // gates every claim after the first.
         const results = await burst(10, () =>
             db.transaction(tx => claimFreePull(tx, USER_ID, 'champion'))
         )
@@ -189,28 +184,29 @@ describe.skipIf(SKIP)('free pull claiming', () => {
         expect((state.freePullsUsedToday as Record<string, number>).champion).toBe(1)
     })
 
-    it('lets the second through once the cooldown has passed, and no further that day', async () => {
+    it('lets the rest through as the cooldown passes, and no further that day', async () => {
         // Time is injected rather than waited on — the specs must not take half an hour, and the
         // clock being a parameter is what makes the boundary testable at all.
         //
         // Anchored at midday UTC, not `Date.now()`, and kept to a few cooldowns: advancing far
         // enough to cross UTC midnight legitimately refills the allowance. "Long enough later"
         // and "still today" are different ideas here.
-        await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW))
-        await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS))
+        //
+        // Walks the whole allowance rather than assuming its size — the count is a tuned
+        // constant, and this spec is about the two gates, not about it being any one number.
+        await exhaustTodaysAllowance()
 
         expect((await readState()).freePullsUsedToday).toMatchObject({ champion: FREE_PULLS_PER_DAY })
 
-        // Third is refused on the daily allowance, cooldown long since irrelevant.
+        // One more is refused on the daily allowance, cooldown long since irrelevant.
         await expect(
-            db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS * 4))
+            db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS * (FREE_PULLS_PER_DAY + 2)))
         ).rejects.toThrowError(expect.objectContaining({ statusCode: 400 }))
     })
 
     it('refills the allowance after the UTC day rolls over', async () => {
         // The other half of the spec above: exhausting today is not exhausting forever.
-        await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW))
-        await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', NOW + COOLDOWN_MS))
+        await exhaustTodaysAllowance()
 
         const tomorrow = nextDayResetAt(NOW)
         await db.transaction(tx => claimFreePull(tx, USER_ID, 'champion', tomorrow))

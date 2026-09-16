@@ -1019,32 +1019,38 @@ export const FORMATION_ROW_CAPACITY = 3
 export const CHAMPION_PASSIVE_PER_POINT = 0.002 // UNTUNED ╧
 
 /**
- * Free Seal grant: a batch of each type per real-time interval, bankable up to a cap
- * (`economy-and-currencies.md` §5). Deliberately *not* a stage-clear drop — keeping Seals discrete
- * preserves "buy extra Seals with Gold" as a genuine choice.
+ * Free 10-pulls, per gacha, per day — **the only free pulls in the game** (revised 2026-09-16).
  *
- * Tied to the 10-pull price rather than a literal 9, so the grant stays exactly one free 10-pull
- * if that price moves.
- */
-export const SEAL_GRANT_INTERVAL_HOURS = 24 // UNTUNED ╧
-export const SEAL_GRANT_AMOUNT = TEN_PULL_COST // UNTUNED ╧
-
-/**
- * Free 10-pulls on top of the daily Seal grant, per gacha, per day.
+ * The time-gated Seal drip that used to sit here is **gone**: a batch of every Seal type every 24
+ * hours, banking up to a week, paid whether or not the player ever opened the gacha. It made Seals
+ * something a clock handed out rather than something earned or bought, and it stacked with this
+ * entitlement so the free allowance arrived through two unrelated mechanisms. Free Seals now come
+ * only from progression milestones (below); everything else is bought with Gold, which is what
+ * makes the Seal ladder a real choice.
  *
  * A **true entitlement, not Seals**: it must be spent as a 10-pull and cannot be banked or split
  * into singles, because the point is the 10-pull *moment* rather than the pull count.
  *
- * The cooldown gates the gap between claims, so an active player collects all of them inside an
- * hour and an idle one still finds them waiting. A re-engagement hook on a game whose premise is
- * not having to re-engage — worth watching in play.
+ * The cooldown gates the gap between claims, so an active player collects all of them inside half
+ * an hour and an idle one still finds them waiting. A re-engagement hook on a game whose premise
+ * is not having to re-engage — worth watching in play.
  *
- * ⚠ With the grant above a gacha gets 9 Seals plus 20 free pulls per day, ×4 systems. The
- * collection curve, Essence income and crafting economy have not been re-derived against that.
+ * A gacha gets 30 free pulls per day and no free Seals, ×4 systems. **30 a day is the intended
+ * hard ceiling** for a player who never buys Seals — accepted 2026-09-16, not a consequence to
+ * repair.
+ *
+ * **Both are TUNED, and they are a pair.** Their product is the daily free allowance — 30 pulls
+ * per gacha — and the cooldown alone decides how long a session has to run to collect it (3 claims
+ * 10 minutes apart is ~20 minutes, so one sitting takes the lot; at the old 30 it was an hour and
+ * most of it went unclaimed). Raising the count without dropping the cooldown makes the tail of
+ * the allowance unreachable in a single session; dropping the cooldown without raising the count
+ * just hands the same 2 pulls over faster. Set by decision on the session-1 playtest, not measured
+ * on the campaign sim — the sim walks combat and does not model pull cadence, so `sim:hero-quest`
+ * has nothing to say about either. Coupled downward to the Seal ladder (`SEAL_LADDER_BASE_GOLD`):
+ * free pulls are now the only free supply, so moving them moves how soon Gold-bought Seals matter.
  */
-export const FREE_PULLS_PER_DAY = 2 // UNTUNED ╧
-export const FREE_PULL_COOLDOWN_MINUTES = 30 // UNTUNED ╧
-export const SEAL_GRANT_BANK_CAP_DAYS = 7 // UNTUNED ╧
+export const FREE_PULLS_PER_DAY = 3 // TUNED ✓
+export const FREE_PULL_COOLDOWN_MINUTES = 10 // TUNED ✓
 
 /**
  * Milestone Seal grants (`economy-and-currencies.md` §5, source 1).

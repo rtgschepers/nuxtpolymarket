@@ -2,9 +2,6 @@
 import {
     FREE_PULLS_PER_DAY,
     FREE_PULL_COOLDOWN_MINUTES,
-    SEAL_GRANT_AMOUNT,
-    SEAL_GRANT_BANK_CAP_DAYS,
-    SEAL_GRANT_INTERVAL_HOURS,
     SEAL_GRANT_PER_BOSS,
     SEAL_GRANT_PER_PRESTIGE,
     SEAL_GRANT_PER_WORLD_CLEAR,
@@ -75,14 +72,9 @@ const planned = HQ_CURRENCY_DOCS.filter(currency => !currency.live)
     <HeroQuestWikiSection
       title="Where Seals come from"
       icon="i-lucide-stamp"
-      lead="Four independent supplies, one for each gacha."
+      lead="Three independent supplies, one set for each gacha."
     >
       <div class="grid gap-2 sm:grid-cols-2">
-        <HeroQuestWikiFormula
-          label="Daily grant"
-          :formula="`${SEAL_GRANT_AMOUNT} Seals every ${SEAL_GRANT_INTERVAL_HOURS}h`"
-          :note="`Exactly one ${TEN_PULL_SIZE}-pull. Banks up to ${SEAL_GRANT_BANK_CAP_DAYS} days if you are away.`"
-        />
         <HeroQuestWikiFormula
           label="Free pulls"
           :formula="`${FREE_PULLS_PER_DAY} free ${TEN_PULL_SIZE}-pulls per gacha per day`"
