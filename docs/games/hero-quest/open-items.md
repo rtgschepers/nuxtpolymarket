@@ -426,7 +426,7 @@ Consequence worth re-measuring: any boss-gate verdict from before `b96a322` unde
 
 ### 28. Global Power Number built, and every collection now raises stats — **landed 2026-09-15**
 
-**GPN is built on the locked formula** (`global-power-number.md`, *As built*), **minus the square root**: `party DPS × party effective HP`. The root only shrank the display — it never changed which party ranks higher — and the number is meant to be big (§2). Computed on read from the fielded party's real stats and shown as the battle screen's animated headline, with a wiki entry. It can go down, as locked.
+**GPN is built on the locked formula** (`global-power-number.md`, *As built*): `sqrt(party DPS × party effective HP) × GPN_DISPLAY_SCALE`. The square root was dropped 2026-09-15 to make the number bigger and **restored 2026-09-16** when the bare product overshot — it read as a balance, not a power rating. `GPN_DISPLAY_SCALE = 10` (UNTUNED) does the enlarging instead: a level-1 Hero opens at ~945 and crosses 1,000 in a few levels. Both steps are monotonic, so ranking is untouched either way (§2). Computed on read from the fielded party's real stats and shown as the battle screen's animated headline, with a wiki entry. It can go down, as locked.
 
 **A different design was considered and rejected.** The proposal was an account-wide, never-decreasing number built from collection size and progress ("big number go bigger"). It was dropped because Arena matchmaking compares GPN with a defender's Defense GPN, and a number padded by collection size would stop predicting fights. The locked design stands.
 
@@ -458,7 +458,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | Constant(s) | Doc | Note |
 |---|---|---|
 | Offline Efficiency / Offline Cap `BASE_COST` (×2) | `idle-mechanics.md` §4 | Formula shapes locked, no anchor value |
-| `K_ATTACK`, `K_DEFEND`, `MEDAL_BASE_WIN`, `MEDAL_BASE_LOSS`, `MEDAL_UPSET_BONUS`, `ARENA_MATCH_BAND_PCT`, `ARENA_SHOP_GEM_PRICE` | `arena.md` | `ARENA_MATCH_BAND_PCT` also a design question, see #2 — and set it against GPN's product form (#28), where a 10% band on the old square root is ~21%. `ARENA_SHOP_GEM_PRICE` has an explicit calibration target (under 1 Battle Speed block per day's Medals) |
+| `K_ATTACK`, `K_DEFEND`, `MEDAL_BASE_WIN`, `MEDAL_BASE_LOSS`, `MEDAL_UPSET_BONUS`, `ARENA_MATCH_BAND_PCT`, `ARENA_SHOP_GEM_PRICE` | `arena.md` | `ARENA_MATCH_BAND_PCT` also a design question, see #2 — set it against GPN's root form (#28, restored 2026-09-16); the flat `GPN_DISPLAY_SCALE` cancels in a ratio, so a percentage band means the same before and after it. `ARENA_SHOP_GEM_PRICE` has an explicit calibration target (under 1 Battle Speed block per day's Medals) |
 | `EHP_DEF_CONSTANT` | `global-power-number.md` §2 | Built (#28). At 10 a level-1 Hero's DEF doubles its EHP; tune against how balanced parties should read against lopsided ones |
 | `SKILL_COLLECTION_PASSIVE_FRACTION`, `ARTIFACT_COLLECTION_PASSIVE_FRACTION` | none — see #28 | What an unequipped Passive Skill or Artifact gives the Hero, as a fraction of equipping it. 0.1 mirrors Gear; tune together with `GEAR_PASSIVE_COEFFICIENT` so all three collections feel comparable |
 | `RAID_BASE_STATS`, `RAID_LEVEL_GROWTH`, `RAID_REWARD_BASE/GROWTH`, `RAID_ENRAGE_SECONDS`, `RAID_RAMPAGE_DMG/POWER_BASE/GROWTH` | `raid-system.md` | Per-raid |
