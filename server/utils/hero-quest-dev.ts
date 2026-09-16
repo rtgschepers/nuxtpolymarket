@@ -3,8 +3,8 @@
  *
  * ## Why this exists
  *
- * Hero Quest is an idle game measured in days — a first prestige takes about a week, the free
- * Seal grant is on a 24-hour timer, and the Gold ladder resets on a date key — and the
+ * Hero Quest is an idle game measured in days — a first prestige takes about a week, and the Gold
+ * ladder resets on a date key — and the
  * `UNTUNED ╧` constants are waiting on play data. This collapses that wait, so "playtest the
  * offline cap" takes a minute instead of a day.
  *
@@ -155,23 +155,18 @@ export async function devSkip(userId: string, hours: number, mode: SkipMode): Pr
     /**
      * Every clock moves together, or the skip is a lie in the player's favour.
      *
-     * The free Seal grant is on its own 24-hour timer, so a day skipped without rewinding it
-     * would hand back a day of combat and none of the Seals that day owed. The Gold ladder is
-     * the one clock that cannot be rewound the same way: it is keyed on a real `YYYY-MM-DD`
-     * string compared against today, and skipping does not move the calendar. Clearing it is the
-     * honest approximation of "a new day started", and is applied only when the skip is actually
-     * a day or more.
+     * The Gold ladder is the one clock that cannot be rewound by subtracting from it: it is keyed
+     * on a real `YYYY-MM-DD` string compared against today, and skipping does not move the
+     * calendar. Clearing it is the honest approximation of "a new day started", and is applied
+     * only when the skip is actually a day or more. (The daily free-pull allowance is keyed the
+     * same way and resets on its own when the real day turns.)
      */
     const totalMs = chunks * chunkMs
-    const grantClock = before.state.lastSealGrantAt
-    await db.update(hqState)
-        .set({
-            ...(grantClock ? { lastSealGrantAt: new Date(grantClock.getTime() - totalMs) } : {}),
-            ...(totalMs >= LADDER_RESET_HOURS * 3600 * 1000
-                ? { sealLadderDate: null, sealLadderPurchasedToday: {} }
-                : {})
-        })
-        .where(eq(hqState.userId, userId))
+    if (totalMs >= LADDER_RESET_HOURS * 3600 * 1000) {
+        await db.update(hqState)
+            .set({ sealLadderDate: null, sealLadderPurchasedToday: {} })
+            .where(eq(hqState.userId, userId))
+    }
 
     let kills = 0
     let goldEarned = 0

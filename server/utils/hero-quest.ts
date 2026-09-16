@@ -26,9 +26,6 @@ import {
     MAX_LOADOUT_SLOTS,
     MAX_SKILL_SLOTS,
     ONLINE_THRESHOLD_MS,
-    SEAL_GRANT_AMOUNT,
-    SEAL_GRANT_BANK_CAP_DAYS,
-    SEAL_GRANT_INTERVAL_HOURS,
     SEAL_GRANT_PER_BOSS,
     SEAL_GRANT_PER_WORLD_CLEAR,
     STAGES_PER_WORLD,
@@ -403,31 +400,6 @@ export function sealGrantSet(amount: number) {
     }
 }
 
-/**
- * How many free time-gated grants are owed, and the clock value to write back.
- *
- * Banks up to `SEAL_GRANT_BANK_CAP_DAYS` intervals so a few missed days aren't punishing,
- * but never accrues indefinitely. A null clock means the account has never been granted —
- * it pays one interval immediately, so a brand-new player can pull without waiting a day.
- *
- * The returned clock advances by whole intervals actually paid, not to `now`, so a partial
- * interval is never silently discarded.
- */
-export function dueSealGrants(lastGrantAt: Date | null, now: number): { grants: number; clock: Date } {
-    const intervalMs = SEAL_GRANT_INTERVAL_HOURS * 3600 * 1000
-    if (!lastGrantAt) return { grants: SEAL_GRANT_AMOUNT, clock: new Date(now) }
-
-    const elapsed = now - lastGrantAt.getTime()
-    if (elapsed < intervalMs) return { grants: 0, clock: lastGrantAt }
-
-    const whole = Math.floor(elapsed / intervalMs)
-    const capped = Math.min(whole, SEAL_GRANT_BANK_CAP_DAYS)
-    return {
-        grants: capped * SEAL_GRANT_AMOUNT,
-        clock: new Date(lastGrantAt.getTime() + whole * intervalMs)
-    }
-}
-
 /** Payout for completing a prestige, `VOID_SHARD_BASE × VOID_SHARD_GROWTH^prestigeCompleted`. */
 export function voidShardsFor(prestigeCompleted: number) {
     return D(VOID_SHARD_BASE).mul(decPow(VOID_SHARD_GROWTH, Math.max(0, prestigeCompleted)))
@@ -523,11 +495,6 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
             killFraction: state.killFraction
         })
 
-        // The free time-gated Seal grant rides the settle rather than a route of its own:
-        // settle is the one thing every read and every mutation already goes through, and a
-        // separate claim endpoint would be a second read-then-write to guard for no gain.
-        const due = dueSealGrants(state.lastSealGrantAt, now)
-
         const [updated] = await tx.update(hqState)
             .set({
                 lastSettledAt: new Date(now),
@@ -537,8 +504,7 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
                 killFraction: result.killFraction,
                 atBossGate: isBossStage(result.position.stage),
                 heroLevel: result.heroLevel,
-                heroXp: toStore(result.heroXp),
-                ...(due.grants > 0 ? { ...sealGrantSet(due.grants), lastSealGrantAt: due.clock } : {})
+                heroXp: toStore(result.heroXp)
             })
             .where(eq(hqState.userId, userId))
             .returning()

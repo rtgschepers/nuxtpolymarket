@@ -1025,7 +1025,8 @@ export const hqState = pgTable('hq_state', {
    * why it is a per-system map rather than an integer.
    *
    * An entitlement is **not** Seals. It cannot be banked, split into singles, or spent on
-   * anything but a 10-pull, which is the whole point of it existing alongside the Seal grant.
+   * anything but a 10-pull — which, with the daily Seal drip gone, is now the only free way
+   * to pull at all.
    */
   freePullsUsedToday: jsonb('free_pulls_used_today').$type<Record<string, number>>().notNull().default({}),
   freePullDate: text('free_pull_date'),
@@ -1038,10 +1039,7 @@ export const hqState = pgTable('hq_state', {
    * timestamp column matches zero rows and fails closed forever (the standing platform warning).
    * Keeping these out of the column type makes that mistake harder to make later.
    */
-  freePullClaimedAt: jsonb('free_pull_claimed_at').$type<Record<string, string>>().notNull().default({}),
-
-  /** Free time-gated Seal grant clock. Null means never granted — the first settle pays out. */
-  lastSealGrantAt: timestamp('last_seal_grant_at')
+  freePullClaimedAt: jsonb('free_pull_claimed_at').$type<Record<string, string>>().notNull().default({})
 }, t => [index('hq_state_userId_idx').on(t.userId)])
 
 /**
