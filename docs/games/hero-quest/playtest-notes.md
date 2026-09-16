@@ -152,7 +152,7 @@ Also still true and worth re-checking in play: mitigation is `min(1, DEF / (PWR 
 
 `XP_STEP_EXPONENT` is derived from the growth and compensates for XP *income*, not for the level count — which is why the pace does not self-preserve here. Worth keeping: the sweep also shows lower growth buys 4 prestiges instead of 2 out of the same curve, so it is a real lever for *run length* if that ever becomes the question.
 
-**3 — Free pulls. ✅ Applied.** `SEAL_GRANT_AMOUNT` 1 → `TEN_PULL_COST`, so the daily grant is exactly one free 10-pull. Written as the constant rather than a literal 9, so the grant still means "a 10-pull" if that price ever moves. Plus **2 further free 10-pulls per day per gacha** as a true entitlement — spendable only as a 10-pull, never banked or split — on a 30-minute cooldown after each claim.
+**3 — Free pulls. ✅ Applied, and revised 2026-09-16 (`open-items.md` #29).** Originally: `SEAL_GRANT_AMOUNT` 1 → `TEN_PULL_COST` so the daily grant was one free 10-pull, plus 2 further free 10-pulls per gacha per day on a 30-minute cooldown. **The daily Seal grant has since been removed entirely** and the entitlement retuned to **3 free 10-pulls per gacha per day on a 10-minute cooldown** — still a true entitlement, spendable only as a 10-pull, never banked or split, and now the only free pulls in the game.
 
 Built as a **payment branch on `gacha/pull.post.ts`, not a second route.** A free pull *is* a pull: same rarity roll, same dupe merge, same level bump, same Gear auto-equip. Only the payment differs, and duplicating the route would have meant two copies of the roll loop — exactly what `CLAUDE.md` §3's one-route rule exists to prevent.
 
@@ -162,7 +162,7 @@ Storage mirrors the Gold ladder exactly — `freePullsUsedToday` (per-system map
 
 One spec was wrong before the code was: it advanced a third claim by twenty cooldowns expecting a refusal, but twenty cooldowns is ten hours, which crosses UTC midnight and legitimately refills the allowance. Worth remembering that "long enough later" and "still today" are different questions here.
 
-⚠ **Consequence to watch next session:** this takes a gacha from 1 pull/day to 9 Seals plus 20 free pulls/day — roughly 30× the volume, ×4 systems. The collection curve, Essence income and the crafting economy all move with it and none has been re-derived.
+**Consequence, accepted:** this takes a gacha from 1 pull/day to 30 free pulls/day and *no* free Seals (was 9 Seals plus 20 free pulls before the 2026-09-16 revision), ×4 systems. 30 a day is the intended hard ceiling for a player who never buys Seals. The collection curve, Essence income and the crafting economy all move with it and none has been re-derived — worth a look in a tuning pass, not a problem to fix.
 
 Note the Guild page predates `GachaHeader` and still renders its own pull row, so the free-pull button is duplicated there. Finding 4 folds all four gachas onto one page, which deletes that copy.
 

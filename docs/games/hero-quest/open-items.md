@@ -276,7 +276,7 @@ New placeholders, all `// UNTUNED ╧`: `SLOT_BASE_BONUS` (×6), `GEAR_PASSIVE_C
 
 `server/utils/hero-quest-dev.ts` plus five routes under `server/api/hero-quest/dev/` and a `Dev` tab that only exists in development builds.
 
-**Why it was built before Phase 4.** `implementation-plan.md` Phase 1 ends with "stop here and actually play it before continuing", and that had been deferred through two whole phases. The obstacle was never willingness — the campaign sim puts two prestiges at three and a half days of wall clock, the free Seal grant is on a 24-hour timer, and the Gold ladder resets on a date key, so an evening of honest play reaches World 2. Every constant in the section below is waiting on data that was, in practice, unobtainable. This is what makes it obtainable.
+**Why it was built before Phase 4.** `implementation-plan.md` Phase 1 ends with "stop here and actually play it before continuing", and that had been deferred through two whole phases. The obstacle was never willingness — the campaign sim puts two prestiges at three and a half days of wall clock, the free Seal grant was on a 24-hour timer (since removed, #29), and the Gold ladder resets on a date key, so an evening of honest play reaches World 2. Every constant in the section below is waiting on data that was, in practice, unobtainable. This is what makes it obtainable.
 
 **What it does:** skip time (as one offline window, or as consecutive presence-length ones), grant any currency, own every roster entry at a chosen star/level, max the prestige shop, teleport the run, force `runCleared`, switch class node, and wipe back to unfounded so the first hour can be played twice.
 
@@ -443,9 +443,21 @@ New placeholders, all `// UNTUNED ╧`: `SKILL_COLLECTION_PASSIVE_FRACTION`, `AR
 
 ---
 
+### 29. Free Seals cut to milestones only, free pulls retuned — **landed 2026-09-16**
+
+**The time-gated Seal grant is removed.** It paid one 10-pull's worth of every Seal type every 24 hours, banking up to 7 days, and it paid whether or not the player ever opened a gacha. Gone with it: `SEAL_GRANT_INTERVAL_HOURS`, `SEAL_GRANT_AMOUNT`, `SEAL_GRANT_BANK_CAP_DAYS`, `dueSealGrants()`, the settle-time write, and the `hq_state.last_seal_grant_at` column (`drizzle/0014`). `economy-and-currencies.md` §5 source 2 is struck through rather than deleted — **this doc is the authority over it**, per the standing rule.
+
+**Free Seals now come only from progression:** boss kills, world clears, prestige (§5 source 1), plus raid clears when raids exist (source 3). Everything else is bought with Gold on the daily ladder. The drip was undercutting both at once — it made the ladder optional and the milestones marginal.
+
+**The free 10-pull entitlement is now the only thing a clock hands out**, and it was retuned with the cut: **3 per gacha per day (was 2) on a 10-minute cooldown (was 30)**. `FREE_PULLS_PER_DAY` and `FREE_PULL_COOLDOWN_MINUTES` are now marked **`// TUNED ✓`** — they are a coupled pair, set by decision rather than by sim measurement (the campaign sim walks combat and models no pull cadence, so it has nothing to say about either). The cooldown is what decides whether the allowance is collectable in one sitting: 3 claims 10 minutes apart is ~20 minutes, where 2 claims 30 minutes apart was an hour and mostly went unclaimed.
+
+**Net effect on pull income.** A gacha goes from 9 free Seals + 20 free pulls per day to **0 free Seals + 30 free pulls**, ×4 systems. Pull *volume* is up; Seal *balances* now only grow by progressing or paying. A player who stalls at a boss gate and never buys Seals is capped at 30 pulls a day per gacha with no Seal income — **that ceiling is intended and accepted** (2026-09-16), not an open consequence. The collection curve, Essence income and the crafting economy still have not been re-derived against the new shape, which is a tuning question like the rest of this section.
+
+---
+
 ## ⚪ Standing numeric tuning — **what is still `// UNTUNED ╧`**
 
-Named constants with a formula shape locked and a placeholder value. Consolidated so a tuning pass has one list. `rg '╧' shared/utils/hero-quest/constants.ts` is the authority — **62 markers** as of 2026-09-15.
+Named constants with a formula shape locked and a placeholder value. Consolidated so a tuning pass has one list. `rg '╧' shared/utils/hero-quest/constants.ts` is the authority — **61 markers** as of 2026-09-16 (three Seal-grant constants deleted and two free-pull constants promoted to `TUNED ✓` by #29; `GPN_DISPLAY_SCALE` added by #28).
 
 ~~**Decided: none of this is tuned before playtesting.**~~ **Superseded for the combat and progression block by #22**, which tuned it on the campaign walk. The original reasoning still holds for everything that remains below: the balance script and campaign sim project *what the formulas say*, and a projected value that feels wrong in play is worth less than no value, because it looks settled. What remains is mostly the gacha, shop and ability-magnitude layers, which the campaign walk barely exercises — so they want play data or a different measurement, not another sim pass.
 
@@ -477,8 +489,8 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness |
 | `OVERFLOW_CONVERSION_RATE` | `classes-and-combat.md` §7 | The only crit constant still untuned. Rarely reachable: with LCK off the level curve only a deliberately built crit Hero passes 100% |
 | `SEAL_GRANT_PER_BOSS`, `SEAL_GRANT_PER_WORLD_CLEAR`, `SEAL_GRANT_PER_PRESTIGE` | `economy-and-currencies.md` §5 | The milestone batch sizes. Doc gives only the shape — "small per World clear, larger per Prestige" — and defers the values to the world/enemy pass (#6). Built and paying out |
-| `SEAL_GRANT_INTERVAL_HOURS`, `SEAL_GRANT_AMOUNT`, `SEAL_GRANT_BANK_CAP_DAYS` | `economy-and-currencies.md` §5 | The free time-gated grant. Sets the floor on pull income for a player who never spends Gold, so it bounds how slow the collection loop can get |
-| `FREE_PULLS_PER_DAY`, `FREE_PULL_COOLDOWN_MINUTES` | none — session-1 playtest | Two free 10-pulls per gacha per day on a 30-minute cooldown, on top of the daily grant. With it a gacha gets 9 Seals plus 20 free pulls a day, ×4 systems; the collection curve, Essence income and crafting economy have not been re-derived against that |
+| ~~`SEAL_GRANT_INTERVAL_HOURS`, `SEAL_GRANT_AMOUNT`, `SEAL_GRANT_BANK_CAP_DAYS`~~ | — | **Deleted 2026-09-16, #29.** The free time-gated grant is gone; milestones and the Gold ladder are the only Seal sources |
+| ~~`FREE_PULLS_PER_DAY`, `FREE_PULL_COOLDOWN_MINUTES`~~ | none — session-1 playtest | **Now `// TUNED ✓` (#29):** 3 free 10-pulls per gacha per day on a 10-minute cooldown, and the only free pulls in the game. A coupled pair — the cooldown decides whether the allowance is collectable in one sitting. 30 free pulls and **no** free Seals per gacha per day, ×4 systems — that ceiling is accepted, see #29 |
 | `VOID_SHARD_BASE`, `VOID_SHARD_GROWTH` | `economy-and-currencies.md` §3 | 100 × 2^prestige, the doc's "starting point". Only has to outpace shop costs, so derive it alongside the slot and offline tracks it pays for — and note that at ~a week per prestige (#22) the first shop purchase is a week in |
 | `wealthFactor` clamp range for Gambler's Strike family | `skills-gacha.md` §4 | Suggested ×0.5–×2.0, not locked |
 | `CHAMPION_SLOT_BASE_COST`, `CHAMPION_SLOT_COST_GROWTH` | `champions-guild-gacha.md` §1 | Void Shard price of party slots 3→5. Competes directly with the two offline tracks for the same currency, so all three want deriving together |

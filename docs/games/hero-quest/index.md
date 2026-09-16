@@ -198,7 +198,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | **Gold** | Platform, universal | Idle kill farming (own bounded curve) | Seal ladder; Arena Shop purchases | `gold-economy.md`, `economy-and-currencies.md` §2 |
 | **Gems** | Platform, universal | Milestones, Holiday gifts, Arena Shop | Battle Speed, Loadout slots, Trait save slots, Arena refresh/attempts | `economy-and-currencies.md` §4 |
 | **Void Shards** | Prestige | Full World 10/Stage 10 clear only | Prestige shop (offline, slots, kill-count, Key rates) | `economy-and-currencies.md` §3 |
-| **Guild Seals** | Pull | Milestones, daily grant, Guild Raid, Arena Shop, Gold ladder | Champion pulls | `champions-guild-gacha.md` §3 |
+| **Guild Seals** | Pull | Milestones, Guild Raid, Arena Shop, Gold ladder (no daily grant — `open-items.md` #29) | Champion pulls | `champions-guild-gacha.md` §3 |
 | **Skill Seals** | Pull | same pattern + Training Grounds Raid | Skill pulls | `skills-gacha.md` §2 |
 | **Excavation Seals** | Pull | same pattern + Dig-site Raid | Artifact pulls | `artifacts-dig-site-gacha.md` §5 |
 | **Forge Seals** | Pull | same pattern + Forge Raid | Gear pulls | `gear-equipment.md` §4 |
