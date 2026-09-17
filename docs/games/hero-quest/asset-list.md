@@ -33,7 +33,7 @@ Two of the 16 skill-cast animations are summon triggers rather than direct-effec
 - **48 distinct skins** — every Champion gets its own look applied to its archetype's shared rig, satisfying "2 Champions sharing an archetype+rarity must look different." Skins don't need their own animation work — they ride the chassis's existing 5 states.
 - **The ability's actual effect is separate art entirely** — the generic "Ability-cast pose" above just triggers the ability's own VFX (locked as custom-per-ability in Section 2 below), so a Champion doesn't need bespoke animation work just because its ability differs from another Champion's.
 
-**One residual question worth a quick answer, not a full re-ask:** are the 48 skins recolors of a shared silhouette (cheap, fast, but rarity may read as "same guy, different color" across the board), or does each rarity step get a fuller redesign — more ornate armor/effects at Epic+ — layered onto the shared chassis (more expensive, but sells the rarity jump harder)? Either way the *chassis* count (4) and *animation* count (20 sets) don't change — this only affects how much art work the 48 skins themselves take.
+**Decided 2026-09-17: fuller per-rarity redesign, not recolors.** Each rarity step gets a genuine redesign — more ornate armor and effects at Epic+ — layered onto the shared chassis, so the rarity jump reads at a glance rather than as "same guy, different colour". The expensive option, chosen deliberately: a gacha's whole reward loop is the reveal, and 48 recolors would undercut it. The *chassis* count (4) and *animation* count (20 sets) are unchanged — this is 48 skins' worth of art effort, not new rig or animation work.
 
 ### 1.3 Companion / Summon Units 🎞️ — **Locked: simple movement + attack only**
 
@@ -78,7 +78,7 @@ No idle loop, no attack animation of its own (it never meaningfully fights back 
 
 Applies to the 16 Hero skills + 28 Champion abilities = **44 unique ability effects**, each getting its own icon and its own spritesheet VFX. No shared template library at this stage.
 
-**One scope question this raises that wasn't explicitly covered:** does the same "custom per ability" rule extend to the **18 Training Grounds Active skills** (`skills-gacha.md` §4), which fire and deal damage/apply effects the same way Hero skills do — or do those reuse/share VFX from the Hero skill set they visually resemble? Given they're mechanically identical to Hero skills (same cooldown system, same auto-fire behavior), I'd lean toward extending the same "custom per ability" treatment for consistency — flagging rather than assuming, since it's another 18 potential VFX sets (36 Training Grounds skills total, but only the 18 Actives need combat VFX; the 18 Passives are stat modifiers with no cast moment).
+**Decided 2026-09-17: yes — the 18 Training Grounds Active skills get the same custom-per-ability treatment.** They are mechanically identical to Hero skills (same cooldown system, same auto-fire behaviour), so sharing VFX with the Hero set they resemble would make a pulled Skill look like a skin of something already owned. **That takes the ability VFX total from 44 to 62 sets.** The 18 Training Grounds Passives need nothing — they are stat modifiers with no cast moment.
 
 ### 2.2 Multi-Strike Attack Animation 🎞️ — **Locked: recolor of the single-strike animation, fired multiple times**
 
@@ -95,7 +95,7 @@ Hunter (triple-strike) and Beast Master (quad-strike) reuse the Archer-path sing
 | Boss enrage-timer UI 🖼️ | 3 of 4 raid fight types |
 | Reinforced Boss add-wave spawn VFX 🎞️ | Dig-site Raid |
 | Phased Boss phase-transition VFX 🎞️ | Forge Raid |
-| Artifact proc feedback 🖼️/🎞️ | Several Artifact effects are chance-based procs rather than always-on (Lucky Dig, Windfall, Chain Reaction, Double Cast, Slipstream, Quick Study) — worth a small flash/icon popup on trigger even though Artifacts are otherwise passive-only |
+| ~~Artifact proc feedback~~ | **Cut 2026-09-17 — log-only, no art.** The six chance-based Artifact effects (Lucky Dig, Windfall, Chain Reaction, Double Cast, Slipstream, Quick Study) surface in the numeric log and nowhere else. Artifacts are passive-only everywhere else in the game; a proc flash would be the one exception, and it would fire often enough to become visual noise during an idle fight nobody is watching |
 
 ---
 
@@ -164,13 +164,13 @@ Unchanged, listed for completeness:
 
 ---
 
-## Remaining Small Follow-Ups
+## Remaining Small Follow-Ups — **all three decided 2026-09-17**
 
-Everything major is locked. Three small residual items, none blocking:
+Everything is locked. The three residual items are answered (`open-items.md` #4):
 
-1. **Champion skins (48): recolor-of-silhouette, or fuller per-rarity redesign?** Doesn't change the 4-chassis/20-animation-set structure either way — only affects how much art work the 48 skins themselves take (Section 1.2).
-2. **Do Training Grounds Active skills (18) get the same custom-VFX treatment as Hero/Champion abilities, or reuse the Hero skill VFX set they mechanically resemble?** (Section 2.1)
-3. **Artifact procs** — small flash/popup on trigger, or silent (numeric log only)? Six Artifact effects are chance-based rather than always-on (Section 2.3).
+1. ~~Champion skins (48): recolor-of-silhouette, or fuller per-rarity redesign?~~ → **fuller per-rarity redesign** on the shared chassis (Section 1.2). Chassis and animation counts unchanged.
+2. ~~Do Training Grounds Active skills (18) get the same custom-VFX treatment?~~ → **yes, custom per ability** (Section 2.1). Ability VFX sets: **44 → 62**.
+3. ~~Artifact procs — flash/popup, or silent?~~ → **silent, numeric log only** (Section 2.3). No art.
 
 ---
 
@@ -182,9 +182,9 @@ Now that fidelity is locked, here's what the numbers actually are:
 |---|---|
 | Hero animated spritesheets | **80** (16 nodes × 5 states, fully unique) |
 | Champion animation sets | **20** (4 chassis × 5 states — reused across all 48 Champions) |
-| Champion unique skins | **48** |
+| Champion unique skins | **48**, each a per-rarity redesign on its archetype's chassis (decided 2026-09-17) |
 | Summon animated spritesheets | **6** (3 summons × 2 states) |
-| Ability VFX + icons | **44** custom sets (Hero + Champion abilities) + possibly 18 more (Training Grounds Actives, per follow-up #2) |
+| Ability VFX + icons | **62** custom sets — 16 Hero skills + 28 Champion abilities + 18 Training Grounds Actives (decided 2026-09-17) |
 | Raid boss designs | **5**, fully unique |
 | Skill/item/currency icons | **164** (16+36+28 ability-adjacent, 48 Artifacts, 36 Gear, 16 currency, plus frames/badges) |
 | Enemy content | **Blocked** — 10 worlds × (regular/elite/boss/super boss) |
@@ -199,4 +199,4 @@ Now that fidelity is locked, here's what the numbers actually are:
 | 2 (Champions) | Build one archetype's chassis + a handful of skins first (validates the shared-rig pipeline) before scaling to all 4 chassis / 48 skins |
 | 3 (Gear/Skills/Artifacts) | Icon sets — the cheapest phase, now that Gear is confirmed icon-only with zero Hero-art interaction |
 | 4 (Raids/Arena/Traits) | 5 unique raid boss designs, Training Dummy's single hit-reaction, Trait grade frames (9-color ramp) |
-| 5 (content completion) | Remaining Champion skins, full 48-Artifact/48-Champion content, World & Enemy Design's entire asset list, ability VFX for the full 44 (+ possibly 18) |
+| 5 (content completion) | Remaining Champion skins, full 48-Artifact/48-Champion content, World & Enemy Design's entire asset list, ability VFX for the full 62 |
