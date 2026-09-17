@@ -45,7 +45,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | `open-items.md` | Every open question, undesigned pass, and untuned constant, plus the precedence table for code that overrides a locked doc. **The freshest doc in the project**, and now only what is still open | Before implementing anything numeric or contested; before starting a design session |
 | `build-log.md` | What landed and why — the numbered record #4–#29, split out of `open-items.md` 2026-09-17 | Only when you need the reasoning behind something already built. **Never to decide what to do next** |
 | `implementation-plan.md` | 5-phase build order, per-phase scope + deferral lists, how to brief Claude Code | Before writing any code |
-| `asset-list.md` | Full art/VFX/icon/background production list, all 10 fidelity decisions locked | Art production planning; blocked on world design for enemies + backgrounds |
+| `asset-list.md` | Full art/VFX/icon/background production list; all 10 fidelity decisions locked, three items still open | Art production planning. Enemies and world backgrounds are blocked on #6; the Artifact icon basis is #30. Volume totals corrected 2026-09-17 |
 | `playtest-notes.md` | Raw session observations, the sim's falsifiable predictions, and what is known-inert so it isn't chased | While playing; and before any tuning pass, since it holds the *why* behind what `open-items.md` decided |
 | `sim-tool.md` | `sim:hero-quest` and `balance:hero-quest` usage — reports, flags, overrides, sweeps, caveats | Before measuring or tuning anything |
 | `idle-game-architecture.md` | The polynux idle-game platform conventions this slice inherits | When a platform convention is in question |

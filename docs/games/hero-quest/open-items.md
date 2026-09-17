@@ -8,7 +8,8 @@ made it the most expensive bloat in the project.
 **Item numbers are the originals and are never reused.** Eleven docs, `constants.ts` and two
 scripts cite them (`#22`, `#23.3`, `#18.6`). The gaps below — #4, #5, #8, #10–#21, #24, #26–#28 —
 are finished items, not missing ones; they are in `build-log.md` under the same number. #22, #23,
-#25 and #29 appear in both: the open part here, the full record there.
+#25 and #29 appear in both: the open part here, the full record there. New items continue from
+**#30**.
 
 **Resolving a bare `#N`:** this doc first, `build-log.md` otherwise. Sub-numbers (`#23.3`,
 `#18.6`) keep their original meaning in both.
@@ -45,6 +46,18 @@ Every raid auto-applies a preferred Loadout on engage (`loadouts.md` §4). Arena
 
 ### 3. Boss/Raid fight crit model — seeded or averaged?
 `tech-architecture.md` §4c/§9 recommends seeded RNG crits for live boss and raid fights, but it's a recommendation, not a lock. **As built, boss fights roll seeded crits** (`fight.ts`). The question is whether that stays — with `BOSS_HP_MULT` sized so gates are not decided within a couple of seconds, the variance matters less than it did.
+
+### 30. Artifact icons — one per item (48), or one per effect (33)?
+
+Surfaced 2026-09-17 while checking `asset-list.md` for completeness. §3.2 has carried "icons could
+follow effects (33) rather than items (48) **if desired**" since the first pass — phrased as an
+option and never actually decided, which left it looking settled. It is the same shape as #4's
+three calls and worth 15 icons.
+
+Per-item reads as 48 distinct relics, which is what the Dig-site's reveal is selling. Per-effect
+reuses art across Artifacts that do the same thing, which is cheaper and makes the effect legible
+at a glance — the same argument that lets ability VFX be shared. **Live, because art is being
+produced now.**
 
 ---
 
@@ -197,7 +210,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - **Confirm the solo shape (#22.1)** — no prestige without a party is a consequence of the design, not yet a stated choice.
    - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
 3. **World & Enemy Design (#6)** — names, themes and rosters done 2026-09-15 (closing #5). What remains is art direction and production, and the optional enemy-kit question; kits that change fight length have to be re-measured against #22.
-4. **The three remaining quick calls (#1-3)** — all answerable in one short pass, none depend on anything else. #4 (the asset follow-ups) is decided, 2026-09-17.
+4. **The four remaining quick calls (#1-3, #30)** — all answerable in one short pass, none depend on anything else. **#30 (Artifact icons, 48 or 33) is the urgent one — art is in production now.** #4's three asset follow-ups are decided, 2026-09-17.
 5. **Phase 4 — endgame systems** (`implementation-plan.md`). Raids, Traits, Arena, Holidays, Battle Speed, plus `loadouts.md` §4's per-raid auto-apply. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena.
 6. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 7. **Playtest, then tune the rest.** The combat and progression block is tuned (#22); the gacha, shop, economy and ability-magnitude constants are settled here — see the standing-tuning section. The balance script and campaign sim stay in use throughout.

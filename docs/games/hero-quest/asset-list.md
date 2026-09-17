@@ -113,9 +113,9 @@ Hunter (triple-strike) and Beast Master (quad-strike) reuse the Archer-path sing
 
 | Set | Count | Notes |
 |---|---|---|
-| Artifacts | 48 | 33 underlying effects; icons could follow effects (33) rather than items (48) if desired, same logic as ability VFX reuse |
+| Artifacts | 48 **or 33 — open** | One icon per item (48), or one per underlying effect (33), the same logic as ability VFX reuse. Phrased as "if desired" since the first pass and never actually decided; it is a real call worth 15 icons, listed in the follow-ups |
 | Gear | 36 | **Locked: icon only — equipping is never visible on the Hero sprite.** No interaction with Section 1.1's Hero art at all |
-| Currency | 16 | Gold, Gems, Void Shards, 4× Seals, 4× Essence, Trait Gems, 5× Keys, Arena Medals |
+| Currency | **18** | Gold, Gems, Void Shards, 4× Seals, 4× Essence, Trait Gems, 5× Keys, Arena Medals — 1+1+1+4+4+1+5+1. **Was written as 16; the row's own list has always added to 18**, and it matches `HQ_CURRENCY_DOCS`. Corrected 2026-09-17 |
 
 ### 3.3 Frames & Badges 🖼️
 
@@ -136,7 +136,8 @@ Unchanged from the previous pass — nothing here was in the fidelity decision s
 |---|---|---|
 | World backgrounds | 10 | Themes set (`core-progression-and-prestige.md` §5) — Thornwick Vale through **The Void**. Art direction owed |
 | Stage-select / world map UI | 1 | |
-| Tab backgrounds | ~10 | Forge, Guild, Training Grounds (3 states, already locked), Dig-site, Raids, Traits, Prestige, Arena, Encyclopedia, Leaderboard |
+| Tab backgrounds | **10** | **Corrected 2026-09-17.** This row used to name Forge, Guild, Training Grounds and Dig-site — the four tabs `open-items.md` #20 collapsed into Gacha + Collections — plus "Encyclopedia", which shipped as Wiki. Commissioning from the old list bought four backgrounds for pages that do not exist and missed four that do. **Built, from `app/pages/hero-quest.vue`: Battle, Gacha, Collections, Loadouts, Prestige, Wiki** (6). **Phase 4, not yet built: Raids, Traits, Arena, Leaderboard** (4). The Dev tab is development-only and needs no art |
+| ~~Training Grounds recruitment art (3 states)~~ | 0–3 | **On hold, not locked.** `trainingGroundsArt` (Barracks / Archery Range / Wizard Tower, `skills-gacha.md` §1) dressed a page that #20 removed; the server still serializes it and nothing renders it. Either the Gacha card grows a per-system art treatment and these three are needed, or the field goes. Decide during the Pixi pass — **do not commission until then** |
 | Gacha pull screen / reveal VFX | **Locked: one shared flash, recolored per rarity tier** | 1 base animation × 6 rarity recolors, not a bespoke cinematic per tier — cheap, reused everywhere |
 
 ---
@@ -164,9 +165,25 @@ Unchanged, listed for completeness:
 
 ---
 
-## Remaining Small Follow-Ups — **all three decided 2026-09-17**
+## Remaining Follow-Ups
 
-Everything is locked. The three residual items are answered (`open-items.md` #4):
+**Fidelity is locked; the list is not complete.** Three things are still open, below the three that
+were answered. Do not read the volume summary as a final commissioning brief until they close.
+
+**Still open:**
+
+1. **Enemy art (§1.4) — the largest gap.** Rosters and world themes are set, but "several small
+   variants" of each world's trash enemy is not a number, and **enemies have no per-unit
+   animation-state count** — the Hero has 5 states, Champions 5, summons 2, enemies unspecified.
+   Gated on `open-items.md` #6.
+2. **World backgrounds (§4)** — 10, themes set, art direction owed. Same gate.
+3. **Artifact icons: 48 or 33? (§3.2)** — one per item, or one per underlying effect. The same
+   shape as the three calls below, and worth 15 icons.
+
+Plus one on hold: the three Training Grounds recruitment-art states (§4), which depend on whether
+the Gacha card grows a per-system art treatment after #20.
+
+**Decided 2026-09-17** (`open-items.md` #4):
 
 1. ~~Champion skins (48): recolor-of-silhouette, or fuller per-rarity redesign?~~ → **fuller per-rarity redesign** on the shared chassis (Section 1.2). Chassis and animation counts unchanged.
 2. ~~Do Training Grounds Active skills (18) get the same custom-VFX treatment?~~ → **yes, custom per ability** (Section 2.1). Ability VFX sets: **44 → 62**.
@@ -176,7 +193,8 @@ Everything is locked. The three residual items are answered (`open-items.md` #4)
 
 ## Real Production Volume Summary
 
-Now that fidelity is locked, here's what the numbers actually are:
+What the numbers actually are. **Two rows are still blocked** and one icon set has an open basis —
+see the follow-ups above before treating this as a commissioning brief.
 
 | Category | Count |
 |---|---|
@@ -186,8 +204,27 @@ Now that fidelity is locked, here's what the numbers actually are:
 | Summon animated spritesheets | **6** (3 summons × 2 states) |
 | Ability VFX + icons | **62** custom sets — 16 Hero skills + 28 Champion abilities + 18 Training Grounds Actives (decided 2026-09-17) |
 | Raid boss designs | **5**, fully unique |
-| Skill/item/currency icons | **164** (16+36+28 ability-adjacent, 48 Artifacts, 36 Gear, 16 currency, plus frames/badges) |
-| Enemy content | **Blocked** — 10 worlds × (regular/elite/boss/super boss) |
+| Static icons | **217** — broken out below, because the single figure here read **164** while claiming to include currency and frames/badges, and 164 is only the first three lines of it |
+| Enemy content | **Blocked** — 10 worlds × (regular/elite/boss/super boss), and the per-enemy animation-state count is not set either (§1.4). Gated on `open-items.md` #6 |
+| World backgrounds | **10**, themes set, art direction owed — same gate |
+
+**Static icons, itemised** (corrected 2026-09-17 — the old single figure dropped 53 icons):
+
+| Set | Count | |
+|---|---|---|
+| Class-tree skills | 16 | §3.1 |
+| Training Grounds skills | 36 | §3.1 — all 36; only the 18 Actives also need VFX |
+| Champion abilities | 28 | §3.1 |
+| Artifacts | 48 | §3.2 — **or 33 if icons follow effects rather than items; still open** |
+| Gear | 36 | §3.2 |
+| Currency | 18 | §3.2 |
+| Rarity tier frames | 6 | §3.3 |
+| Trait grade frames | 9 | §3.3 |
+| Archetype badges | 4 | §3.3 |
+| Class-tree node icons | 16 | §3.3 |
+| **Total** | **217** | 164 of it is skills + Artifacts + Gear, which is where the old figure stopped |
+
+Not in that total: the **status-effect icon set**, which §2.3 gives as a range (~15–20) rather than a count. Settle the range and it lands here.
 
 ---
 
