@@ -81,10 +81,12 @@ Account age is `hq_state.created_at` (written once at row creation, never update
 
 ```
 GOLD_TENURE_DAYS    = [0, 0.14, 0.25, 0.5, 1.03, 1.23, 3, 3.93, 5.84, 11.62, 15.84, 34.35, 41.97, 81.91, 145.09, 229.47]
-GOLD_TENURE_CEILING = [1.443, 3.098, 3.869, 6.181, 16.68, 21.9, 90.2, 157.2, 280, 718.6, 1110, 3223, 4446, 10870, 17190, 28510]
+GOLD_TENURE_CEILING = [17.24, 37.18, 46.43, 74.17, 200.2, 262.8, 1082, 1887, 3360, 8624, 13320, 38680, 53350, 130400, 206300, 342200]
 ```
 
-- **Each ceiling entry** is the geometric mean of Colony and Xeno income (uninvested and invested, both games) at that day, divided by `BASE_GOLD × 3600 / MIN_SECONDS_PER_KILL`. Geometrically interpolated between rungs, because the platform economies grow geometrically.
+> **Regenerated 2026-09-16 at the real kill rate — every rung is 12× what it was** (`open-items.md` #23). The divisor used to be `BASE_GOLD × 3600 / MIN_SECONDS_PER_KILL`, i.e. 7,200 kills/hour — the throughput *floor*, treated as the typical case. The campaign walk kills at 523–620/hour depending on party size, so the table described an account killing twelve times faster than the game produces and every "Hero Quest pays 0.85× platform" claim was that much too optimistic. The divisor is now `GOLD_REFERENCE_KILLS_PER_HOUR = 600`, measured.
+
+- **Each ceiling entry** is the geometric mean of Colony and Xeno income (uninvested and invested, both games) at that day, divided by `BASE_GOLD × GOLD_REFERENCE_KILLS_PER_HOUR`. Geometrically interpolated between rungs, because the platform economies grow geometrically. **Emit it, never hand-edit it: `bun run balance:compare --emit-hq-ceiling` prints the table.**
 - **The rung days sit on every Colony habitat and Xeno tier boundary**, where the platform curve bends. Evenly spaced rungs sagged up to 22% below the curve; landing on the bends holds it to ~1.5% (worst case 0.989× at day 0.17).
 - **`GOLD_PLATFORM_DISCOUNT = 0.85`** is applied on the way out rather than baked in, so the table stays literally "what Colony and Xeno pay" and the deliberate discount is one visible number. Parity is the wrong target: an invested roster spends most of its time with the ceiling binding rather than progression, so the ceiling is effectively what the economy pays, and a game idling at exactly the platform rate would be the platform's best idle game.
 - **`GOLD_TENURE_CRAWL = 1.0005`/day past the last rung** (+20%/year, ~5.5× over a decade) — the tenure analogue of the old plateau crawl.
@@ -120,7 +122,8 @@ secondsPerKill = max(MIN_SECONDS_PER_KILL, enemyEHP / partyDPS)
 ```
 
 - **`MIN_SECONDS_PER_KILL = 0.5s`** (tuned) — diegetically a spawn-pacing floor, which the battle scene needs anyway (nothing sane renders 1,000 kills/sec), and which the settle math applies identically so live and offline agree.
-- With both axes capped, max Gold/hour is **provably bounded by construction**: `BASE_GOLD × goldTenureCeiling(horizon) × (3600 / MIN_SECONDS_PER_KILL) × maxGold%Stack × maxBattleSpeed`. It takes no position — the progression factor is unbounded, so the ceiling is the bound — but it does take a **date**, because the tenure crawl never goes flat. `GOLD_BOUND_HORIZON_DAYS = 3650` (ten years) is the one the specs use. At that horizon (`--table=bound`): 385.8M/hr with no stack, 6.17B/hr at a ×4 stack under ×4 Battle Speed — **~162,000× headroom** under the column.
+- With both axes capped, max Gold/hour is **provably bounded by construction**: `BASE_GOLD × goldTenureCeiling(horizon) × (3600 / MIN_SECONDS_PER_KILL) × maxGold%Stack × maxBattleSpeed`. It takes no position — the progression factor is unbounded, so the ceiling is the bound — but it does take a **date**, because the tenure crawl never goes flat. `GOLD_BOUND_HORIZON_DAYS = 3650` (ten years) is the one the specs use. **At that horizon, after the 2026-09-16 regeneration: 4.63B/hr with no stack, 74.1B/hr at a ×4 stack under ×4 Battle Speed** — 12× the figures this line used to quote (385.8M and 6.17B), and ~13,500× headroom under the column rather than ~162,000×.
+- **The floor is now the abuse bound rather than the description of play.** Since the ceiling is generated at 600 kills/hour and `MIN_SECONDS_PER_KILL` still allows 7,200, the worst case an account can reach is **12× platform income** — the old calibration did not disappear, it moved from describing the typical case to bounding the extreme. ⚠ **Battle Speed multiplies straight through this**, and there is no second ceiling underneath it.
 
 ---
 
@@ -148,6 +151,8 @@ e.g. Coin Toss ≈ 0.5–2 minutes' worth, Windfall ≈ 5–10 minutes' worth (r
 ## 7. Critical Catch #1 — The 1,000,000-Gold Seal Price Breaks
 
 > ⚠ **Calibration stale since §3a (2026-08-18) — the ladder's shape stands, its numbers do not.** Every income figure below (48M/day at month 1, ~5.7B/day at month 3, ~17B/day at month 6) comes from the superseded calendar anchors. The keeping-pace ceiling now pays roughly 147M/day at day 30, 677M/day at day 90 and 1.25B/day at day 180 — one to two orders of magnitude less at the back end — so the "complete one gacha's roster in ~6 months" target behind `SEAL_LADDER_GROWTH` no longer holds at these rates. Not re-derived; tracked in `open-items.md` #23.
+>
+> The 2026-09-16 ceiling regeneration left these keeping-pace figures **numerically unchanged** — the table went up 12× and the rate it is stated at came down 12× — but they now describe the kill rate the game actually produces instead of the throughput floor, so they are true rather than optimistic. What #23 measured on top of that is worse for the ladder than "stale": a real prestige-0 account is nowhere near keeping pace, earns ~29.6K Gold/day, and needs **33.8 days for the ladder's first 1,000,000-Gold Seal**. Re-deriving the growth rates is therefore blocked on #23.3 (the progression half), not parallel to it.
 
 The locked flat price (1M Gold per extra Seal, `gacha-shared-system.md` §4) collides fatally with the target curve:
 
@@ -240,9 +245,9 @@ Proposed redesign preserving the flavor: scale off the Hero's **PWR** (like ever
 The original plan here was to model a prestige→calendar mapping and fit a prestige-indexed factor table to it. Step 1 was carried out and showed the mapping does not exist (§3a), so the calendar is now the curve's input rather than something it is fitted to. What calibration means now:
 
 1. **The ceiling is regenerated, not fitted.** `GOLD_TENURE_CEILING` is derived from Colony's and Xeno's live constants via `scripts/lib/economy-stages.ts`. Regenerate it after any retune of either game; the cross-game spec catches it when someone forgets.
-2. **`GOLD_STEP_BASE` is the one Hero Quest dial**, and it trades how early an account reaches the ceiling against how much falling behind on power costs. Measure it with the campaign walk (which runs on its own clock, so the ceiling is visible there) and `scripts/economy-compare.ts`. Re-run after any change to run pacing — it is calibrated against how fast the loop turns, and the loop has since slowed (`open-items.md` #23).
+2. **`GOLD_STEP_BASE` is the one Hero Quest dial**, and it trades how early an account reaches the ceiling against how much falling behind on power costs. ⚠ Measured 2026-09-16 (`open-items.md` #23), it is **not** currently reaching the ceiling at all: the campaign walk is progression-bound end to end and earns 0.07% of platform. Raising it now has room it did not have before the regeneration — the walk saturates at 138.8M rather than 11.57M — but the value has not been moved, pending the #23.3 decision. Measure it with the campaign walk (which runs on its own clock, so the ceiling is visible there) and `scripts/economy-compare.ts`. Re-run after any change to run pacing — it is calibrated against how fast the loop turns, and the loop has since slowed (`open-items.md` #23).
 3. **`GOLD_PLATFORM_DISCOUNT` is a design number**, not a measurement. Move it to change how Hero Quest sits against the platform.
-4. **Asserted in the specs:** worst-case Gold/hour (max stack × max Battle Speed × throughput floor, at the ten-year horizon) and the max offline collect both clear the column ceiling by ≥3 orders of magnitude.
+4. **Asserted in the specs:** worst-case Gold/hour (max stack × max Battle Speed × throughput floor, at the ten-year horizon) and the max offline collect clear the column ceiling by ~13,500× and **≥2 orders of magnitude** respectively. ⚠ **The collect assertion was ≥3 orders until 2026-09-16** — regenerating the ceiling 12× came straight out of that margin, taking the largest single collect from ~4.4e11 to ~5.3e12 against a ~1e15 column, so 187 consecutive worst-case collects fill it instead of 2,250. Recorded in `open-items.md` #23 rather than reconciled quietly; `test/hero-quest/settle.spec.ts` asserts the two-order figure and says why.
 
 ---
 
