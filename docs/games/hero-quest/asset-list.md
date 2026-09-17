@@ -45,16 +45,80 @@ Two of the 16 skill-cast animations are summon triggers rather than direct-effec
 
 **2 animation states each** (Move, Attack) — **no dedicated Hit or Death animation**. 3 summons × 2 states = **6 animated spritesheets**, the cheapest character-art line on the list.
 
-### 1.4 Enemies — **named; art direction still owed**
+### 1.4 Enemies 🎞️ — **Locked: 4 weapon variants per world, styled to it; 4 states, 5 for bosses**
 
-The rosters and one-line world themes are set (`core-progression-and-prestige.md` §5): one trash enemy per world (its elites are the same enemy, stat-buffed and visually marked), one boss, one super boss. The structure below stands; "several small variants" of the trash enemy is now a variation on that one named enemy.
+**Locked: every enemy is styled to its world.** A world's theme line is the art brief for its
+background *and* its whole roster — trash, elite, boss and super boss are drawn as inhabitants of
+that place, not as a generic monster set recoloured ten times. Cinderpass fields ash-caked kobolds
+around a molten wyrm; The Fraying fields knights coming apart thread by thread. This is what makes
+a world read as somewhere the player has arrived, given that nothing else about it changes — the
+stat curve is continuous across worlds and the pool never re-themes between prestiges
+(`core-progression-and-prestige.md` §5), so **art is the only signal that the run has moved on.**
 
-| Enemy category | Count needed | Per world |
-|---|---|---|
-| Regular wave enemies | Several small variants | ×10 worlds |
-| Elite wave enemy | 1+ distinct, tougher | ×10 worlds |
-| Boss | 1 unique | ×10 worlds |
-| Super boss | 1 unique, more elaborate | ×10 worlds |
+One trash enemy per world (elites are the same enemy, stat-buffed and visually marked), one boss,
+one super boss.
+
+**The rosters, with the theme each is drawn from** — source of truth `shared/utils/hero-quest/content/worlds.ts`, mirrored in `core-progression-and-prestige.md` §5. The arc is a walk toward the source: Duskspire's archmage opened a door to the Void (World 6), the cracks spread outward, and a run starts at the far frontier and walks inward past the door and out through the edge of the world.
+
+| # | World | Theme — the art brief | Trash / elite | Boss | Super boss |
+|---|---|---|---|---|---|
+| 1 | Thornwick Vale | Frontier farmland at the edge of the kingdom, where the first cracks have turned the hedgerows feral | Bramble Goblin | Old Gnarlhide | Gorsecrown, King of Hedges |
+| 2 | Mirewood | A drowned forest of black water and hanging moss, rotting from the roots up | Bog Lurker | Mother Leech | Rotheart, the Sunken Elder |
+| 3 | Cinderpass | A volcanic mountain pass choked with ash, held by kobold clans and the thing they worship | Cinder Kobold | Slagjaw | Pyrrhax, the Molten Wyrm |
+| 4 | Rimeholt | A frozen northern hold whose raiders swore themselves to a cold that does not end | Frostbound Raider | Jarl Hrimgar | Vinterhel, the Glacier Titan |
+| 5 | Sunken Amarath | The drowned capital of a sea-empire, its dead still keeping the tides | Drowned Sailor | Tidecaller Nerine | Queen Maerith of the Deep |
+| 6 | Duskspire | A city of mage-towers held at twilight since its archmage opened a door to the Void | Hollow Acolyte | Magister Halvane | Archmage Ithren, the Door-Opener |
+| 7 | The Bonefields | An ancient battlefield where the fallen of a forgotten war rise to fight it again | Restless Legionnaire | Grave Marshal Korr | Ossuar, the Thousand-Bone Host |
+| 8 | The Shattered Sky | Islands of torn-loose stone adrift in a storm the Void has unmoored | Skyshard Wisp | Stormcrown Roc | Zephyrax, Breaker of Heavens |
+| 9 | The Fraying | The edge of the world, where colour, sound and memory come apart thread by thread | Unravelled Knight | Sister Vesper, the Forgotten | Liminus, the Last Door |
+| 10 | The Void | Nothing, pressing in — where every crack leads, and where each run ends before it begins again | Void Thrall | Void Herald | Nihil, the Hunger at the End |
+
+**Decided 2026-09-17: 4 trash variants per world — sword, axe, bow, mage-staff.** Each wears an
+outfit matching its weapon type *and* its world's environment: Rimeholt's axe-carrier is a
+fur-wrapped raider, Sunken Amarath's is a barnacled marine. The weapon set is deliberately the
+party's own vocabulary — a player already reads "staff means it hits from the back" from their own
+Hero, so a pack of six is legible at a glance without a tutorial.
+
+**The weapon is the rig; the world is the skin.** This is §1.2's Champion chassis pattern, applied
+again because it is the same problem — four archetypes became four rigs and forty-eight skins, and
+here four weapon types become **4 rigs, animated once**, reskinned across all ten worlds. Forty
+bespoke animated trash enemies would be the single most expensive line on this list; this is 16
+animation sets and 40 skins. A bow release and an axe swing genuinely differ, so the split has to
+be by weapon rather than by world — which is the cheap direction, since there are 4 weapons and 10
+worlds.
+
+**Decided 2026-09-17: 4 animation states for trash and elites — Idle, Attack, Hit, Death.**
+Deliberately one short of the Hero's and the Champions' 5: **enemies have no abilities**, so there
+is no skill-cast to animate. That is not an omission, it is the current combat model — `fight.ts`
+emits `enemy_attack` and `enemy_down` and no enemy ability event exists (`open-items.md` #18.6 is
+the same fact seen from the other side: `controlResist` is inert because nothing applies control to
+the party). ⚠ **If the enemy-kit question in #6 is ever answered yes, every rig gains a fifth
+state** — 4 more sets for trash, 20 for bosses. That is a cost the kit decision carries and nobody
+has priced.
+
+**Bosses and super bosses get 5 — Idle, Attack, Hit, Death, and an Entry.** The extra one is not
+a cast; it is the boss arriving. Bosses used to be the only thing in the game that waited for the
+player, and `open-items.md` #25 took that away — they now fire automatically while the tab is
+visible, which is on the playtest watchlist precisely as *"whether a boss still feels like an event
+when the player did not start it"*. With the player's action gone, the art is what is left to carry
+the moment. One entry animation per boss is the cheapest thing that answers it. **If it does not
+earn its keep in playtest, drop bosses to 4** — nothing else depends on it.
+
+**Elites are a visual mark on the trash enemy, not a design.** They share the trash roster's name
+and stat-buffed identity (§5), so the mark — an aura, a banner, a scar, whatever reads at a
+glance — is **one consistent treatment applied across all ten worlds and all four weapon variants**,
+so a player learns "this shape means elite" once rather than forty times. No animation of its own.
+
+| Enemy category | Rigs | Skins | States | Spritesheets |
+|---|---|---|---|---|
+| Trash (4 weapon variants) | **4**, shared across every world | **40** (4 × 10 worlds) | 4 | **16** (4 rigs × 4 states) |
+| Elite | — reuses the trash rig | 1 mark treatment, reused | — | **0** |
+| Boss | 10, one per world, bespoke | — | 5 | **50** |
+| Super boss | 10, one per world, bespoke and the most elaborate art in its world | — | 5 | **50** |
+| | | **60 designs** | | **116 spritesheets** |
+
+**Still owed:** production itself, and the enemy-kit question (`open-items.md` #6) — which is a
+gameplay decision, not an art one, and would add the fifth state above.
 
 ### 1.5 Raid Bosses 🎞️ — **Locked: all 5 unique designs, no reuse**
 
@@ -134,7 +198,7 @@ Unchanged from the previous pass — nothing here was in the fidelity decision s
 
 | Asset | Count | Notes |
 |---|---|---|
-| World backgrounds | 10 | Themes set (`core-progression-and-prestige.md` §5) — Thornwick Vale through **The Void**. Art direction owed |
+| World backgrounds | 10 | One per world, drawn from the same theme line as that world's roster (§1.4 has the table) — Thornwick Vale through **The Void**. The background and the enemies standing on it are a matched set; a world is the only place the run's progress is visible, since the stat curve is continuous and the pool never re-themes between prestiges. Art direction owed (`open-items.md` #6) |
 | Stage-select / world map UI | 1 | |
 | Tab backgrounds | **10** | **Corrected 2026-09-17.** This row used to name Forge, Guild, Training Grounds and Dig-site — the four tabs `open-items.md` #20 collapsed into Gacha + Collections — plus "Encyclopedia", which shipped as Wiki. Commissioning from the old list bought four backgrounds for pages that do not exist and missed four that do. **Built, from `app/pages/hero-quest.vue`: Battle, Gacha, Collections, Loadouts, Prestige, Wiki** (6). **Phase 4, not yet built: Raids, Traits, Arena, Leaderboard** (4). The Dev tab is development-only and needs no art |
 | ~~Training Grounds recruitment art (3 states)~~ | 0–3 | **On hold, not locked.** `trainingGroundsArt` (Barracks / Archery Range / Wizard Tower, `skills-gacha.md` §1) dressed a page that #20 removed; the server still serializes it and nothing renders it. Either the Gacha card grows a per-system art treatment and these three are needed, or the field goes. Decide during the Pixi pass — **do not commission until then** |
@@ -167,15 +231,17 @@ Unchanged, listed for completeness:
 
 ## Remaining Follow-Ups
 
-**Fidelity is locked. Everything still open is gated on world design** — every icon, unit and VFX
-count on this list is now decided.
+**Every count on this list is decided.** Fidelity, counts and styling rules are all locked as of
+2026-09-17; what remains is production, plus one gameplay decision that would change a count.
 
-**Still open, both waiting on `open-items.md` #6:**
+**Still open — one item, and it is not an art question:**
 
-1. **Enemy art (§1.4) — the largest gap.** Rosters and world themes are set, but "several small
-   variants" of each world's trash enemy is not a number, and **enemies have no per-unit
-   animation-state count** — the Hero has 5 states, Champions 5, summons 2, enemies unspecified.
-2. **World backgrounds (§4)** — 10, themes set, art direction owed.
+1. **World backgrounds (§4)** — 10, one per world, briefs are §1.4's theme column. Art direction
+   owed, but nothing is undecided about the count or the fidelity.
+
+**Not an art decision, but it changes this list:** whether enemies get ability kits
+(`open-items.md` #6). A yes adds a **fifth animation state to every enemy rig** — 4 more trash
+sets and 20 more boss sets — and that cost has never been priced into the kit discussion.
 
 Plus one on hold: the three Training Grounds recruitment-art states (§4), which depend on whether
 the Gacha card grows a per-system art treatment after #20.
@@ -186,13 +252,14 @@ the Gacha card grows a per-system art treatment after #20.
 2. ~~Do Training Grounds Active skills (18) get the same custom-VFX treatment?~~ → **yes, custom per ability** (Section 2.1). Ability VFX sets: **44 → 62**.
 3. ~~Artifact procs — flash/popup, or silent?~~ → **silent, numeric log only** (Section 2.3). No art.
 4. ~~Artifact icons: one per item, or one per effect?~~ → **one per item, 48** (Section 3.2). The reveal is selling distinct relics.
+5. ~~Trash enemy variant count, and the per-enemy animation-state count?~~ → **4 weapon variants** (sword/axe/bow/staff) on **4 shared rigs**, **4 states** for trash and elites, **5 for bosses** — the extra one is an Entry, not a cast (Section 1.4).
 
 ---
 
 ## Real Production Volume Summary
 
-What the numbers actually are. Everything here is decided except the **two blocked rows**, both
-waiting on world design — see the follow-ups above.
+What the numbers actually are — **every row is now a number**. The last two blocked rows (enemies,
+world backgrounds) closed on 2026-09-17.
 
 | Category | Count |
 |---|---|
@@ -203,8 +270,9 @@ waiting on world design — see the follow-ups above.
 | Ability VFX + icons | **62** custom sets — 16 Hero skills + 28 Champion abilities + 18 Training Grounds Actives (decided 2026-09-17) |
 | Raid boss designs | **5**, fully unique |
 | Static icons | **217** — broken out below, because the single figure here read **164** while claiming to include currency and frames/badges, and 164 is only the first three lines of it |
-| Enemy content | **Blocked** — 10 worlds × (regular/elite/boss/super boss), and the per-enemy animation-state count is not set either (§1.4). Gated on `open-items.md` #6 |
-| World backgrounds | **10**, themes set, art direction owed — same gate |
+| Enemy animated spritesheets | **116** — 16 trash (4 weapon rigs × 4 states, shared across all worlds) + 50 boss + 50 super boss (10 each × 5 states, bespoke). §1.4 |
+| Enemy designs | **60** — 40 trash skins (4 variants × 10 worlds) + 10 bosses + 10 super bosses, plus one elite mark reused everywhere. §1.4 |
+| World backgrounds | **10**, one per world, briefed in §1.4's theme column — the only line still owing art direction rather than production |
 
 **Static icons, itemised** (corrected 2026-09-17 — the old single figure dropped 53 icons):
 

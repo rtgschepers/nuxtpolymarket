@@ -193,11 +193,11 @@ Starting point: `BASE_CURRENCY = 100`, `CURRENCY_GROWTH = 2` → 100 / 200 / 400
 | 9 | The Fraying | The edge of the world, where colour, sound and memory come apart thread by thread | Unravelled Knight | Sister Vesper, the Forgotten | Liminus, the Last Door |
 | 10 | The Void | Nothing, pressing in — where every crack leads, and where each run ends before it begins again | Void Thrall | Void Herald | Nihil, the Hunger at the End |
 
-The source of truth is `shared/utils/hero-quest/content/worlds.ts`; the wiki's Content page renders it. Names only — stats come from Section 1. Enemies have no abilities of their own yet. No tier bumps or visual re-theming between prestiges — this keeps art scope minimal for a small team. Difficulty is communicated entirely through the stat curve (Section 1), not through visual differentiation between prestiges.
+The source of truth is `shared/utils/hero-quest/content/worlds.ts`; the wiki's Content page renders it, and `asset-list.md` §1.4 mirrors this table as the art brief — where it also locks that **every enemy is styled to its world**. Names only — stats come from Section 1. Enemies have no abilities of their own yet. No tier bumps or visual re-theming between prestiges — this keeps art scope minimal for a small team. Difficulty is communicated entirely through the stat curve (Section 1), not through visual differentiation between prestiges.
 
 ---
 
 ## Next sections to define
-- ~~**World themes & enemy/boss design (specific rosters)**~~ — named in §5. Still open: art direction and production, and whether enemies get their own ability kits.
+- ~~**World themes & enemy/boss design (specific rosters)**~~ — named in §5, and fully briefed for art in `asset-list.md` §1.4 (2026-09-17: 4 weapon variants per world on shared rigs, 4 animation states, 5 for bosses). Still open: production itself, and whether enemies get their own ability kits (`open-items.md` #6).
 
 *(Classes & combat, all four gacha systems, and idle mechanics & economy are all now Locked in their own docs — see `index.md`.)*
