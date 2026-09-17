@@ -8,7 +8,7 @@ attention; this one holds the record.
 scripts cite them (`#22`, `#23.3`, `#18.6`), so renumbering would silently repoint a reference.
 Numbers missing here are items still open — they stayed in `open-items.md` under the same number.
 Four entries (#22, #23, #25, #29) appear in **both**: the full record is here, and the part still
-needing attention stayed there.
+needing attention stayed there. Numbering runs to **#30**; the next new item is #31.
 
 **This is not on the per-task reading list** (`CLAUDE.md` §1). Read an entry when you need the
 reasoning behind something already built; do not load it to find out what to do next.
@@ -445,6 +445,24 @@ New placeholders, all `// UNTUNED ╧`: `SKILL_COLLECTION_PASSIVE_FRACTION`, `AR
 **The free 10-pull entitlement is now the only thing a clock hands out**, and it was retuned with the cut: **3 per gacha per day (was 2) on a 10-minute cooldown (was 30)**. `FREE_PULLS_PER_DAY` and `FREE_PULL_COOLDOWN_MINUTES` are now marked **`// TUNED ✓`** — they are a coupled pair, set by decision rather than by sim measurement (the campaign sim walks combat and models no pull cadence, so it has nothing to say about either). The cooldown is what decides whether the allowance is collectable in one sitting: 3 claims 10 minutes apart is ~20 minutes, where 2 claims 30 minutes apart was an hour and mostly went unclaimed.
 
 **Net effect on pull income.** A gacha goes from 9 free Seals + 20 free pulls per day to **0 free Seals + 30 free pulls**, ×4 systems. Pull *volume* is up; Seal *balances* now only grow by progressing or paying. A player who stalls at a boss gate and never buys Seals is capped at 30 pulls a day per gacha with no Seal income — **that ceiling is intended and accepted** (2026-09-16), not an open consequence. The collection curve, Essence income and the crafting economy still have not been re-derived against the new shape, which is a tuning question like the rest of this section.
+
+---
+
+### 30. Artifact icons — **one per item, decided 2026-09-17**
+
+**48 icons, one per Artifact** — not 33, one per underlying effect.
+
+Surfaced while checking `asset-list.md` for completeness. §3.2 had carried "icons could follow
+effects (33) rather than items (48) **if desired**" since the first pass — phrased as an option
+and never actually decided, which is why it read as settled for as long as it did. Worth 15 icons.
+
+**Why per-item.** The Dig-site's reveal is selling 48 distinct relics; sharing art between
+Artifacts that happen to roll the same effect would undercut the one thing that pull is for. This
+is deliberately the **opposite** call to ability VFX, where reuse is fine because there the effect
+*is* the thing being read — an Artifact is an object, an ability is an event.
+
+Applied to `asset-list.md` §3.2 and its itemised icon table. No change to the 217 total: 48 was
+already the number counted.
 
 ---
 

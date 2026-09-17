@@ -113,7 +113,7 @@ Hunter (triple-strike) and Beast Master (quad-strike) reuse the Archer-path sing
 
 | Set | Count | Notes |
 |---|---|---|
-| Artifacts | 48 **or 33 — open** | One icon per item (48), or one per underlying effect (33), the same logic as ability VFX reuse. Phrased as "if desired" since the first pass and never actually decided; it is a real call worth 15 icons, listed in the follow-ups |
+| Artifacts | **48** | **Decided 2026-09-17: one icon per item**, not one per underlying effect (33). The Dig-site's reveal is selling 48 distinct relics, and sharing art between Artifacts that happen to roll the same effect would undercut that — the opposite call to ability VFX, where the effect *is* the thing being read. `open-items.md` #30, now in `build-log.md` |
 | Gear | 36 | **Locked: icon only — equipping is never visible on the Hero sprite.** No interaction with Section 1.1's Hero art at all |
 | Currency | **18** | Gold, Gems, Void Shards, 4× Seals, 4× Essence, Trait Gems, 5× Keys, Arena Medals — 1+1+1+4+4+1+5+1. **Was written as 16; the row's own list has always added to 18**, and it matches `HQ_CURRENCY_DOCS`. Corrected 2026-09-17 |
 
@@ -167,34 +167,32 @@ Unchanged, listed for completeness:
 
 ## Remaining Follow-Ups
 
-**Fidelity is locked; the list is not complete.** Three things are still open, below the three that
-were answered. Do not read the volume summary as a final commissioning brief until they close.
+**Fidelity is locked. Everything still open is gated on world design** — every icon, unit and VFX
+count on this list is now decided.
 
-**Still open:**
+**Still open, both waiting on `open-items.md` #6:**
 
 1. **Enemy art (§1.4) — the largest gap.** Rosters and world themes are set, but "several small
    variants" of each world's trash enemy is not a number, and **enemies have no per-unit
    animation-state count** — the Hero has 5 states, Champions 5, summons 2, enemies unspecified.
-   Gated on `open-items.md` #6.
-2. **World backgrounds (§4)** — 10, themes set, art direction owed. Same gate.
-3. **Artifact icons: 48 or 33? (§3.2)** — one per item, or one per underlying effect. The same
-   shape as the three calls below, and worth 15 icons.
+2. **World backgrounds (§4)** — 10, themes set, art direction owed.
 
 Plus one on hold: the three Training Grounds recruitment-art states (§4), which depend on whether
 the Gacha card grows a per-system art treatment after #20.
 
-**Decided 2026-09-17** (`open-items.md` #4):
+**Decided 2026-09-17** (`open-items.md` #4 and #30):
 
 1. ~~Champion skins (48): recolor-of-silhouette, or fuller per-rarity redesign?~~ → **fuller per-rarity redesign** on the shared chassis (Section 1.2). Chassis and animation counts unchanged.
 2. ~~Do Training Grounds Active skills (18) get the same custom-VFX treatment?~~ → **yes, custom per ability** (Section 2.1). Ability VFX sets: **44 → 62**.
 3. ~~Artifact procs — flash/popup, or silent?~~ → **silent, numeric log only** (Section 2.3). No art.
+4. ~~Artifact icons: one per item, or one per effect?~~ → **one per item, 48** (Section 3.2). The reveal is selling distinct relics.
 
 ---
 
 ## Real Production Volume Summary
 
-What the numbers actually are. **Two rows are still blocked** and one icon set has an open basis —
-see the follow-ups above before treating this as a commissioning brief.
+What the numbers actually are. Everything here is decided except the **two blocked rows**, both
+waiting on world design — see the follow-ups above.
 
 | Category | Count |
 |---|---|
@@ -215,7 +213,7 @@ see the follow-ups above before treating this as a commissioning brief.
 | Class-tree skills | 16 | §3.1 |
 | Training Grounds skills | 36 | §3.1 — all 36; only the 18 Actives also need VFX |
 | Champion abilities | 28 | §3.1 |
-| Artifacts | 48 | §3.2 — **or 33 if icons follow effects rather than items; still open** |
+| Artifacts | 48 | §3.2 — one per item, decided 2026-09-17 |
 | Gear | 36 | §3.2 |
 | Currency | 18 | §3.2 |
 | Rarity tier frames | 6 | §3.3 |
