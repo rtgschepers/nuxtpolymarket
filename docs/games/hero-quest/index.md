@@ -2,7 +2,9 @@
 
 Master navigation for the project. **26 files**: 18 design docs (all **Locked** except `idea-backlog.md`, a running list), 7 project-meta docs catalogued in §1a, and `CLAUDE.md`. *Refreshed 2026-09-15 against the built game; the folder is gitignored and local.*
 
-> **Read first:** `open-items.md` lists everything still open — design questions, undesigned passes, and the standing constant-tuning list. Anything below marked ⚠️ points at a section where code has overridden a locked doc; `open-items.md` records each (#20, #23, #25).
+> **Read first:** `open-items.md` lists everything still open — design questions, undesigned passes, and the standing constant-tuning list. Anything below marked ⚠️ points at a section where code has overridden a locked doc; `open-items.md`'s precedence table records each (#17, #18.2, #20, #23, #25, #29).
+>
+> **`build-log.md` is the record of what landed** and why it was built that way — split out of `open-items.md` on 2026-09-17. It is **not** on the per-task reading list: read an entry when you need the reasoning behind something already built, never to find out what to do next. A bare `#N` resolves to `open-items.md` first, `build-log.md` otherwise.
 
 ---
 
@@ -40,7 +42,8 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Doc | Owns | When to read it |
 |---|---|---|
 | `index.md` | This file — catalog, topic lookup, currency/formula indexes, roster sizes | Any time you need to find where something is specified |
-| `open-items.md` | Every open question, undesigned pass, and untuned constant. **The freshest doc in the project** | Before implementing anything numeric or contested; before starting a design session |
+| `open-items.md` | Every open question, undesigned pass, and untuned constant, plus the precedence table for code that overrides a locked doc. **The freshest doc in the project**, and now only what is still open | Before implementing anything numeric or contested; before starting a design session |
+| `build-log.md` | What landed and why — the numbered record #4–#29, split out of `open-items.md` 2026-09-17 | Only when you need the reasoning behind something already built. **Never to decide what to do next** |
 | `implementation-plan.md` | 5-phase build order, per-phase scope + deferral lists, how to brief Claude Code | Before writing any code |
 | `asset-list.md` | Full art/VFX/icon/background production list, all 10 fidelity decisions locked | Art production planning; blocked on world design for enemies + backgrounds |
 | `playtest-notes.md` | Raw session observations, the sim's falsifiable predictions, and what is known-inert so it isn't chased | While playing; and before any tuning pass, since it holds the *why* behind what `open-items.md` decided |

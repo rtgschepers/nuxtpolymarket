@@ -17,7 +17,9 @@ Per task, load:
 3. The 2–4 docs owning the system being built
 4. `open-items.md` — before implementing anything numeric or contested
 
-`tech-architecture.md` and `open-items.md` are the biggest docs and are section-addressable. Fetch §3 for schema, §5 for routes, §2 for the shared layer — not the whole file.
+**`build-log.md` is not on that list.** It holds the record of everything that landed (#4–#29), split out of `open-items.md` on 2026-09-17 to stop the always-read doc carrying 604 lines of finished work. Read a single entry when you need the reasoning behind something already built; never load it to decide what to do next. A bare `#N` resolves to `open-items.md` first, `build-log.md` otherwise, and numbers are never reused.
+
+`tech-architecture.md` is the biggest doc and is section-addressable. Fetch §3 for schema, §5 for routes, §2 for the shared layer — not the whole file.
 
 ---
 
@@ -27,7 +29,8 @@ The docs were written across many sessions and revised in place. Conflicts exist
 
 | Question | Authority |
 |---|---|
-| Is this decided, or still open? | `open-items.md` — always. It is the freshest doc in the project. |
+| Is this decided, or still open? | `open-items.md` — always. It is the freshest doc in the project, and now holds *only* what is open. |
+| Does the code override a locked doc here? | `open-items.md`'s precedence table — the live list, with the full record in `build-log.md`. |
 | How is it built (schema, routes, types, layering)? | `tech-architecture.md` |
 | What is the rule / formula / number? | The owning system doc, per `index.md` §1 |
 | What order do we build in, what's deferred? | `implementation-plan.md` |
@@ -118,10 +121,10 @@ Structural invariants from the docs (drop-rate rows sum to 100%, ability reuse �
 ## 7. Known-unstable ground
 
 - **The loop is tuned as a pacing model — change it as one.** One index `n = p×100 + (w-1)×10 + (s-1)`, one base `ENEMY_STEP_BASE = 1.08`, no prestige difficulty reset. Hero PWR/DEF/VIT track enemy DEF/PWR exactly (`ENEMY_PACE_RATIO = 1.0`), so the mitigation clamp never makes walls; enemy HP rides its own exponent, and **walls come from `FIGHT_LENGTH_DRIFT` at boss timers**. LCK is off the level curve. A first prestige for a party of three is about a week; a solo account does not prestige. Full derivation: `core-progression-and-prestige.md` §1; record and open consequences: `open-items.md` #22. Anything that lengthens fights (enemy kits, heals, more escorts) has to be re-measured on the campaign walk. The curve stays behind `settle.enemyMultiplier()` / `enemyHpMultiplier()`.
-- **Gold is paced on wall-clock account age** — `BASE_GOLD × min(1.017^n, tenureCeiling(age))`, ceiling generated from Colony and Xeno at 0.85× (`gold-economy.md` §3a). `PRESTIGE_GOLD_FACTOR`, `GOLD_PRESTIGE_CAP` and the calendar anchors are gone. ⚠ **Three consequences are unreconciled** — lost anchors, a stale Seal ladder, and very low first-week income (`open-items.md` #23). Do not build economy features on top of these numbers without surfacing that.
-- **Settles carry a part-kill** (`hq_state.kill_fraction`, in kills, `[0, 1)`), and the DB connection is pinned to UTC. Anything that resets run position must zero `killFraction` too (`open-items.md` #24).
+- **Gold is paced on wall-clock account age** — `BASE_GOLD × min(1.017^n, tenureCeiling(age))`, ceiling generated from Colony and Xeno at 0.85× (`gold-economy.md` §3a). `PRESTIGE_GOLD_FACTOR`, `GOLD_PRESTIGE_CAP` and the calendar anchors are gone. ⚠ **Three consequences are unreconciled** — lost anchors (#23.1), a stale Seal ladder (#23.2) and very low first-week income (#23.3). The tenure ceiling was regenerated against the measured kill rate on 2026-09-16, which raised it 12× and left the walk's income unchanged, since it is progression-bound throughout; the progression half is the open one. Do not build economy features on top of these numbers without surfacing that.
+- **Settles carry a part-kill** (`hq_state.kill_fraction`, in kills, `[0, 1)`), and the DB connection is pinned to UTC. Anything that resets run position must zero `killFraction` too (`build-log.md` #24).
 - **Hero level persists across prestige and class switches.** `heroLevel`/`heroXp` are **not** reset by `settleHq`'s prestige path — it zeroes only the run-position group.
-- **Locked docs that code has overridden**, each recorded rather than silently reconciled: the four gacha tabs collapsed to Gacha + Collections (#20), automatic boss engagement (#25), the account-age Gold curve (#23). If you read the older rule in a system doc, `open-items.md` wins.
+- **Locked docs that code has overridden**, each recorded rather than silently reconciled: Champion and Artifact names generated against guidance that deferred them (#17, #18.2), the four gacha tabs collapsed to Gacha + Collections (#20), the account-age Gold curve (#23), automatic boss engagement (#25), the free Seal grant removed (#29). **`open-items.md`'s precedence table is the live list** — read it before trusting a rule in a system doc; where they disagree, it wins.
 - **`gold-economy.md` supersedes older Gold assumptions** in `gacha-shared-system.md`, `economy-and-currencies.md`, `skills-gacha.md`, and `core-progression-and-prestige.md`. Any flat 1,000,000-Gold Seal price you encounter is superseded by the daily escalating ladder (`gold-economy.md` §7).
 
 ---
