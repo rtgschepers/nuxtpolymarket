@@ -45,7 +45,7 @@ import {
 
 import {
     BASE_GOLD,
-    MIN_SECONDS_PER_KILL
+    GOLD_REFERENCE_KILLS_PER_HOUR
 } from '../../shared/utils/hero-quest/constants'
 import {
     goldProgressionFactor,
@@ -374,8 +374,13 @@ export function platformIncomeAtDay(days: number): number {
 // nobody regenerates it. Then these ratios drift and the band catches it.
 // See `docs/games/hero-quest/gold-economy.md` §3a.
 
-/** Kills per hour at the throughput floor — the rate the grind actually runs at. */
-const HQ_KILLS_PER_HOUR = 3600 / MIN_SECONDS_PER_KILL
+/**
+ * The kill rate every figure below is stated at — `GOLD_REFERENCE_KILLS_PER_HOUR`, measured on
+ * the campaign walk, **not** the throughput floor. Using the floor here was the bug behind
+ * `open-items.md` #23: it described an account killing 12× faster than the game produces, so
+ * "Hero Quest pays 0.85× platform" was a statement about a rate nobody plays at.
+ */
+const HQ_KILLS_PER_HOUR = GOLD_REFERENCE_KILLS_PER_HOUR
 
 /**
  * Gold/hour for a Hero Quest account of `days` age that is keeping pace, i.e.
@@ -448,6 +453,23 @@ export function compareAtEqualDays(globalLevelFor: (tier: number) => number, res
         const colony = colonyIncomeAtDay(stage.days, researchLevel)
         return { tier, days: stage.days, xeno: stage.coinsPerHour, colony, ratio: stage.coinsPerHour / colony }
     })
+}
+
+/**
+ * `GOLD_TENURE_CEILING`, regenerated — the values to paste into `constants.ts`.
+ *
+ * The table is the platform curve expressed as a per-kill multiplier, so it is exactly
+ * `platformIncomeAtDay(rung) / (BASE_GOLD × GOLD_REFERENCE_KILLS_PER_HOUR)`. `GOLD_PLATFORM_DISCOUNT`
+ * is deliberately *not* applied: `goldTenureCeiling` applies it on the way out, which keeps the
+ * table readable as the platform curve and the discount visible as one number.
+ *
+ * Four significant figures, matching what is there now — the platform curves this comes from are
+ * not accurate to more, and a long tail of digits would imply otherwise.
+ */
+export function emitGoldTenureCeiling(rungs: readonly number[]): number[] {
+    return rungs.map(day => Number(
+        (platformIncomeAtDay(day) / (BASE_GOLD * GOLD_REFERENCE_KILLS_PER_HOUR)).toPrecision(4)
+    ))
 }
 
 export { MAX_RESEARCH_LEVEL, MAX_TIER, XENO_UPGRADE_MAX_LEVEL }

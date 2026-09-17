@@ -745,6 +745,14 @@ export const BASE_GOLD = 0.4
  * a real share of its time below the ceiling — so falling behind on power still costs Gold.
  * Steeper pins every roster to the ceiling and progress stops paying; shallower drops a stalled
  * account to a tenth of platform income.
+ *
+ * ⚠ **That rationale did not survive measurement** (`open-items.md` #23, 2026-09-16, re-derivable
+ * with `bun run sim:hero-quest --report=gold --party=3`). The campaign walk spends **100%** of its
+ * first prestige loop progression-bound, never ceiling-bound, at **0.07% of platform income** —
+ * nowhere near the 0.4–2.5x band. Nor does raising this fix it: swept on the walk it saturates at
+ * 1.07 (1.09 and 1.15 return the identical total), because `BASE_GOLD × GOLD_TENURE_CEILING` caps
+ * income at ~2.6% of platform at the walk's real kill rate. The value is left alone pending the
+ * #23.3 decision, which is about the ceiling's derivation rather than about this dial.
  */
 export const GOLD_STEP_BASE = 1.017
 
@@ -768,6 +776,36 @@ export const GOLD_STEP_BASE = 1.017
  * Because it is a `min`, a dormant account is not a hole: six months of age buys a high ceiling,
  * but a Stage 1 hero's progression factor is still 1. Waiting cannot skip the game.
  */
+/**
+ * The kill rate `GOLD_TENURE_CEILING` is generated against — **the rate the game actually runs
+ * at**, not the rate it is capped at.
+ *
+ * The table converts a platform Gold/hour figure into a per-kill value, so it needs a kill rate to
+ * divide by. It used `MIN_SECONDS_PER_KILL` (7,200/hr), which is the *throughput floor* — the
+ * fastest a kill may ever resolve — and treating a floor as the typical case made the ceiling
+ * 11.7× too low: an account pinned to it earned a twelfth of platform income forever
+ * (`open-items.md` #23, measured 2026-09-16).
+ *
+ * **Measured on the campaign walk**, `bun run sim:hero-quest --report=gold`: 523 kills/hour solo,
+ * 617 for a party of three, 620 for a party of six. That it barely moves across party sizes is the
+ * pacing model working — `ENEMY_PACE_RATIO` and `FIGHT_LENGTH_DRIFT` hold fight length roughly
+ * constant, so a bigger party kills faster *and* walks deeper, and the rate converges. 600 is a
+ * round number inside that band; the spread is wider than the last digit, so precision here would
+ * be false.
+ *
+ * ⚠ **What this trades away.** `MIN_SECONDS_PER_KILL` was in the derivation because a bounded
+ * per-kill value times an unbounded kill rate is unbounded income. Calibrating to the typical rate
+ * means anything that lifts the real rate above 600/hr earns proportionally more than platform.
+ * The floor still bounds the worst case at `3600 / MIN_SECONDS_PER_KILL ÷ this` = **12×**, so the
+ * old calibration did not vanish — it stopped describing normal play and became the bound on the
+ * extreme. **Battle Speed (Phase 4, unbuilt) is the live risk**: it multiplies kill rate directly,
+ * and its multiplier lands straight on Gold income against the platform.
+ *
+ * Coupled to `GOLD_TENURE_CEILING`, which must be regenerated whenever this moves
+ * (`bun run balance:compare --emit-hq-ceiling`), and to nothing else — combat never reads it.
+ */
+export const GOLD_REFERENCE_KILLS_PER_HOUR = 600 // TUNED ✓
+
 export const GOLD_TENURE_DAYS: readonly number[] = [
     0, 0.14, 0.25, 0.5, 1.03, 1.23, 3, 3.93, 5.84, 11.62, 15.84, 34.35, 41.97, 81.91, 145.09, 229.47
 ]
@@ -776,14 +814,15 @@ export const GOLD_TENURE_DAYS: readonly number[] = [
  * The ceiling at each rung of `GOLD_TENURE_DAYS`, geometrically interpolated between them.
  *
  * Derived, not chosen: each entry is the geometric mean of Colony and Xeno income (uninvested and
- * invested, both games) at that day, divided by `BASE_GOLD × 3600 / MIN_SECONDS_PER_KILL`.
- * Regenerate from `scripts/lib/economy-stages.ts` whenever those economies are retuned.
+ * invested, both games) at that day, divided by `BASE_GOLD × GOLD_REFERENCE_KILLS_PER_HOUR`.
+ * **Emit it, do not hand-edit it:** `bun run balance:compare --emit-hq-ceiling` prints the table.
+ * Regenerate whenever those economies, `BASE_GOLD` or the reference kill rate move.
  *
  * The rung days sit on **every Colony habitat and Xeno tier boundary**, where the platform curve
  * bends. Evenly spaced rungs sagged up to 22% below the curve; landing on the bends holds it to 1.5%.
  */
 export const GOLD_TENURE_CEILING: readonly number[] = [
-    1.443, 3.098, 3.869, 6.181, 16.68, 21.9, 90.2, 157.2, 280, 718.6, 1110, 3223, 4446, 10870, 17190, 28510
+    17.24, 37.18, 46.43, 74.17, 200.2, 262.8, 1082, 1887, 3360, 8624, 13320, 38680, 53350, 130400, 206300, 342200
 ]
 
 /**

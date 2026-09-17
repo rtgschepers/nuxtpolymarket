@@ -24,6 +24,7 @@
 
 import {
     COLONY_STAGES,
+    emitGoldTenureCeiling,
     HERO_QUEST_SAMPLE_DAYS,
     colonyIncomeAtDay,
     colonyStage,
@@ -36,7 +37,11 @@ import {
     xenoStage,
     MAX_RESEARCH_LEVEL
 } from './lib/economy-stages'
-import { GOLD_PLATFORM_DISCOUNT } from '../shared/utils/hero-quest/constants'
+import {
+    GOLD_PLATFORM_DISCOUNT,
+    GOLD_REFERENCE_KILLS_PER_HOUR,
+    GOLD_TENURE_DAYS
+} from '../shared/utils/hero-quest/constants'
 
 function compact(value: number): string {
     return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(value)
@@ -161,6 +166,21 @@ if (worstSag < 1 - HQ_TOLERANCE) {
     console.log(`WARNING ceiling table sags to ${worstSag.toFixed(3)} of the curve at day ${worstDay.toFixed(2)} — add a rung there`)
 } else {
     console.log(`ceiling table follows the platform curve between rungs: worst ${worstSag.toFixed(3)} at day ${worstDay.toFixed(2)}\n`)
+}
+
+// ─── Regenerating the ceiling ───────────────────────────────────────────────
+// `--emit-hq-ceiling` prints the table rather than checking it, so "regenerate,
+// never hand-edit" is a command someone can run. The rungs themselves are not
+// emitted: they sit on Colony habitat and Xeno tier boundaries, which move only
+// when those games gain or lose a stage.
+
+if (process.argv.includes('--emit-hq-ceiling')) {
+    const emitted = emitGoldTenureCeiling(GOLD_TENURE_DAYS)
+    console.log(`\nGOLD_TENURE_CEILING regenerated at ${GOLD_REFERENCE_KILLS_PER_HOUR} kills/hour`)
+    console.log('Paste into shared/utils/hero-quest/constants.ts:\n')
+    console.log('export const GOLD_TENURE_CEILING: readonly number[] = [')
+    console.log(`    ${emitted.join(', ')}`)
+    console.log(']\n')
 }
 
 console.log(warnings === 0
