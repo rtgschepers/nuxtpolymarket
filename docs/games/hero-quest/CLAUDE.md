@@ -21,6 +21,8 @@ Per task, load:
 
 `tech-architecture.md` is the biggest doc and is section-addressable. Fetch §3 for schema, §5 for routes, §2 for the shared layer — not the whole file.
 
+**Art tasks read `art-style.md` first.** It is the art brief: procedural generation, the reference-video style, the review-round workflow, the chibi body, the cinematic skill recipe, backgrounds and the two-tier palette, plus what is done and what is open. `asset-list.md` / `asset-checklist.md` say *what* to draw; `art-style.md` says *how*.
+
 ---
 
 ## 2. Precedence when docs disagree
