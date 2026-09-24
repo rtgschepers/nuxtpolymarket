@@ -1,1 +1,0 @@
-ALTER TABLE "hq_state" DROP COLUMN "last_seal_grant_at";

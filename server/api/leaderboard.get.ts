@@ -1,17 +1,17 @@
 import { count, countDistinct, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '#server/database'
 import { getSessionUserId } from '#server/utils/auth'
-import { user, minerState, bankState, colonyState, colonyBugResearch, xenoPlantsUnlocked, xenoGridSlots, xenoBreederSlots, aiMessages, hackAgents, hackItems, gemOrders, tcgBattlerRun, tcgBattlerRating } from '#server/database/schema'
+import { user, bankState, colonyState, colonyBugResearch, xenoPlantsUnlocked, xenoGridSlots, xenoBreederSlots, aiMessages, hackAgents, hackItems, gemOrders, tcgBattlerRun, tcgBattlerRating, townState, townResearch, voidState } from '#server/database/schema'
 import { getGemGuidePrice } from '#server/utils/gem-exchange'
-import { overclockMultiplier, catalystMultiplier } from '#shared/utils/miner-config'
 import { bailoutRemaining, debtFloor, growBankBalance, isBailoutActive } from '#shared/utils/gamelogic/bank'
 import { PLANT_TYPES } from '#shared/utils/xeno'
 import { equippedAgentPower, type EquippableItemRow } from '#server/utils/hack'
+import { townScore, voidScore } from '#shared/utils/gamelogic/scoreboard'
 
 export default defineEventHandler(async (event) => {
   const sessionUserId = await getSessionUserId(event)
   const xenoSpeciesIds = [...new Set(PLANT_TYPES.map(plant => plant.id))]
-  const [users, gemGuidePrice, gemEscrowRows, hackAgentRows, hackItemRows, colonyHabitatRows, researchTotals, xenoSpeciesCounts, xenoGridCounts, xenoBreederCounts, aiPromptCounts, battlerTotals, battlerRatings] = await Promise.all([
+  const [users, gemGuidePrice, gemEscrowRows, hackAgentRows, hackItemRows, colonyHabitatRows, researchTotals, xenoSpeciesCounts, xenoGridCounts, xenoBreederCounts, aiPromptCounts, battlerTotals, battlerRatings, townRows, townResearchRows, voidRows] = await Promise.all([
     db
       .select({
         id: user.id,
@@ -20,11 +20,6 @@ export default defineEventHandler(async (event) => {
         prestige: user.prestige,
         balance: user.balance,
         gems: user.gems,
-        rigLevel: minerState.rigLevel,
-        vaultLevel: minerState.vaultLevel,
-        factoryLevel: minerState.factoryLevel,
-        overclockLevel: minerState.overclockLevel,
-        catalystLevel: minerState.catalystLevel,
         bankBalance: bankState.balance,
         bankLastSettledAt: bankState.lastSettledAt,
         bankLoanPrincipal: bankState.loanPrincipal,
@@ -33,7 +28,6 @@ export default defineEventHandler(async (event) => {
         bailoutRepaid: bankState.bailoutRepaid,
       })
       .from(user)
-      .leftJoin(minerState, eq(minerState.userId, user.id))
       .leftJoin(bankState, eq(bankState.userId, user.id)),
     getGemGuidePrice(),
     // Coins and gems escrowed in open exchange offers still belong to the
@@ -90,6 +84,19 @@ export default defineEventHandler(async (event) => {
       .from(tcgBattlerRun)
       .groupBy(tcgBattlerRun.userId),
     db.select({ userId: tcgBattlerRating.userId, rating: tcgBattlerRating.rating }).from(tcgBattlerRating),
+    db.select({ userId: townState.userId, milestonesClaimed: townState.milestonesClaimed }).from(townState),
+    db.select({ userId: townResearch.userId, researchId: townResearch.researchId }).from(townResearch),
+    db
+      .select({
+        userId: voidState.userId,
+        runsPlayed: voidState.runsPlayed,
+        highestSectorCleared: voidState.highestSectorCleared,
+        pilotXp: voidState.pilotXp,
+        ownedShipIds: voidState.ownedShipIds,
+        upgradeLevels: voidState.upgradeLevels,
+        tradeLevel: voidState.tradeLevel,
+      })
+      .from(voidState),
   ])
 
   const gemEscrowByUser = new Map(gemEscrowRows.map(row => [row.userId, row]))
@@ -114,6 +121,14 @@ export default defineEventHandler(async (event) => {
   const aiPromptsByUser = new Map(aiPromptCounts.map(row => [row.userId, row.n]))
   const battlerByUser = new Map(battlerTotals.map(row => [row.userId, row]))
   const battlerRatingByUser = new Map(battlerRatings.map(row => [row.userId, row.rating]))
+  const townResearchByUser = new Map<string, string[]>()
+  for (const row of townResearchRows) {
+    const list = townResearchByUser.get(row.userId)
+    if (list) list.push(row.researchId)
+    else townResearchByUser.set(row.userId, [row.researchId])
+  }
+  const townByUser = new Map(townRows.map(row => [row.userId, townScore(row.milestonesClaimed ?? [], townResearchByUser.get(row.userId) ?? [])]))
+  const voidByUser = new Map(voidRows.map(row => [row.userId, voidScore(row)]))
 
   return users
     .map(u => {
@@ -134,7 +149,6 @@ export default defineEventHandler(async (event) => {
       if (bankBalance < 0 && loanPrincipal > 0) bankBalance = Math.max(bankBalance, debtFloor(loanPrincipal))
       const bailoutActive = isBailoutActive(bailout)
       const totalWealth = balance + gemValue + bankBalance
-      const totalLevels = (u.rigLevel ?? 1) + (u.vaultLevel ?? 1) + (u.factoryLevel ?? 1)
       const itemMap = itemsByUser.get(u.id) ?? new Map<string, EquippableItemRow>()
       const hackPower = (agentsByUser.get(u.id) ?? [])
         .reduce((total, agent) => total + equippedAgentPower(agent, itemMap), 0)
@@ -145,14 +159,15 @@ export default defineEventHandler(async (event) => {
       const xenoBreederSlotsUnlocked = xenoBreederByUser.get(u.id) ?? 0
       const aiPromptsUsed = aiPromptsByUser.get(u.id) ?? 0
       const battler = battlerByUser.get(u.id)
-      const totalUpgrades = totalLevels
-        + (u.overclockLevel ?? 0)
-        + (u.catalystLevel ?? 0)
-        + colonyHabitatLevel
+      const town = townByUser.get(u.id)
+      const voidRunner = voidByUser.get(u.id)
+      const totalUpgrades = colonyHabitatLevel
         + colonyResearchLevels
         + xenoSpeciesUnlocked
         + xenoGridSlotsUnlocked
         + xenoBreederSlotsUnlocked
+        + (town?.total ?? 0)
+        + (voidRunner?.total ?? 0)
       return {
         isCurrentUser: u.id === sessionUserId,
         id: u.id,
@@ -167,23 +182,26 @@ export default defineEventHandler(async (event) => {
         bailoutRemaining: bailoutActive ? bailoutRemaining(bailout) : 0,
         gems,
         gemValue,
-        rigLevel: u.rigLevel ?? 1,
-        vaultLevel: u.vaultLevel ?? 1,
-        factoryLevel: u.factoryLevel ?? 1,
-        overclockPct: Math.round((overclockMultiplier(u.overclockLevel ?? 0) - 1) * 100),
-        catalystPct: Math.round((catalystMultiplier(u.catalystLevel ?? 0) - 1) * 100),
         hackPower,
         colonyHabitatLevel,
         colonyResearchLevels,
         xenoSpeciesUnlocked,
         xenoGridSlotsUnlocked,
         xenoBreederSlotsUnlocked,
+        townScore: town?.total ?? 0,
+        townMilestones: town?.milestones ?? 0,
+        townResearch: town?.research ?? 0,
+        voidScore: voidRunner?.total ?? 0,
+        voidSectorsCleared: voidRunner?.sectors ?? 0,
+        voidPilotLevel: voidRunner?.pilotLevel ?? 0,
+        voidHulls: voidRunner?.hulls ?? 0,
+        voidSystemLevels: voidRunner?.systems ?? 0,
+        voidTradeLevel: voidRunner?.trade ?? 0,
         aiPromptsUsed,
         battlerRunsWon: battler?.runsWon ?? 0,
         battlerRating: battlerRatingByUser.get(u.id) ?? null,
         battlerBattlesWon: battler?.battlesWon ?? 0,
         battlerBattlesLost: battler?.battlesLost ?? 0,
-        totalLevels,
         totalUpgrades,
         totalWealth,
       }

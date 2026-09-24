@@ -23,6 +23,7 @@ export interface LightboxCard {
     assetNumber: string | null
     maskKind: string | null
     foilEffect: string | null
+    foilMask?: string | null
     legacySet?: string | null
     holo?: boolean
     name: string
@@ -297,7 +298,6 @@ async function sendToGrading() {
                 predictedGrade: predicted.value ?? null
             }
         })
-        toast.add({ title: 'Sent to the grader — back in 24 hours', color: 'success' })
         gradePanel.value = false
         predicted.value = undefined
         refetchCopies()
@@ -420,7 +420,6 @@ async function buy() {
     buying.value = true
     try {
         await apiFetch('/api/tcg/market/buy', { method: 'POST', body: { listingId: listing.id } })
-        toast.add({ title: 'Bought — the card is yours', color: 'success' })
         emit('changed')
         await fetchSession()
         emitClose()
@@ -435,7 +434,6 @@ async function buy() {
 async function cancelMyListing(listingId: string) {
     try {
         await apiFetch('/api/tcg/market/cancel', { method: 'POST', body: { listingId } })
-        toast.add({ title: 'Listing cancelled', color: 'success' })
         emit('changed')
         if (props.card?.listing) emitClose()
         else refetchCopies()
@@ -447,6 +445,7 @@ async function cancelMyListing(listingId: string) {
 // Sell form for an owned copy.
 const sellPanel = ref(false)
 const sellPrice = ref(1000)
+const sellPriceText = useAmountInput(sellPrice)
 const sellNote = ref('')
 const sellSubmitting = ref(false)
 async function listForSale() {
@@ -458,7 +457,6 @@ async function listForSale() {
             method: 'POST',
             body: { copyId, price: Number(sellPrice.value), note: sellNote.value || null }
         })
-        toast.add({ title: 'Listed on the market', color: 'success' })
         sellPanel.value = false
         sellNote.value = ''
         refetchCopies()
@@ -498,13 +496,9 @@ async function sellToVendor() {
     }
     vendorSubmitting.value = true
     try {
-        const res = await apiFetch<{ amount: number }>('/api/tcg/vendor/sell', {
+        await apiFetch<{ amount: number }>('/api/tcg/vendor/sell', {
             method: 'POST',
             body: { copyId }
-        })
-        toast.add({
-            title: `The vendor hands you ${formatNumber(res.amount, false)} coin${res.amount === 1 ? '' : 's'}. The card is gone.`,
-            color: 'success'
         })
         vendorPanel.value = false
         refetchCopies()
@@ -522,6 +516,7 @@ async function sellToVendor() {
 
 const auctionPanel = ref(false)
 const auctionStart = ref(100)
+const auctionStartText = useAmountInput(auctionStart)
 const auctionDurationMs = ref(3_600_000)
 const auctionDurations = [
     { label: '1 hour', value: 3_600_000 },
@@ -538,7 +533,6 @@ async function startAuction() {
             method: 'POST',
             body: { copyId, startPrice: Number(auctionStart.value), durationMs: auctionDurationMs.value }
         })
-        toast.add({ title: 'Auction started', color: 'success' })
         auctionPanel.value = false
         refetchCopies()
         emit('changed')
@@ -776,6 +770,7 @@ onBeforeUnmount(() => {
                         :asset-number="String(card.assetNumber ?? '')"
                         :mask-kind="card.maskKind ?? 'wp'"
                         :foil-effect="card.foilEffect"
+                        :foil-mask="card.foilMask ?? null"
                         :pattern="card.pattern"
                         :legacy-set="card.legacySet ?? null"
                         :holo="card.holo ?? false"
@@ -796,6 +791,7 @@ onBeforeUnmount(() => {
                         :asset-number="String(card.assetNumber ?? '')"
                         :mask-kind="card.maskKind ?? 'wp'"
                         :foil-effect="card.foilEffect"
+                        :foil-mask="card.foilMask ?? null"
                         :pattern="card.pattern"
                         :legacy-set="card.legacySet ?? null"
                         :holo="card.holo ?? false"
@@ -1027,14 +1023,16 @@ onBeforeUnmount(() => {
                             class="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-950/90 p-3"
                         >
                             <UInput
-                                v-model.number="sellPrice"
-                                type="number"
+                                v-model="sellPriceText"
                                 size="sm"
-                                :min="1"
+                                autocomplete="off"
                             >
                                 <template #leading>
                                     <span class="text-xs text-neutral-500">coins</span>
                                 </template>
+                              <template v-if="amountPreview(sellPriceText)" #trailing>
+                                <span class="text-xs tabular-nums text-muted">{{ amountPreview(sellPriceText) }}</span>
+                              </template>
                             </UInput>
                             <UInput
                                 v-model="sellNote"
@@ -1071,14 +1069,16 @@ onBeforeUnmount(() => {
                             class="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-950/90 p-3"
                         >
                             <UInput
-                                v-model.number="auctionStart"
-                                type="number"
+                                v-model="auctionStartText"
                                 size="sm"
-                                :min="1"
+                                autocomplete="off"
                             >
                                 <template #leading>
                                     <span class="text-xs text-neutral-500">start</span>
                                 </template>
+                              <template v-if="amountPreview(auctionStartText)" #trailing>
+                                <span class="text-xs tabular-nums text-muted">{{ amountPreview(auctionStartText) }}</span>
+                              </template>
                             </UInput>
                             <USelect
                                 v-model="auctionDurationMs"

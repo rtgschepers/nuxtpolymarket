@@ -17,6 +17,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     hackops: 'HackOps',
     rakeback: 'Rakeback',
     colony: 'Colony',
+    polytown: 'Polytown',
     dice: 'Dice',
     limbo: 'Limbo',
     bank: 'Bank',
@@ -29,10 +30,29 @@ const CATEGORY_LABELS: Record<string, string> = {
     candymadness: 'Candy Madness',
     magichands: 'Magic Hands',
     spinata: 'Spinata',
+    trashpanda: 'Trash Panda Heist',
+    polymasters: 'PolyMasters',
+    // Rounds played before the rename to PolyMasters.
+    aviamasters: 'PolyMasters',
+    emberportals: 'Ember Portals',
     roulette: 'Roulette',
     'casino-holdem': 'Casino Hold\'em',
     'three-card-poker': 'Three Card Poker',
-    baccarat: 'Baccarat'
+    baccarat: 'Baccarat',
+    town: 'Polytown',
+    meadowbrawl: 'Meadowbrawl',
+    pathwarden: 'Pathwarden',
+    firewall: 'Firewall',
+    'gold-miner': 'Gold Miner',
+    'call-of-xeno': 'Call of Xeno',
+    'storm-the-house': 'Storm the House',
+    'voxel-arena': 'Voxel Arena',
+    battler: 'Battler',
+    tcg: 'TCG',
+    prestige: 'Prestige',
+    draft: 'Draft',
+    assets: 'Assets',
+    gift: 'Gift'
 }
 
 function titleCase(prefix: string): string {

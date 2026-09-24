@@ -74,7 +74,9 @@ const spread = computed(() => {
 // ---- Trade terminal ----
 const tradeMode = ref<'buy' | 'sell'>('buy')
 const quantity = ref(1)
+const quantityText = useAmountInput(quantity, { integer: true })
 const price = ref(0)
+const priceText = useAmountInput(price)
 const loading = ref(false)
 const priceTouched = ref(false)
 const tradeTerminal = useTemplateRef<HTMLElement>('tradeTerminal')
@@ -133,6 +135,28 @@ function resetPrice() {
   priceTouched.value = false
 }
 
+// The AI button: Jev picks a good resting price for this offer. It only fills
+// in the price; the player still places the order.
+const suggesting = ref(false)
+
+async function suggestPrice() {
+  if (suggesting.value) return
+  suggesting.value = true
+  try {
+    const res = await $fetch('/api/gem-exchange/advise', {
+      method: 'POST',
+      body: { side: tradeMode.value, quantity: safeQuantity.value }
+    })
+    priceTouched.value = true
+    price.value = res.price
+    if (!res.jev) toast.add({ title: 'The AI couldn\'t decide, so this is the front of the queue', color: 'warning' })
+  } catch (error: unknown) {
+    toast.add({ title: apiErrorMessage(error, 'Couldn\'t suggest a price'), color: 'error' })
+  } finally {
+    suggesting.value = false
+  }
+}
+
 function setQuantity(amount: number) {
   quantity.value = Math.max(1, Math.min(GEM_EXCHANGE_MAX_QUANTITY, Math.floor(amount)))
 }
@@ -184,32 +208,11 @@ async function placeOrder() {
   if (loading.value) return
   loading.value = true
   try {
-    const result = await $fetch('/api/gem-exchange/place', {
+    await $fetch('/api/gem-exchange/place', {
       method: 'POST',
       body: { side: tradeMode.value, quantity: safeQuantity.value, price: safePrice.value }
     })
     await Promise.all([refresh(), fetchSession()])
-
-    const gemLabel = (n: number) => `${formatNumber(n, false)} gem${n !== 1 ? 's' : ''}`
-    if (result.filled === 0) {
-      toast.add({
-        title: `${result.side === 'buy' ? 'Buy' : 'Sell'} offer placed`,
-        description: `${gemLabel(result.quantity)} @ ${formatNumber(result.price, false)} coins — waiting for a match`,
-        color: 'info'
-      })
-    } else {
-      const avg = result.avgFillPrice ?? result.price
-      const title = result.side === 'buy'
-          ? `Bought ${gemLabel(result.filled)} for ${formatNumber(result.coinsMoved, false)} coins`
-          : `Sold ${gemLabel(result.filled)} for ${formatNumber(result.coinsMoved, false)} coins`
-      toast.add({
-        title,
-        description: result.remaining > 0
-            ? `Avg ${formatNumber(avg, false)} coins — ${gemLabel(result.remaining)} still on offer`
-            : `Avg ${formatNumber(avg, false)} coins`,
-        color: 'success'
-      })
-    }
   } catch (e) {
     toast.add({ title: apiErrorMessage(e, 'Could not place the offer'), color: 'error' })
   } finally {
@@ -224,7 +227,6 @@ async function cancelOrder(orderId: string) {
   try {
     await $fetch('/api/gem-exchange/cancel', { method: 'POST', body: { orderId } })
     await Promise.all([refresh(), fetchSession()])
-    toast.add({ title: 'Offer cancelled — escrow returned', color: 'neutral' })
   } catch (e) {
     toast.add({ title: apiErrorMessage(e, 'Could not cancel the offer'), color: 'error' })
   } finally {
@@ -443,15 +445,17 @@ const maxAskDepth = computed(() => Math.max(1, ...(data.value?.book.asks ?? []).
                     @click="setQuantity(quantity - 1)"
                 />
                 <UInput
-                    v-model="quantity"
-                    type="number"
-                    min="1"
+                    v-model="quantityText"
+                    autocomplete="off"
                     size="xl"
                     placeholder="1"
                     class="w-full"
                 >
                   <template #leading>
                     <UIcon name="i-lucide-gem" class="size-4 text-cyan-400" />
+                  </template>
+                  <template v-if="amountPreview(quantityText, true)" #trailing>
+                    <span class="text-xs tabular-nums text-muted">{{ amountPreview(quantityText, true) }}</span>
                   </template>
                 </UInput>
                 <UButton
@@ -484,16 +488,17 @@ const maxAskDepth = computed(() => Math.max(1, ...(data.value?.book.asks ?? []).
                 Price per gem
               </label>
               <UInput
-                  v-model="price"
-                  type="number"
-                  :min="GEM_EXCHANGE_MIN_PRICE"
-                  step="0.01"
+                  v-model="priceText"
+                  autocomplete="off"
                   size="xl"
                   class="w-full"
                   @input="priceTouched = true"
               >
                 <template #leading>
                   <UIcon name="i-lucide-coins" class="size-4 text-yellow-400" />
+                </template>
+                <template v-if="amountPreview(priceText)" #trailing>
+                  <span class="text-xs tabular-nums text-muted">{{ amountPreview(priceText) }}</span>
                 </template>
               </UInput>
               <div class="flex items-center gap-1.5 mt-2">
@@ -504,6 +509,18 @@ const maxAskDepth = computed(() => Math.max(1, ...(data.value?.book.asks ?? []).
                 </UTooltip>
                 <UButton size="xs" color="success" variant="soft" label="+5%" @click="nudgePrice(0.05)" />
                 <UButton size="xs" color="success" variant="soft" label="+20%" @click="nudgePrice(0.20)" />
+                <UTooltip text="Suggest a good price for this offer" :delay-duration="120">
+                  <UButton
+                      size="xs"
+                      color="primary"
+                      variant="soft"
+                      icon="i-lucide-sparkles"
+                      label="AI"
+                      class="ml-auto"
+                      :loading="suggesting"
+                      @click="suggestPrice"
+                  />
+                </UTooltip>
               </div>
             </div>
           </div>
