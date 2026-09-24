@@ -26,7 +26,8 @@
     "balance:compare": "bun scripts/economy-compare.ts",
     "tcg:rarity-audit": "bun scripts/tcg-rarity-audit.ts",
     "balance:hero-quest": "bun scripts/hero-quest-balance.ts",
-    "sim:hero-quest": "bun scripts/hero-quest-sim.ts"
+    "sim:hero-quest": "bun scripts/hero-quest-sim.ts",
+    "art:hero-quest": "bun scripts/hero-quest-art.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.98",

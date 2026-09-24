@@ -23,7 +23,10 @@ const tabs = [
   // The playtest harness. Dev builds only — the routes behind it 404 in production regardless,
   // so this is the convenience half of a guard whose real half lives on the server.
   ...(import.meta.dev
-    ? [{ label: 'Dev', to: '/hero-quest/dev', icon: 'i-lucide-flask-conical' }]
+    ? [
+        { label: 'Dev', to: '/hero-quest/dev', icon: 'i-lucide-flask-conical' },
+        { label: 'Art', to: '/hero-quest/art', icon: 'i-lucide-palette' }
+      ]
     : [])
 ]
 
