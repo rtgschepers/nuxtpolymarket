@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { allArt } from '../../app/utils/hero-quest-art/catalog'
-import { PALETTE } from '../../app/utils/hero-quest-art/palette'
+import { allArt, ART_ROUNDS } from '../../app/utils/hero-quest-art/catalog'
+import { PALETTE, PALETTE_RGB, SCENERY, SCENERY_RAMPS, C, luma } from '../../app/utils/hero-quest-art/palette'
+import { WORLD_SCENES, SW, SH, FLOOR_Y, FIGHT_BAND } from '../../app/utils/hero-quest-art/scenery'
+import { enemyLook } from '../../app/utils/hero-quest-art/enemies'
 import { Surface } from '../../app/utils/hero-quest-art/surface'
 import { HERO_ART, HERO_STATES } from '../../app/utils/hero-quest-art/heroes'
 import { hasChampionSkin } from '../../app/utils/hero-quest-art/champions'
@@ -89,9 +91,81 @@ describe('Hero Quest art coverage', () => {
         }
     })
 
+    it('tags every review round onto assets that exist', () => {
+        // a typo in a round's prefix list would silently drop that asset from the gallery filter
+        for (const r of ART_ROUNDS) {
+            for (const p of r.prefixes) expect(allArt().some(a => a.id.startsWith(p)), `${r.label}: ${p}`).toBe(true)
+            expect(allArt().filter(a => a.round === r.n).length, r.label).toBeGreaterThan(0)
+        }
+    })
+
     it('uses unique, path-shaped ids', () => {
         const all = allArt().map(a => a.id)
         expect(new Set(all).size).toBe(all.length)
         for (const id of all) expect(id).toMatch(/^[a-z0-9_]+(\/[a-z0-9_]+)+$/)
+    })
+})
+
+// The palette's two tiers (palette.ts): characters are saturated and bright, scenery is darker
+// and duller, and a world on the tier paints nothing but scenery behind its fighters. These
+// are what stop an enemy blending into its own world — the Bramble Goblins once stood in
+// front of hedges painted in their exact greens.
+
+/** RGB distance under which two colours read as the same at a glance. */
+const SAME_AT_A_GLANCE = 40
+/** Share of a fight band allowed near an enemy's body colours. */
+const MAX_BLEND = 0.05
+
+function rgbDistance(a: number, b: number): number {
+    const p = PALETTE_RGB[a]!
+    const q = PALETTE_RGB[b]!
+    return Math.hypot((p >> 16 & 255) - (q >> 16 & 255), (p >> 8 & 255) - (q >> 8 & 255), (p & 255) - (q & 255))
+}
+
+describe('Hero Quest palette tiers', () => {
+    it('orders every scenery ramp dark → light', () => {
+        for (const [name, ramp] of Object.entries(SCENERY_RAMPS)) {
+            for (let i = 1; i < ramp.length; i++) expect(luma(C[ramp[i]!]), `${name} step ${i}`).toBeGreaterThan(luma(C[ramp[i - 1]!]))
+        }
+    })
+
+    it('keeps every character off the scenery tier', () => {
+        const bodies = ['hero/', 'champion/', 'summon/', 'enemy/', 'boss/', 'superboss/', 'raid/', 'arena/']
+        for (const a of allArt()) {
+            if (!bodies.some(p => a.id.startsWith(p))) continue
+            const s = new Surface(a.w, a.h, 0, 0)
+            for (const f of new Set([0, a.frames >> 1])) {
+                s.clear()
+                a.render(s, f)
+                for (let i = 0; i < s.data.length; i++) if (SCENERY.has(s.data[i]!)) throw new Error(`${a.id} frame ${f} paints scenery colour ${s.data[i]}`)
+            }
+        }
+    })
+
+    it('paints the fight band of every tiered world in scenery only, clear of its enemies', () => {
+        const tiered = WORLD_SCENES.filter(w => w.tiered)
+        expect(tiered.length).toBeGreaterThan(0)
+        for (const scene of tiered) {
+            const index = WORLDS.findIndex(w => w.id === scene.id) + 1
+            const look = enemyLook(index, 'sword')
+            // the colours that make an enemy's silhouette read: mid and light skin, clothes
+            const body = [look.skin[1], look.skin[2], look.pants, look.arm]
+            const s = new Surface(SW, SH, 0, 0)
+            for (const t of [0, 0.8]) {
+                s.clear()
+                scene.draw(s, 0, t)
+                let near = 0
+                let n = 0
+                for (let y = FLOOR_Y - FIGHT_BAND; y < FLOOR_Y; y++) {
+                    for (let x = 0; x < SW; x++) {
+                        const c = s.data[y * SW + x]!
+                        if (!SCENERY.has(c)) throw new Error(`${scene.id} paints off-tier colour ${c} at ${x},${y}`)
+                        n++
+                        if (body.some(b => rgbDistance(b, c) < SAME_AT_A_GLANCE)) near++
+                    }
+                }
+                expect(near / n, `${scene.id}: share of the fight band that blends with its enemies`).toBeLessThanOrEqual(MAX_BLEND)
+            }
+        }
     })
 })

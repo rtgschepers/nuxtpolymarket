@@ -19,6 +19,7 @@ import { sample } from './anim'
 import { drawCreature } from './creature'
 import { DISCIPLE_CLIPS, DISCIPLE_LOOK, RAISED_DEAD_CLIPS, RAISED_DEAD_LOOK, WOLF } from './summons'
 import { abilityId } from '../../../shared/utils/hero-quest/content/champions'
+import { CINEMATIC_BY_ID } from './vfx-cinematic'
 
 export type VfxSource = 'class' | 'champion' | 'training'
 
@@ -730,7 +731,10 @@ const TRAINING_VFX: VfxDef[] = [
     })
 ]
 
-export const VFX: readonly VfxDef[] = [...CLASS_VFX, ...CHAMPION_VFX, ...TRAINING_VFX]
+// round 2: the cinematic rebuilds replace their classic entries by ID, in place
+const CLASS_VFX_LIVE = CLASS_VFX.map(v => CINEMATIC_BY_ID[v.id] ?? v)
+
+export const VFX: readonly VfxDef[] = [...CLASS_VFX_LIVE, ...CHAMPION_VFX, ...TRAINING_VFX]
 export const VFX_BY_ID: Readonly<Record<string, VfxDef>> = Object.fromEntries(VFX.map(v => [v.id, v]))
 
 // ── Multi-strike (asset-list §2.2): the Archer-path single strike, recoloured and repeated ──

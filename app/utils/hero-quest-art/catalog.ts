@@ -7,7 +7,8 @@
 // IDs are paths — `hero/class_warrior/attack` — and become the exported file names.
 
 import { ANIM_FPS, frameCount } from './anim'
-import { C, CLEAR, RARITY_COLORS, TRAIT_GRADES  } from './palette'
+import { C, CLEAR, RARITY_COLORS, TRAIT_GRADES, SCENERY, SCENERY_RAMPS, type ColorName } from './palette'
+import { drawText } from './font'
 import type { Surface } from './surface'
 import { Actor } from './rig'
 import { HERO_ART, HERO_STATES } from './heroes'
@@ -20,6 +21,8 @@ import { BOSSES_A } from './bosses-a'
 import { BOSSES_B } from './bosses-b'
 import { VFX, MULTI_STRIKE, drawMultiStrike, drawVfxStage } from './vfx'
 import { VL } from './vfx-kit'
+import { CINEMATIC_BY_ID, CINEMATIC_VFX, cinematicStage } from './vfx-cinematic'
+import { drawSkillBanner } from './presentation'
 import { ICON, SMALL_ICON, glyph, squareFrame, circleFrame, crestFrame, itemTile } from './icon-kit'
 import { CLASS_SKILL_ICONS, CHAMPION_ABILITY_ICONS, TRAINING_SKILL_ICONS } from './icons-abilities'
 import { ARTIFACT_ICONS, GEAR_ICONS, CURRENCY_ICONS, CURRENCY_LABELS } from './icons-items'
@@ -30,8 +33,8 @@ import { SKILLS } from '../../../shared/utils/hero-quest/content/skills'
 import { ARTIFACTS } from '../../../shared/utils/hero-quest/content/artifacts'
 import { GEAR } from '../../../shared/utils/hero-quest/content/gear'
 import { NUMBER_STYLES, drawNumberPop, drawNumberAtlas, numberAtlasWidth, drawPartyFrame, drawCooldown, drawEnrageTimer, drawAddWaveSpawn, drawPhaseShift, drawRevealBase, REVEAL_LUT, REVEAL_SIZE } from './feedback'
-import { Surface as Surf, blit } from './surface'
-import { WORLD_SCENES, SW, SH } from './scenery'
+import { Surface as Surf, blit, rect } from './surface'
+import { WORLD_SCENES, SW, SH, BG_FRAMES } from './scenery'
 import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawLogo, drawAppIcon, drawSplash } from './ui-art'
 import { GILDED_WARLORD, DRILLMASTER, BURIED_COLOSSUS, DIG_SCARAB, RELIC_SHARD, ANVIL_HEART, RAMPANT, TRAINING_DUMMY } from './raids'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
@@ -76,7 +79,31 @@ export interface ArtAsset {
     /** Where the feet land inside the frame (bodies); absent means top-left placement. */
     ax?: number
     ay?: number
+    /** The review round that last changed it (see ART_ROUNDS); absent for the original pass. */
+    round?: number
 }
+
+/**
+ * Review rounds: each restyle pass lists the asset IDs it touched (by prefix), so the
+ * gallery can show one round's changes on their own. Newest last.
+ */
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
+    {
+        n: 2,
+        label: 'Round 2 · video style',
+        prefixes: [
+            'hero/class_beginner/', 'hero/class_warrior/', 'hero/class_sorcerer/', 'hero/class_hunter/',
+            'vfx/skill_haste', 'vfx/skill_whirlwind', 'vfx/skill_meteor_shower', 'vfx/skill_kill_shot',
+            'feedback/skill_banner/', 'feedback/number/normal', 'feedback/number/crit',
+            'arena/training_dummy/', 'bg/world/world_thornwick_vale'
+        ]
+    },
+    {
+        n: 3,
+        label: 'Round 3 · scenery tier',
+        prefixes: ['ui/palette/', 'bg/world/world_thornwick_vale']
+    }
+]
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
@@ -221,7 +248,8 @@ function vfxAssets(): ArtAsset[] {
     const out: ArtAsset[] = VFX.map(v => ({
         id: `vfx/${v.id}`, group: 'vfx' as const, section: SECTION[v.source], label: `${v.name} — ${v.owner}`,
         w: VL.W, h: VL.H, frames: Math.round(v.dur * ANIM_FPS), fps: ANIM_FPS, loop: false,
-        render: (dst: Surface, f: number) => v.draw(dst, f / ANIM_FPS), underlay: drawVfxStage
+        render: (dst: Surface, f: number) => v.draw(dst, f / ANIM_FPS),
+        underlay: CINEMATIC_BY_ID[v.id] ? cinematicStage(v.id) : drawVfxStage
     }))
     for (const m of MULTI_STRIKE) {
         out.push({
@@ -329,6 +357,10 @@ function feedbackAssets(): ArtAsset[] {
         d => { squareFrame(d, LINE_M.warrior); glyph(d, sample, 12, 12) }))
     out.push(anim('feedback/enrage_timer', 'feedback', 'Boss enrage timer', 'Draining → low → enraged', 88, 14, 16, false, (d, t, f) => drawEnrageTimer(d, f / 14, t)))
     out.push(anim('feedback/add_wave_spawn', 'feedback', 'Raid VFX', 'Reinforced Boss add-wave spawn (Dig-site)', 64, 48, 12, false, (d, t) => drawAddWaveSpawn(d, t)))
+    for (const v of CINEMATIC_VFX) {
+        out.push(anim(`feedback/skill_banner/${v.id}`, 'feedback', 'Skill banner', `${v.name} — ${v.owner}`, 160, 16, 8, false,
+            (d, t) => drawSkillBanner(d, v.name.toUpperCase(), 80, 4, t)))
+    }
     out.push(anim('feedback/phase_transition', 'feedback', 'Raid VFX', 'Phased Boss phase transition (Forge)', 96, 96, 12, false, (d, t) => drawPhaseShift(d, t)))
     return out
 }
@@ -347,9 +379,51 @@ function revealAssets(): ArtAsset[] {
 
 function backgroundAssets(): ArtAsset[] {
     return WORLD_SCENES.map((scene, i) => ({
-        ...anim(`bg/world/${scene.id}`, 'backgrounds', 'World backgrounds', `${WORLDS[i]!.index}. ${WORLDS[i]!.name}`, SW, SH, 16, true, (d, t) => scene.draw(d, 0, t)),
+        ...anim(`bg/world/${scene.id}`, 'backgrounds', 'World backgrounds', `${WORLDS[i]!.index}. ${WORLDS[i]!.name}`, SW, SH, BG_FRAMES, true, (d, t) => scene.draw(d, 0, t)),
         opaque: true
     }))
+}
+
+// ── Palette sheets ──────────────────────────────────────────────────────────────────
+
+const SWATCH = 9
+const LABEL_W = 34
+
+/** One row per ramp: its name, then its colours dark → light. */
+function paletteSheet(id: string, label: string, rows: readonly (readonly [string, readonly number[]])[]): ArtAsset {
+    const cols = Math.max(...rows.map(r => r[1].length))
+    const w = LABEL_W + cols * (SWATCH + 1) + 3
+    const h = rows.length * (SWATCH + 1) + 3
+    return still(id, 'ui', 'Palette', label, w, h, (d) => {
+        rect(d, 0, 0, w, h, C.ink)
+        rows.forEach(([name, cs], r) => {
+            const y = 2 + r * (SWATCH + 1)
+            drawText(d, name.toUpperCase(), 2, y + 2, C.bone1, { shadow: 0 })
+            cs.forEach((c, k) => rect(d, LABEL_W + k * (SWATCH + 1), y, SWATCH, SWATCH, c))
+        })
+    })
+}
+
+/** The character tier, grouped by name (red0…red3 → RED); singles share one row. */
+function characterRamps(): [string, number[]][] {
+    const groups = new Map<string, number[]>()
+    const singles: number[] = []
+    for (const [name, i] of Object.entries(C) as [ColorName, number][]) {
+        if (SCENERY.has(i)) continue
+        const base = name.replace(/\d+$/, '')
+        if (base === name) { singles.push(i); continue }
+        groups.set(base, [...(groups.get(base) ?? []), i])
+    }
+    const rows = [...groups.entries()]
+    for (let k = 0; k < singles.length; k += 6) rows.push([k ? '' : 'singles', singles.slice(k, k + 6)])
+    return rows
+}
+
+function paletteAssets(): ArtAsset[] {
+    return [
+        paletteSheet('ui/palette/scenery', 'Scenery tier — behind the fight line', Object.entries(SCENERY_RAMPS).map(([n, r]) => [n, r.map(c => C[c])] as const)),
+        paletteSheet('ui/palette/characters', 'Character tier — bodies and effects', characterRamps())
+    ]
 }
 
 function uiAssets(): ArtAsset[] {
@@ -372,7 +446,7 @@ function brandingAssets(): ArtAsset[] {
 // ── Registry ───────────────────────────────────────────────────────────────────────
 
 type Provider = () => ArtAsset[]
-const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, brandingAssets]
+const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, paletteAssets, brandingAssets]
 
 /** Register more providers (bosses, VFX, icons, …) — each module adds its own. */
 export function registerArt(p: Provider): void {
@@ -383,7 +457,12 @@ export function registerArt(p: Provider): void {
 let cache: ArtAsset[] | null = null
 
 export function allArt(): readonly ArtAsset[] {
-    if (!cache) cache = PROVIDERS.flatMap(p => p())
+    if (!cache) {
+        cache = PROVIDERS.flatMap(p => p())
+        for (const a of cache) {
+            for (const r of ART_ROUNDS) if (r.prefixes.some(p => a.id.startsWith(p))) a.round = r.n
+        }
+    }
     return cache
 }
 

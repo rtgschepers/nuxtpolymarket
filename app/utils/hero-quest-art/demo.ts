@@ -23,7 +23,9 @@ import { CHASSIS } from './champions'
 import { ENEMY_RIGS, ELITE_MARK, drawEliteMark, type EnemyWeapon } from './enemies'
 import { NUMBER_STYLES, type NumberStyle } from './feedback'
 import { VL } from './vfx-kit'
-import { SW, SH, FLOOR_Y } from './scenery'
+import { SW, SH, FLOOR_Y, WORLD_SCENES, reflectWater } from './scenery'
+import { CINEMATIC_BY_ID, type CinematicVfx } from './vfx-cinematic'
+import { drawSkillBanner, tintLut, applyTint } from './presentation'
 import { CLASS_BY_ID } from '../../../shared/utils/hero-quest/content/classes'
 import { CHAMPION_BY_ID, CHAMPIONS } from '../../../shared/utils/hero-quest/content/champions'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
@@ -52,16 +54,25 @@ interface Unit {
     fired: boolean
     hp: number
     phase: Phase
+    /** Numbers stacked on this unit by the skill playing now. */
+    stack: number
 }
 
+/** A Hero skill being presented: banner up, scene tinted, hits landing on its own clock. */
+interface Cine { def: CinematicVfx, banner: string, lut: Uint8Array, t: number, next: number, first: Unit | null }
+
 interface Fx { live: boolean, baked: Baked | null, t: number }
-interface Num { live: boolean, x: number, y: number, t: number, style: NumberStyle, text: string }
+interface Num { live: boolean, x: number, y: number, t: number, style: NumberStyle, text: string, hold: boolean }
+
+/** How long a stacked (held) number stays up, against 0.9 s for a rising one. */
+const HOLD_LIFE = 1.8
 
 const NUM_TEXT: Readonly<Record<string, readonly string[]>> = {
     normal: ['128', '96', '1.24K', '211', '87', '640'],
     crit: ['2.4K!', '8.61K!', '1.9K!'],
     heal: ['+356', '+120', '+88'],
-    miss: ['MISS']
+    miss: ['MISS'],
+    total: ['48.2K', '31.7K', '52.9K', '44.1K']
 }
 
 function frameAt(b: Baked, t: number): Surface {
@@ -105,7 +116,11 @@ export class BattleDemo {
     private bg: Baked | null = null
     private units: Unit[] = []
     private fx: Fx[] = Array.from({ length: 8 }, () => ({ live: false, baked: null, t: 0 }))
-    private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, t: 0, style: NUMBER_STYLES[0]!, text: '' }))
+    private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, t: 0, style: NUMBER_STYLES[0]!, text: '', hold: false }))
+    private heroCine: CinematicVfx | null = null
+    private cine: Cine | null = null
+    private water = -1
+    private glitter = -1
     private time = 0
     private wave = 0
     private waveTimer = 0
@@ -130,6 +145,11 @@ export class BattleDemo {
         const heroFrames = ['idle', 'attack', 'cast', 'hit', 'death'].map(st => bake(artById(`hero/${classId}/${st}`)!))
         const skill = CLASS_BY_ID[classId as keyof typeof CLASS_BY_ID]!.skill.id
         const heroUnit = this.unit(0, OX + VL.allies[2].x, heroFrames, [hero.clips.attack, hero.clips.cast], bake(artById(`vfx/${skill}`)!))
+        this.heroCine = CINEMATIC_BY_ID[skill] ?? null
+        this.cine = null
+        const scene = WORLD_SCENES[world - 1]!
+        this.water = scene.water ?? -1
+        this.glitter = scene.glitter ?? -1
         // two Champions: a support in the back, a damage dealer in the middle, varied by world
         const pick = (arch: string, k: number) => CHAMPIONS.filter(c => c.archetype === arch)[(world * 3 + k) % 12]!.id
         const champs = [pick('support', 1), pick('damage', 2)].map((id, i) => {
@@ -168,7 +188,7 @@ export class BattleDemo {
             frames: [idle!, attack!, cast ?? attack!, hit!, death!, entry ?? idle!, idle!],
             clips: [null, clips[0] ?? null, clips[1] ?? null],
             impact: [0, clips[0]?.impact ?? 0.45 * attack!.frames.length / ANIM_FPS, clips[1]?.impact ?? 0.45 * (cast ?? attack!).frames.length / ANIM_FPS],
-            vfx, state: U.Idle, t: 0, wait: 0.5 + Math.random() * 1.2, fired: false, hp: 4, phase: Phase.Idle
+            vfx, state: U.Idle, t: 0, wait: 0.5 + Math.random() * 1.2, fired: false, hp: 4, phase: Phase.Idle, stack: 0
         }
     }
 
@@ -201,13 +221,46 @@ export class BattleDemo {
         return null
     }
 
-    private number(x: number, y: number, kind: 'normal' | 'crit' | 'heal' | 'miss'): void {
+    private number(x: number, y: number, kind: 'normal' | 'crit' | 'heal' | 'miss' | 'total', hold = false): void {
         const n = this.nums[this.numCursor]!
         this.numCursor = (this.numCursor + 1) % this.nums.length
         const list = NUM_TEXT[kind]!
-        n.live = true; n.x = x; n.y = y; n.t = 0
-        n.style = kind === 'normal' ? NUMBER_STYLES[0]! : kind === 'crit' ? NUMBER_STYLES[1]! : kind === 'heal' ? NUMBER_STYLES[2]! : NUMBER_STYLES[3]!
+        n.live = true; n.x = x; n.y = y; n.t = 0; n.hold = hold
+        n.style = kind === 'normal' ? NUMBER_STYLES[0]! : kind === 'crit' || kind === 'total' ? NUMBER_STYLES[1]! : kind === 'heal' ? NUMBER_STYLES[2]! : NUMBER_STYLES[3]!
         n.text = list[Math.floor(Math.random() * list.length)]!
+    }
+
+    /** Start presenting the Hero's skill: the VFX runs from the first frame of the cast. */
+    private startCine(def: CinematicVfx, u: Unit): void {
+        u.fired = true // hits come from the skill's own clock, not the clip's impact
+        this.playFx(u.vfx)
+        for (let i = 0; i < this.units.length; i++) this.units[i]!.stack = 0
+        this.cine = { def, banner: def.name.toUpperCase(), lut: tintLut(def.cinematic.tint), t: 0, next: 0, first: null }
+    }
+
+    /** One of the skill's impacts: damage the next target, stack its number, total at the end. */
+    private cineHit(c: Cine, i: number): void {
+        let n = 0
+        for (let k = 0; k < this.units.length; k++) if (standing(this.units[k]!)) n++
+        if (!n) return
+        let pick = c.def.cinematic.spread ? i % n : 0
+        let tgt = this.units[0]!
+        for (let k = 0; k < this.units.length; k++) {
+            const u = this.units[k]!
+            if (standing(u) && pick-- === 0) { tgt = u; break }
+        }
+        if (!c.first) c.first = tgt
+        const top = FLOOR_Y - (tgt.boss ? 52 : 40)
+        this.number(tgt.x, top - tgt.stack * 7, 'normal', true)
+        tgt.stack++
+        this.particles.burst(tgt.x, FLOOR_Y - 14, 16, 80, 0.6, 'ember', 140, FLOOR_Y)
+        tgt.hp -= 2
+        tgt.state = tgt.hp <= 0 ? U.Death : U.Hit
+        tgt.t = 0
+        if (i === c.def.cinematic.hits.length - 1) {
+            const f = c.first
+            this.number(f.x + 6, FLOOR_Y - (f.boss ? 52 : 40) - f.stack * 7 - 4, 'total', true)
+        }
     }
 
     private playFx(b: Baked | null): void {
@@ -247,11 +300,13 @@ export class BattleDemo {
             switch (u.state) {
                 case U.Idle:
                     u.phase = Phase.Idle
-                    if (u.t >= u.wait && this.target(u.side)) {
+                    // everyone holds while a Hero skill has the stage
+                    if (!this.cine && u.t >= u.wait && this.target(u.side)) {
                         const cast = u.side === 0 ? Math.random() < 0.3 : false
                         u.state = cast ? U.Cast : U.Attack
                         u.t = 0
                         u.fired = false
+                        if (cast && i === 0 && this.heroCine) this.startCine(this.heroCine, u)
                     }
                     break
                 case U.Attack:
@@ -275,6 +330,13 @@ export class BattleDemo {
                     break
             }
         }
+        const c = this.cine
+        if (c) {
+            c.t += dt
+            const hits = c.def.cinematic.hits
+            while (c.next < hits.length && c.t >= hits[c.next]!) this.cineHit(c, c.next++)
+            if (c.t >= c.def.dur + 0.3) this.cine = null
+        }
         // next wave once the pack is down
         let foes = 0
         for (let i = 0; i < this.units.length; i++) if (this.units[i]!.side === 1 && this.units[i]!.state !== U.Gone) foes++
@@ -288,7 +350,7 @@ export class BattleDemo {
             f.t += dt
             if (f.t >= f.baked!.frames.length / f.baked!.fps) f.live = false
         }
-        for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (!n.live) continue; n.t += dt; if (n.t > 0.9) n.live = false }
+        for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (!n.live) continue; n.t += dt; if (n.t > (n.hold ? HOLD_LIFE : 0.9)) n.live = false }
         this.particles.update(dt)
         // ambient: embers, dust — cosmetic
         if (Math.random() < 0.05) this.particles.spawn(Math.random() * DEMO_W, FLOOR_Y - 1, (Math.random() - 0.5) * 6, -8 - Math.random() * 10, 2.5, 'dust')
@@ -298,6 +360,12 @@ export class BattleDemo {
         const s = this.frame
         if (!this.bg) return s
         s.data.set(frameAt(this.bg, this.time).data)
+        const c = this.cine
+        if (c) {
+            // the scene dims toward the skill's colour, stepping in and out through the dither
+            const out = c.def.dur + 0.3 - c.t
+            applyTint(s, c.lut, Math.min(16, Math.floor(Math.min(c.t / 0.2, out / 0.3) * 16)))
+        }
         // back row first: party right-to-left overlaps correctly, enemies left-to-right
         for (let i = this.units.length - 1; i >= 0; i--) {
             const u = this.units[i]!
@@ -309,15 +377,24 @@ export class BattleDemo {
         }
         for (let i = 0; i < this.fx.length; i++) { const f = this.fx[i]!; if (f.live) blitAt(s, f.baked!, f.t, OX, OY) }
         this.particles.draw(s)
+        // standing water mirrors the fight, not just the scenery
+        if (this.water >= 0) reflectWater(s, this.water, this.time, this.glitter)
         for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (n.live) drawNumber(s, n) }
         textOut(s, this.label, 6, 5, C.bone1, 'small', 1, 0, 1, C.ink, -1)
+        if (c && c.t < c.def.dur) drawSkillBanner(s, c.banner, DEMO_W / 2, 14, c.t)
         return s
     }
 }
 
+/** An enemy that can still be hit. */
+function standing(u: Unit): boolean {
+    return u.side === 1 && u.state !== U.Death && u.state !== U.Gone && u.state !== U.Entry
+}
+
 function drawNumber(s: Surface, n: Num): void {
-    const u = n.t / 0.9
-    const rise = Math.round((1 - (1 - u) * (1 - u)) * 14)
+    const u = n.t / (n.hold ? HOLD_LIFE : 0.9)
+    // a held number pops up 3px and stays put in its stack; a loose one floats away
+    const rise = n.hold ? Math.min(3, Math.round(n.t * 30)) : Math.round((1 - (1 - u) * (1 - u)) * 14)
     if (u > 0.75 && (Math.floor(n.t * 10) & 1)) return
     textOut(s, n.text, n.x, n.y - rise, n.style.color, n.style.font, 1, 1, 2, n.style.shadow, n.style.bevel ?? -1)
 }

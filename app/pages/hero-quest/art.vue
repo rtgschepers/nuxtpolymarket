@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { allArt, ART_GROUPS, type ArtGroup } from '~/utils/hero-quest-art/catalog'
+import { allArt, ART_GROUPS, ART_ROUNDS, type ArtGroup } from '~/utils/hero-quest-art/catalog'
 
 /**
  * The art gallery. **Development only**, like the Dev tab.
@@ -11,20 +11,28 @@ import { allArt, ART_GROUPS, type ArtGroup } from '~/utils/hero-quest-art/catalo
 if (!import.meta.dev) throw createError({ statusCode: 404, statusMessage: 'Not found' })
 
 const assets = allArt()
-const group = ref<ArtGroup>('heroes')
+/**
+ * Review rounds, newest first. The page opens on the latest round's changes across every
+ * group, so they can be judged together; an asset shows under the round that last changed it.
+ */
+const rounds = [...ART_ROUNDS].reverse().map(r => ({ ...r, count: assets.filter(a => a.round === r.n).length }))
+const GROUP_LABEL = Object.fromEntries(ART_GROUPS.map(g => [g.id, g.label])) as Record<ArtGroup, string>
+const group = ref<ArtGroup | number>(rounds[0]!.n)
 const query = ref('')
 
 const counts = computed(() => Object.fromEntries(ART_GROUPS.map(g => [g.id, assets.filter(a => a.group === g.id).length])))
 
 const sections = computed(() => {
   const q = query.value.trim().toLowerCase()
+  const inRound = typeof group.value === 'number'
   const out = new Map<string, typeof assets[number][]>()
   for (const a of assets) {
-    if (a.group !== group.value) continue
+    if (inRound ? a.round !== group.value : a.group !== group.value) continue
     if (q && !a.label.toLowerCase().includes(q) && !a.id.includes(q) && !a.section.toLowerCase().includes(q)) continue
-    const list = out.get(a.section) ?? []
+    const key = inRound ? `${GROUP_LABEL[a.group]} · ${a.section}` : a.section
+    const list = out.get(key) ?? []
     list.push(a)
-    out.set(a.section, list)
+    out.set(key, list)
   }
   return [...out.entries()]
 })
@@ -45,6 +53,22 @@ const sections = computed(() => {
     </ClientOnly>
 
     <div class="flex flex-wrap items-center gap-1">
+      <UButton
+        v-for="r in rounds"
+        :key="r.n"
+        size="xs"
+        icon="i-lucide-sparkles"
+        :variant="group === r.n ? 'solid' : 'outline'"
+        color="primary"
+        @click="group = r.n"
+      >
+        {{ r.label }}
+        <span class="text-[10px] opacity-70 tabular-nums">{{ r.count }}</span>
+      </UButton>
+      <USeparator
+        orientation="vertical"
+        class="h-5 mx-1"
+      />
       <UButton
         v-for="g in ART_GROUPS"
         :key="g.id"

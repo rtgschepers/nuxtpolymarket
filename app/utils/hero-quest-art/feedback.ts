@@ -25,8 +25,9 @@ export interface NumberStyle {
 }
 
 export const NUMBER_STYLES: readonly NumberStyle[] = [
-    { id: 'normal', label: 'Normal hit', sample: '1.24K', font: 'small', color: C.white, shadow: C.ink },
-    { id: 'crit', label: 'Crit hit', sample: '8.61K!', font: 'big', color: C.gold2, shadow: C.red1, bevel: C.gold3 },
+    // round 2: the video's chunky numbers — hits in outlined gold, crits in outlined red
+    { id: 'normal', label: 'Normal hit', sample: '1.24K', font: 'small', color: C.gold2, shadow: C.ink, bevel: C.gold3 },
+    { id: 'crit', label: 'Crit hit', sample: '8.61K!', font: 'big', color: C.red2, shadow: C.ink, bevel: C.red3 },
     { id: 'heal', label: 'Heal', sample: '+356', font: 'small', color: C.green4, shadow: C.green0 },
     { id: 'miss', label: 'Miss / evasion', sample: 'MISS', font: 'small', color: C.steel2, shadow: C.stone0 }
 ]

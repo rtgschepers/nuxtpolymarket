@@ -14,6 +14,7 @@ import type { Surface} from './surface';
 import { line, px, rect } from './surface'
 import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest, type Look, type HKey } from './rig'
 import { HERO_SKIN, heroFace, heroHair, tunic, cape, pauldron, robeSkirt, smear, streak, sparks } from './hero-parts'
+import { CHIBI_HEROES } from './heroes-chibi'
 import { M, tip, sword, axe, hammer, staff, bow, shield, tome, fist, orb, Gem, ShieldStyle, type Mat } from './weapons'
 
 export interface HeroClips { idle: Clip, attack: Clip, cast: Clip, hit: Clip, death: Clip }
@@ -1250,6 +1251,8 @@ export const HERO_ART: Readonly<Record<string, HeroArt>> = {
     class_bowman: bowman,
     class_marksman: marksman,
     class_hunter: hunter,
-    class_beast_master: beastMaster
+    class_beast_master: beastMaster,
+    // round 2: the chibi rebuilds replace their classic entries by ID
+    ...CHIBI_HEROES
 }
 

@@ -72,6 +72,11 @@ export interface Look {
     lower?: Painter
     /** Draw the back arm in front of the torso (two-handed grips). */
     backArmFront?: boolean
+    /**
+     * Replaces the whole humanoid construction (the chibi body in chibi.ts). It must resolve
+     * `J` the same way, so `fx` painters and the VFX layer keep working.
+     */
+    body?: (s: Surface, L: Look, p: Float32Array, t: number) => void
     /** Proportions. Pixel Crusade's hero is 8 and 9. */
     legLen?: number
     torsoLen?: number
@@ -131,6 +136,7 @@ function legs(s: Surface, L: Look, p: Float32Array): void {
  * it afterwards (see `Actor`).
  */
 export function drawHumanoid(s: Surface, L: Look, p: Float32Array, t: number): void {
+    if (L.body) { L.body(s, L, p, t); return }
     const legLen = L.legLen ?? 8
     const torsoLen = L.torsoLen ?? 9
     J.torsoLen = torsoLen

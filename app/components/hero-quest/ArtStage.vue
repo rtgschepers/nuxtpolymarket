@@ -13,7 +13,7 @@ const wrap = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const cssSize = ref({ width: DEMO_W, height: DEMO_H })
 const world = ref(1)
-const classId = ref<ClassId>('class_beginner')
+const classId = ref<ClassId>('class_sorcerer')
 const paused = ref(false)
 const fullscreen = ref(false)
 

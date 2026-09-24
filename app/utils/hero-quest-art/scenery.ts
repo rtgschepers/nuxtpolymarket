@@ -6,13 +6,18 @@
 // shifts each layer by its own parallax factor, so the battle can pan without re-authoring.
 // Everything is laid out by hash of a tile index, so it tiles forever and never pops.
 
-import { C } from './palette'
+import { C, shadeLut } from './palette'
 import type { Surface} from './surface';
-import { rect, px, line, disc, ellipse, tri, dither, ditherDisc, ditherEllipse, hash2, bayer, poly } from './surface'
+import { rect, px, line, disc, ellipse, tri, quad, dither, ditherDisc, ditherEllipse, hash2, bayer, poly } from './surface'
 import { qt } from './vfx-kit'
+import { ANIM_FPS } from './anim'
 
 export const SW = 320
 export const SH = 180
+/** Frames in a world background's loop; every motion in a scene must repeat within it. */
+export const BG_FRAMES = 16
+/** The loop in seconds. A scene's motion is written as phase = t / BG_LOOP so it closes. */
+export const BG_LOOP = BG_FRAMES / ANIM_FPS
 /** The floor line characters stand on. */
 export const FLOOR_Y = 150
 
@@ -109,38 +114,250 @@ function drift(s: Surface, t: number, n: number, seed: number, cols: readonly nu
 
 // ── The ten worlds ─────────────────────────────────────────────────────────────────
 
-export interface WorldScene { id: string, draw(s: Surface, scroll: number, t: number): void }
+export interface WorldScene {
+    id: string
+    draw(s: Surface, scroll: number, t: number): void
+    /**
+     * First row of standing water, when the scene has any. The live stage re-runs
+     * `reflectWater` after the units are drawn so bodies and effects mirror in it too.
+     */
+    water?: number
+    /** Column the sun's glitter road runs down on the water, if any. */
+    glitter?: number
+    /**
+     * On the scenery tier: everything in the fight band (FIGHT_BAND rows above the floor) is
+     * painted in SCENERY colours only, so the characters in front always read.
+     */
+    tiered?: boolean
+}
 
+/** Rows above FLOOR_Y that sit behind a standing fighter — the band the scenery tier governs. */
+export const FIGHT_BAND = 28
+
+// ── Water ──────────────────────────────────────────────────────────────────────────
+
+const REFLECT_LUT = shadeLut(0.85, 'sky0', 0.2)
+/** Rows of scene mirrored per row of water: >1 foreshortens, so a shallow pond still shows the sky. */
+const REFLECT_SQUASH = 2.2
+
+/**
+ * Mirror everything above the water line into rows [top, SH): each row copied from its
+ * foreshortened mirror image about `top − 2` (REFLECT_SQUASH rows up per row down), sheared sideways by a wave that grows with depth, and
+ * darkened through a shade map. Then a sparse glitter of lit dashes on the surface.
+ */
+export function reflectWater(s: Surface, top: number, t: number, glitterX = -1): void {
+    // everything below moves on the background loop, so a baked 16-frame strip closes
+    const ph = (qt(t) / BG_LOOP) % 1
+    const f = Math.floor(ph * BG_FRAMES + 1e-6)
+    const axis = top - 2
+    const w = s.w
+    const d = s.data
+    for (let y = top; y < s.h; y++) {
+        const depth = y - top
+        const src = axis - R(depth * REFLECT_SQUASH) - 1
+        if (src < 0) break
+        const off = R(Math.sin(y * 0.9 + ph * Math.PI * 2) * (0.6 + depth * 0.09))
+        const row = y * w
+        const srow = src * w
+        for (let x = 0; x < w; x++) {
+            let sx = x + off
+            if (sx < 0) sx = 0
+            else if (sx >= w) sx = w - 1
+            d[row + x] = REFLECT_LUT[d[srow + sx]!]!
+        }
+        // ripple lines: every third row a broken lighter streak, sliding a pixel every two frames
+        if (depth % 3 === 1) {
+            for (let x = mod((f >> 1) + depth * 5, 8); x < w; x += 8) {
+                const c = d[row + x]!
+                if (hash2(x >> 3, y) < 0.6) d[row + x] = c === C.void || c === C.ink ? C.night0 : c
+            }
+        }
+    }
+    if (glitterX >= 0) {
+        // the sun's road across the water, re-scattered every other frame
+        const k = f >> 1
+        for (let y = top + 1; y < s.h; y += 2) {
+            const spread = 3 + (y - top) * 0.6
+            for (let i = 0; i < 3; i++) {
+                const x = R(glitterX + (hash2(y, i + k * 3) - 0.5) * spread * 2)
+                const len = 1 + R(hash2(i, y) * 3)
+                rect(s, x, y, len, 1, i === 0 ? C.white : C.gold3)
+            }
+        }
+    }
+}
+
+/** A wide flat cloud: stacked lozenges in `body`, underside lit `lit` toward the sun. */
+function streakCloud(s: Surface, x: number, y: number, len: number, body: number, lit: number, dark: number): void {
+    for (let i = 0; i < 3; i++) {
+        const l = len * (1 - i * 0.3)
+        const ox = x + (i === 1 ? len * 0.1 : i === 2 ? len * 0.28 : 0)
+        rect(s, ox + 2, y - i * 3 - 1, l - 4, 1, i === 2 ? dark : body)
+        rect(s, ox, y - i * 3, l, 3, body)
+    }
+    rect(s, x + 1, y + 2, len - 3, 1, lit)
+    rect(s, x + 3, y + 3, len * 0.55, 1, lit)
+    dither(s, x + 6, y + 4, len * 0.4, 1, lit, 6)
+}
+
+/** A tall pine with a stepped, jagged silhouette — the video's framing trees. */
+function bigPine(s: Surface, x: number, base: number, h: number, c: number, rim: number): void {
+    const tiers = Math.floor(h / 9)
+    for (let k = 0; k < tiers; k++) {
+        const ty = base - h + k * 8
+        const w = 3 + k * 2.2
+        tri(s, x - w, ty + 11, x + w, ty + 11, x, ty, c)
+        rect(s, R(x - w), ty + 10, R(w * 2) + 1, 2, c)
+        // the sun side of each tier catches light
+        line(s, x + 1, ty + 2, R(x + w * 0.8), ty + 10, rim)
+    }
+    rect(s, x - 1, base - 6, 3, 8, C.rust0)
+}
+
+// clump scratch for bush(), so drawing a scene never allocates
+const CX = new Float32Array(4)
+const CY = new Float32Array(4)
+const CR = new Float32Array(4)
+
+/**
+ * A leafy bush, backlit: the low sun is behind the hedgerows, so the faces toward us sit in
+ * cool shade (dark green → teal) and only the crowns catch a thin gold rim. Keeping them
+ * darker and cooler than anything standing in front is what lets the fighters read — the
+ * Bramble Goblins are the same greens a sunlit bush would be. Overlapping round clumps,
+ * ragged single-leaf bumps on the rim, a few berries. `w` is the footprint; it stands on `base`.
+ */
+function bush(s: Surface, x: number, base: number, w: number, h: number, seed: number): void {
+    const n = 3 + (w > 22 ? 1 : 0)
+    for (let i = 0; i < n; i++) {
+        const u = n === 1 ? 0.5 : i / (n - 1)
+        const mid = 1 - Math.abs(u - 0.5) * 2
+        CR[i] = h * (0.42 + 0.28 * mid) + hash2(seed, i) * 1.5
+        CX[i] = x - w / 2 + CR[i]! * 0.8 + u * (w - CR[i]! * 1.6)
+        CY[i] = base - CR[i]! + 1
+    }
+    // dark body, a pixel fatter, then the ragged leaf edge
+    for (let i = 0; i < n; i++) disc(s, CX[i]!, CY[i]!, CR[i]! + 1, C.moss0)
+    for (let i = 0; i < n; i++) {
+        for (let k = 0; k < 10; k++) {
+            const a = -Math.PI * (0.05 + 0.9 * hash2(seed + i, k))
+            const r = CR[i]! + 1.5
+            px(s, CX[i]! + Math.cos(a) * r, CY[i]! + Math.sin(a) * r, C.moss0)
+        }
+    }
+    rect(s, R(x - w / 2), base - 2, w, 3, C.moss0)
+    // shade body in cool teal, a slightly lighter crown toward the sun
+    for (let i = 0; i < n; i++) disc(s, CX[i]!, CY[i]!, CR[i]! - 0.5, C.lagoon0)
+    for (let i = 0; i < n; i++) disc(s, CX[i]! + 1, CY[i]! - 2.5, CR[i]! - 4, C.lagoon1)
+    for (let i = 0; i < n; i++) {
+        // the backlight: a thin gold rim along each clump's upper-right edge
+        const r = CR[i]! + 0.5
+        for (let k = 0; k < 9; k++) {
+            const a = -Math.PI * (0.08 + 0.42 * (k / 8))
+            px(s, CX[i]! + Math.cos(a) * r, CY[i]! + Math.sin(a) * r, k < 3 ? C.sand3 : k < 6 ? C.sand2 : C.moss3)
+        }
+        // leaf texture in the shade: a few dark flecks
+        for (let k = 0; k < 4; k++) px(s, CX[i]! - r * 0.6 + hash2(seed + 3, i * 5 + k) * r, CY[i]! + hash2(seed + 4, i * 5 + k) * r * 0.6, C.moss0)
+    }
+    // a couple of bramble berries
+    for (let k = 0; k < 2; k++) {
+        const i = (seed + k) % n
+        const bx = R(CX[i]! - CR[i]! * 0.3 + k * 3)
+        const by = R(CY[i]! + CR[i]! * 0.2)
+        px(s, bx, by, C.rust2); px(s, bx + 1, by, C.rust1); px(s, bx, by - 1, C.rust3)
+    }
+}
+
+/** Fireflies wheeling on small closed loops — one lap per background loop, so it repeats. */
+function fireflies(s: Surface, ph: number, n: number, seed: number, y0: number, y1: number): void {
+    for (let i = 0; i < n; i++) {
+        const a = (ph + hash2(seed, i)) * Math.PI * 2 * (i & 1 ? 1 : -1)
+        const x = R(hash2(seed + 1, i) * SW + Math.cos(a) * 4)
+        const y = R(y0 + hash2(seed + 2, i) * (y1 - y0) + Math.sin(a) * 2)
+        const lit = (Math.floor(ph * BG_FRAMES) + i * 5) % 8 < 5
+        if (lit) s.set(x, y, i % 3 ? C.sand3 : C.moss3)
+    }
+}
+
+// ── The ten worlds ─────────────────────────────────────────────────────────────────
+
+const SUN = { x: 236, y: 90 }
+const TW_WATER = FLOOR_Y + 5
+
+/**
+ * Thornwick Vale in the late afternoon, after the reference video: a blue sky warming to
+ * gold at the horizon, clouds lit underneath, the sun low over the hills, windmills and a
+ * pine treeline, leafy hedgerows, a grass bank with the first violet crack, and a millpond
+ * in front that mirrors all of it (and, on the live stage, the party too).
+ *
+ * Every motion is a whole number of cycles per BG_LOOP, so the baked loop never jumps.
+ */
 const thornwick: WorldScene = {
     id: 'world_thornwick_vale',
+    water: TW_WATER,
+    glitter: SUN.x,
+    tiered: true,
     draw(s, sc, t) {
-        sky(s, [C.night1, C.night2, C.night3, C.haze, C.red3, C.orange, C.gold2], [0, 16, 36, 56, 74, 88, 98])
-        disc(s, 236 - sc * 0.02, 96, 14, C.gold3); disc(s, 236 - sc * 0.02, 96, 11, C.white)
-        ridge(s, sc * 0.1, 112, 18, 90, 1, C.night3, C.haze)
-        ridge(s, sc * 0.25, 124, 14, 70, 2, C.green1, C.green2)
-        // fields in stripes, a windmill, haystacks
-        for (let y = 124; y < FLOOR_Y; y += 3) dither(s, 0, y, SW, 1, y & 2 ? C.olive1 : C.green1, 8)
-        band(sc * 0.4, 180, 3, (x) => {
-            rect(s, x - 3, 104, 7, 24, C.bone0); tri(s, x - 5, 104, x + 5, 104, x, 96, C.brown1)
-            const a = qt(t) * 1.5
-            for (let i = 0; i < 4; i++) line(s, x, 100, x + Math.cos(a + i * Math.PI / 2) * 14, 100 + Math.sin(a + i * Math.PI / 2) * 14, C.brown2)
+        const ph = (qt(t) / BG_LOOP) % 1
+        const f = Math.floor(ph * BG_FRAMES + 1e-6)
+        sky(s, [C.sky0, C.sky1, C.sky2, C.dusk3, C.gold2, C.gold3], [0, 24, 50, 76, 92, 104])
+        // the sun: a wide soft glow, the disc, a white core
+        ditherDisc(s, SUN.x - sc * 0.02, SUN.y, 22, C.gold3, 2)
+        ditherDisc(s, SUN.x - sc * 0.02, SUN.y, 17, C.gold3, 6)
+        disc(s, SUN.x - sc * 0.02, SUN.y, 13, C.gold3)
+        disc(s, SUN.x - sc * 0.02, SUN.y, 10, C.white)
+        // streak clouds, still (drift can't close in a 1.6 s loop), lit from below
+        for (let i = 0; i < 6; i++) {
+            const len = 30 + R(hash2(i, 21) * 50)
+            const x = mod(hash2(i, 22) * (SW + 80) - sc * 0.05, SW + 80) - 60
+            const y = 18 + i * 12 + R(hash2(i, 23) * 5)
+            const body = y < 50 ? C.white : y < 76 ? C.bone1 : C.dusk3
+            const lit = y < 50 ? C.sky2 : C.gold3
+            streakCloud(s, R(x), y, len, body, lit, y < 50 ? C.sky2 : C.dusk3)
+        }
+        // far ridge in blue haze, nearer hills in soft green
+        ridge(s, sc * 0.1, 112, 22, 96, 1, C.sky1, C.sky2)
+        ridge(s, sc * 0.2, 124, 14, 70, 2, C.moss1, C.moss2)
+        // treeline, then windmills a quarter-turn per loop
+        band(sc * 0.3, 7, 8, (x, _k, r) => pine(s, x, 132, 8 + R(r * 10), C.moss0, null))
+        band(sc * 0.3, 150, 3, (x) => {
+            poly(s, [-5, 30, 5, 30, 3, 0, -3, 0], x, 102, C.sand2)
+            poly(s, [1, 30, 5, 30, 3, 0, 1, 0], x, 102, C.sand3) // sunlit side
+            tri(s, x - 5, 103, x + 5, 103, x, 96, C.rust2)
+            line(s, x, 96, x + 5, 103, C.rust3)
+            rect(s, x - 1, 116, 2, 3, C.rust0) // door
+            px(s, x + 1, 108, C.rock1)
+            const a = ph * Math.PI / 2
+            for (let i = 0; i < 4; i++) {
+                const ca = Math.cos(a + i * Math.PI / 2)
+                const sa = Math.sin(a + i * Math.PI / 2)
+                line(s, x, 101, x + ca * 17, 101 + sa * 17, C.rust1)
+                quad(s, x + ca * 5, 101 + sa * 5, x + ca * 17, 101 + sa * 17,
+                    x + ca * 17 - sa * 4, 101 + sa * 17 + ca * 4, x + ca * 5 - sa * 4, 101 + sa * 5 + ca * 4, C.sand3)
+                line(s, x + ca * 5 - sa * 2, 101 + sa * 5 + ca * 2, x + ca * 17 - sa * 2, 101 + sa * 17 + ca * 2, C.sand2)
+            }
+            disc(s, x, 101, 1, C.rust0)
         })
-        band(sc * 0.45, 60, 4, (x, _k, r) => { if (r > 0.5) { ellipse(s, x, 132, 6, 4, C.gold1); dither(s, x - 6, 128, 12, 4, C.gold2, 6) } })
-        // feral hedgerows with brambles
-        band(sc * 0.7, 34, 5, (x, k) => {
-            ellipse(s, x, 142, 14 + (k & 3), 9, C.green0)
-            ditherEllipse(s, x - 3, 138, 9, 5, C.green1, 8)
-            for (let i = 0; i < 5; i++) { const bx = x - 10 + i * 5; line(s, bx, 136, bx + 2, 130 - (i & 1) * 3, C.brown1); px(s, bx + 2, 129 - (i & 1) * 3, C.red2) }
-        })
-        // floor: a dirt road, grass verges, the first crack glowing violet
-        rect(s, 0, FLOOR_Y - 2, SW, SH - FLOOR_Y + 2, C.brown1)
-        rect(s, 0, FLOOR_Y - 2, SW, 2, C.green2)
-        dither(s, 0, FLOOR_Y, SW, 12, C.brown2, 5)
+        rect(s, 0, 132, SW, FLOOR_Y - 132, C.moss0)
+        dither(s, 0, 132, SW, 3, C.moss1, 6)
+        // hedgerows gone feral: leafy clumps, bramble berries
+        band(sc * 0.6, 34, 5, (x, k, r) => bush(s, x, FLOOR_Y - 2, 22 + R(r * 10), 9 + (k & 3), 17 + (k & 7)))
+        // framing pines at both edges, deep green with sunlit edges
+        bigPine(s, 14, FLOOR_Y, 86, C.moss0, C.moss2)
+        bigPine(s, 34, FLOOR_Y, 58, C.moss0, C.moss2)
+        bigPine(s, 300, FLOOR_Y, 92, C.moss0, C.moss2)
+        bigPine(s, 280, FLOOR_Y, 62, C.moss0, C.moss2)
+        // the grass bank the party stands on, tufted, with the crack glowing violet
+        rect(s, 0, FLOOR_Y - 2, SW, TW_WATER - FLOOR_Y + 2, C.rust0)
+        rect(s, 0, FLOOR_Y - 2, SW, 2, C.moss2)
+        for (let x = 0; x < SW; x += 2) if (hash2(x, 31) < 0.5) px(s, x, FLOOR_Y - 3, hash2(x, 32) < 0.3 ? C.sand3 : C.moss3)
+        rect(s, 0, FLOOR_Y, SW, 1, C.rust1)
         band(sc, 140, 6, (x) => {
-            poly(s, [0, 0, 4, 3, 2, 8, 7, 14, 3, 20], x, FLOOR_Y + 2, C.purple0)
-            for (let i = 0; i < 20; i += 4) px(s, x + 3 + (i & 4 ? 1 : 0), FLOOR_Y + 3 + i, (Math.floor(qt(t) * 4) + i) & 4 ? C.purple2 : C.pink)
+            line(s, x, FLOOR_Y - 2, x + 3, FLOOR_Y + 3, C.heather2)
+            px(s, x + 1, FLOOR_Y, (f >> 2) & 1 ? C.heather3 : C.dusk2)
         })
-        drift(s, t, 18, 7, [C.gold3, C.gold2], -6, 4, 90, FLOOR_Y)
+        // the millpond
+        reflectWater(s, TW_WATER, t, SUN.x)
+        fireflies(s, ph, 14, 7, 116, FLOOR_Y - 6)
     }
 }
 

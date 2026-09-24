@@ -74,7 +74,52 @@ const HEX = {
     stone3: '#7c7892',
 
     lava0: '#9c1e10',
-    lava1: '#ff4d1a'
+    lava1: '#ff4d1a',
+
+    // round 2: the dusk ramp for twilight skies (plum → mauve → rose → salmon)
+    dusk0: '#3a2350',
+    dusk1: '#6b3a6b',
+    dusk2: '#b0587a',
+    dusk3: '#eb8a7c',
+    // round 2: muted afternoon blues for the upper sky
+    sky0: '#35508f',
+    sky1: '#5b7fc4',
+    sky2: '#9fb3e3',
+
+    // round 3: the scenery tier — see SCENERY_RAMPS. Four steps each, darker and duller than
+    // the character ramps, shadows leaning cool and highlights leaning warm.
+    moss0: '#152623',
+    moss1: '#264230',
+    moss2: '#3e6440',
+    moss3: '#6f8f55',
+    lagoon0: '#10303a',
+    lagoon1: '#1b4f55',
+    lagoon2: '#357069',
+    lagoon3: '#6a9a88',
+    slate0: '#1a1f33',
+    slate1: '#2d3857',
+    slate2: '#4e5d85',
+    slate3: '#8392b5',
+    heather0: '#221a30',
+    heather1: '#3c2b4f',
+    heather2: '#66487e',
+    heather3: '#a07cb4',
+    rust0: '#2b1714',
+    rust1: '#51291f',
+    rust2: '#86432d',
+    rust3: '#c0714a',
+    rock0: '#201d20',
+    rock1: '#3a3436',
+    rock2: '#625753',
+    rock3: '#9a8b7e',
+    sand0: '#3a2c22',
+    sand1: '#6e5539',
+    sand2: '#a88a5c',
+    sand3: '#f0cf86',
+    ice0: '#1d2a3d',
+    ice1: '#38536e',
+    ice2: '#6c8fa9',
+    ice3: '#b4cedb'
 } as const
 
 export type ColorName = keyof typeof HEX
@@ -90,6 +135,67 @@ export const C = Object.fromEntries(Object.keys(HEX).map((k, i) => [k, i + 1])) 
 
 /** Transparent. Drawing with it erases. */
 export const CLEAR = 0
+
+// ── Tiers ──────────────────────────────────────────────────────────────────────────
+//
+// The palette is one palette in two tiers. The **character tier** (everything not listed
+// below) is saturated and bright: Heroes, Champions, enemies, bosses, effects. The **scenery
+// tier** is what backgrounds paint behind the fight line: each ramp darker and duller than
+// its character-tier cousin, so whatever stands in front reads in every world. Characters
+// never use scenery colours, and a world on the tier paints its fight band with nothing
+// else (both pinned in test/hero-quest/art.spec.ts).
+//
+// A new colour joins a named ramp here, ordered dark → light — never a one-off.
+
+export const SCENERY_RAMPS = {
+    moss: ['moss0', 'moss1', 'moss2', 'moss3'],
+    lagoon: ['lagoon0', 'lagoon1', 'lagoon2', 'lagoon3'],
+    slate: ['slate0', 'slate1', 'slate2', 'slate3'],
+    heather: ['heather0', 'heather1', 'heather2', 'heather3'],
+    rust: ['rust0', 'rust1', 'rust2', 'rust3'],
+    rock: ['rock0', 'rock1', 'rock2', 'rock3'],
+    sand: ['sand0', 'sand1', 'sand2', 'sand3'],
+    ice: ['ice0', 'ice1', 'ice2', 'ice3'],
+    sky: ['sky0', 'sky1', 'sky2'],
+    dusk: ['dusk0', 'dusk1', 'dusk2', 'dusk3']
+} as const satisfies Record<string, readonly ColorName[]>
+
+/** Palette indices of the scenery tier. */
+export const SCENERY: ReadonlySet<number> = new Set(Object.values(SCENERY_RAMPS).flatMap(r => r.map(n => C[n])))
+
+/** Perceived brightness 0–255 of palette index `i` (Rec. 709 weights). */
+export function luma(i: number): number {
+    const c = PALETTE_RGB[i]!
+    return 0.2126 * (c >> 16 & 255) + 0.7152 * (c >> 8 & 255) + 0.0722 * (c & 255)
+}
+
+/**
+ * A palette remap that multiplies every colour by `mul` and pulls it `amount` of the way
+ * toward `tint`, snapped to the nearest palette entry — for reflections, and for dimming
+ * the scene toward a skill's colour. Transparent stays transparent.
+ */
+export function shadeLut(mul: number, tint: ColorName, amount: number): Uint8Array {
+    const t = PALETTE_RGB[C[tint]]!
+    const tr = t >> 16 & 255
+    const tg = t >> 8 & 255
+    const tb = t & 255
+    const lut = new Uint8Array(PALETTE.length)
+    for (let i = 1; i < PALETTE.length; i++) {
+        const c = PALETTE_RGB[i]!
+        const r = (c >> 16 & 255) * mul * (1 - amount) + tr * amount
+        const g = (c >> 8 & 255) * mul * (1 - amount) + tg * amount
+        const b = (c & 255) * mul * (1 - amount) + tb * amount
+        let best = 1
+        let bd = Infinity
+        for (let j = 1; j < PALETTE.length; j++) {
+            const p = PALETTE_RGB[j]!
+            const d = ((p >> 16 & 255) - r) ** 2 * 3 + ((p >> 8 & 255) - g) ** 2 * 4 + ((p & 255) - b) ** 2 * 2
+            if (d < bd) { bd = d; best = j }
+        }
+        lut[i] = best
+    }
+    return lut
+}
 
 // ── Ramps ──────────────────────────────────────────────────────────────────────────
 // A particle walks a ramp from its first entry to its last over its life, and a recolor
