@@ -118,53 +118,6 @@ const rawGroups: CommandPaletteGroup[] = [
     ]
   },
   {
-    id: 'miner',
-    label: 'Miner (Idle Game)',
-    items: [
-      {
-        id: 'miner-overview',
-        label: 'Miner Overview',
-        description: 'Idle mining rig, GPU hashing, and ore extraction',
-        icon: 'i-lucide-pickaxe',
-        to: '/miner',
-        keywords: ['miner', 'mining', 'rig', 'gpu', 'ore', 'hash', 'idle']
-      },
-      {
-        id: 'miner-factory',
-        parentId: 'miner-overview',
-        isSubpage: true,
-        treePrefix: '├──',
-        label: 'Factory',
-        description: 'Automated factory pipelines and production lines',
-        icon: 'i-lucide-factory',
-        to: '/miner/factory',
-        keywords: ['miner', 'factory', 'automation', 'machines', 'production', 'pipeline']
-      },
-      {
-        id: 'miner-shop',
-        parentId: 'miner-overview',
-        isSubpage: true,
-        treePrefix: '├──',
-        label: 'Shop',
-        description: 'Upgrade mining hardware, pickaxes, and power efficiency',
-        icon: 'i-lucide-store',
-        to: '/miner/shop',
-        keywords: ['miner', 'shop', 'hardware', 'pickaxe', 'buy', 'upgrades', 'store']
-      },
-      {
-        id: 'miner-lootbox',
-        parentId: 'miner-overview',
-        isSubpage: true,
-        treePrefix: '└──',
-        label: 'Lootboxes',
-        description: 'Unbox rare mining gear, GPUs, and bonus chips',
-        icon: 'i-lucide-gift',
-        to: '/miner/lootbox',
-        keywords: ['miner', 'lootbox', 'crates', 'unboxing', 'rewards', 'chest']
-      }
-    ]
-  },
-  {
     id: 'xeno',
     label: 'Xeno (Idle Game)',
     items: [
@@ -332,6 +285,20 @@ const rawGroups: CommandPaletteGroup[] = [
         icon: 'i-lucide-book-open',
         to: '/hack/wiki',
         keywords: ['hack', 'wiki', 'guide', 'manual', 'tactics', 'strategy', 'help']
+      }
+    ]
+  },
+  {
+    id: 'polytown',
+    label: 'Polytown (Idle Game)',
+    items: [
+      {
+        id: 'polytown-overview',
+        label: 'Polytown',
+        description: 'Build a town on the endless grid, produce goods and trade them on the market',
+        icon: 'i-lucide-building-2',
+        to: '/polytown',
+        keywords: ['polytown', 'town', 'city', 'builder', 'plot', 'idle', 'market', 'resources']
       }
     ]
   },
@@ -613,7 +580,7 @@ const rawGroups: CommandPaletteGroup[] = [
       {
         id: 'xenoslot',
         label: 'Xeno Slot',
-        description: 'Alien organism slot machine with expanding bio-reels',
+        description: 'Sci-fi line slot with a Hold & Win coin bonus',
         icon: 'i-lucide-cherry',
         to: '/games/xenoslot',
         keywords: ['slots', 'xenoslot', 'xeno', 'casino', 'reels', 'spin']
@@ -657,6 +624,30 @@ const rawGroups: CommandPaletteGroup[] = [
         icon: 'i-lucide-party-popper',
         to: '/games/spinata',
         keywords: ['slots', 'spinata', 'pinata', 'fiesta', 'casino', 'spin']
+      },
+      {
+        id: 'trashpanda',
+        label: 'Trash Panda Heist',
+        description: 'Raccoon heist slot with sticky wild free spins and a dumpster pick game',
+        icon: 'i-lucide-trash-2',
+        to: '/games/trashpanda',
+        keywords: ['slots', 'trashpanda', 'trash', 'panda', 'raccoon', 'heist', 'casino', 'spin']
+      },
+      {
+        id: 'emberportals',
+        label: 'Ember Portals',
+        description: 'Cluster tumble slot with growing portal wilds and sticky free spins',
+        icon: 'i-lucide-orbit',
+        to: '/games/emberportals',
+        keywords: ['slots', 'emberportals', 'ember', 'portal', 'portals', 'fire', 'cluster', 'tumble', 'casino', 'spin']
+      },
+      {
+        id: 'polymasters',
+        label: 'PolyMasters',
+        description: 'Crash game: fly through multipliers, dodge rockets and land on the island',
+        icon: 'i-lucide-plane',
+        to: '/games/polymasters',
+        keywords: ['slots', 'polymasters', 'plane', 'crash', 'aviator', 'rocket', 'casino', 'fly']
       }
     ]
   }

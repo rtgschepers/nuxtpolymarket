@@ -25,7 +25,10 @@ export default defineNuxtConfig({
             // PROJECT_DSN is the name Argus issues its DSNs under; either sets it.
             sentryDsn: process.env.NUXT_PUBLIC_SENTRY_DSN || process.env.PROJECT_DSN || '',
             // The browser fetches card textures straight from the sidecar.
-            pokemonApiBase: 'http://127.0.0.1:8080'
+            pokemonApiBase: 'http://127.0.0.1:8080',
+            // Pirate Raid auto-play asks Laya (laya_server.py) on the player's
+            // own machine, straight from the browser.
+            layaUrl: 'http://127.0.0.1:8000'
         }
     },
     // The casino and pirate raid are canvas-heavy, interactive experiences.
@@ -35,8 +38,15 @@ export default defineNuxtConfig({
     routeRules: {
         // The auto-scaling gem market became the player-driven exchange
         '/gem-market': { redirect: '/gem-exchange' },
+        // The Miner idle game is retired; Polytown's gem mines took over gem income.
+        '/miner': { redirect: '/polytown' },
+        '/miner/**': { redirect: '/polytown' },
+        // The crash game launched as Aviamasters and was renamed PolyMasters.
+        '/games/aviamasters': { redirect: '/games/polymasters' },
         '/games/**': { ssr: false },
         '/pirates/**': { ssr: false },
+        '/void': { ssr: false },
+        '/void/**': { ssr: false },
         '/shapezz': { ssr: false },
         '/shapezz/**': { ssr: false },
         '/pathwarden': { ssr: false },

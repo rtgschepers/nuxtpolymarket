@@ -5,6 +5,7 @@ import type {
   PathwardenMapPlan
 } from '#shared/types/pathwarden-save'
 import type { FirewallRunSave } from '#shared/utils/gamelogic/firewall'
+import type { GmOffer, GmShopItem } from '#shared/utils/gamelogic/gold-miner'
 import type { CallOfXenoRunSave } from '#shared/utils/gamelogic/call-of-xeno-save'
 import type { MeadowbrawlRunSave } from '#shared/utils/gamelogic/meadowbrawl-meta'
 import type {
@@ -16,6 +17,7 @@ import type {
   TcgCondition
 } from '#shared/types/tcg-db'
 import type { RateTemplate } from '#shared/utils/tcg/rate-fitter'
+import type { TownEventData } from '#shared/utils/gamelogic/town-events'
 import type { TcgGradeResult } from '#shared/utils/tcg/grading-model-types'
 
 export const user = pgTable('user', {
@@ -67,7 +69,12 @@ export const transactions = pgTable(
     category: text('category'),
     createdAt: timestamp('created_at').defaultNow().notNull()
   },
-  table => [index('transactions_userId_createdAt_idx').on(table.userId, table.createdAt)]
+  table => [
+    index('transactions_userId_createdAt_idx').on(table.userId, table.createdAt),
+    // The site-wide audit filters on createdAt alone, which the composite index
+    // above cannot serve because userId leads it.
+    index('transactions_createdAt_idx').on(table.createdAt)
+  ]
 )
 
 export const session = pgTable(
@@ -175,6 +182,8 @@ export const pirateState = pgTable('pirate_state', {
   // 1 — every owned ability starts there, so the map only stores what has
   // actually been paid for.
   abilityLevels: jsonb('ability_levels').$type<Record<string, number>>().notNull().default({}),
+  // Letters of Marque: permanent multiplier on every voyage's pay (see pirateMarqueMultiplier).
+  marqueLevel: integer('marque_level').notNull().default(0),
   // Set when a voyage starts, cleared on finish. Server computes elapsed time
   // from this instead of trusting the client, and snapshots the power level
   // so mid-run upgrades can't raise the finish-run payout ceiling.
@@ -223,6 +232,103 @@ export const pirateRunHistory = pgTable('pirate_run_history', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, t => [
   index('pirate_run_history_userId_createdAt_idx').on(t.userId, t.createdAt)
+])
+
+// ─── Void Runner ──────────────────────────────────────────────────────────
+
+export const voidState = pgTable('void_state', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  // Banked materials by resource id. Cargo carried mid-run only lands here on a dock.
+  resources: jsonb('resources').$type<Record<string, number>>().notNull().default({}),
+  ownedShipIds: jsonb('owned_ship_ids').$type<string[]>().notNull().default(['sparrow']),
+  equippedShipId: text('equipped_ship_id').notNull().default('sparrow'),
+  // Hull tier per ship id, only for hulls refitted above the tier they were built at.
+  shipTiers: jsonb('ship_tiers').$type<Record<string, number>>().notNull().default({}),
+  // Gear fitted to each hull, keyed by ship id: { gun, turrets[], armor[], shields[] } of item ids.
+  loadouts: jsonb('loadouts').$type<Record<string, unknown>>().notNull().default({}),
+  // Relic mods waiting to be socketed, by mod id.
+  mods: jsonb('mods').$type<Record<string, number>>().notNull().default({}),
+  // Set once the free starter kit has been handed out.
+  starterGranted: boolean('starter_granted').notNull().default(false),
+  // Bumped when the starter kit grows; older pilots get the new pieces once.
+  kitVersion: integer('kit_version').notNull().default(0),
+  // Daily limits on the rare meta rewards (UTC day key), so forged reports buy little.
+  rewardsDay: text('rewards_day'),
+  marksToday: integer('marks_today').notNull().default(0),
+  blueprintsToday: integer('blueprints_today').notNull().default(0),
+  gearToday: integer('gear_today').notNull().default(0),
+  relicsToday: integer('relics_today').notNull().default(0),
+  // Pilot meta: Command Marks and the perks bought with them, blueprints for MkII gear, recovered lore logs.
+  marks: integer('marks').notNull().default(0),
+  perks: jsonb('perks').$type<Record<string, number>>().notNull().default({}),
+  blueprints: jsonb('blueprints').$type<string[]>().notNull().default([]),
+  lore: jsonb('lore').$type<string[]>().notNull().default([]),
+  // Captured extraction beacons, keyed `sector:slot`; `at` is epoch ms of the capture or last defence.
+  beacons: jsonb('beacons').$type<Record<string, { at: number, attacked?: boolean }>>().notNull().default({}),
+  upgradeLevels: jsonb('upgrade_levels').$type<Record<string, number>>().notNull().default({}),
+  // 0 until the first warden is killed and docked home.
+  highestSectorCleared: integer('highest_sector_cleared').notNull().default(0),
+  runsPlayed: integer('runs_played').notNull().default(0),
+  extractions: integer('extractions').notNull().default(0),
+  kills: integer('kills').notNull().default(0),
+  wardensKilled: integer('wardens_killed').notNull().default(0),
+  bestHaulValue: integer('best_haul_value').notNull().default(0),
+  totalSold: bigint('total_sold', { mode: 'number' }).notNull().default(0),
+  // Set on launch, cleared on finish. The snapshots stop a mid-run refit from
+  // raising what an in-flight run may bank.
+  runStartedAt: timestamp('run_started_at'),
+  runSector: integer('run_sector'),
+  runShipId: text('run_ship_id'),
+  runCargo: integer('run_cargo'),
+  // Pilot skills: XP drives the level, the level drives points in every tree.
+  pilotXp: integer('pilot_xp').notNull().default(0),
+  // Trade Contracts: a coin-only multiplier on market sell prices.
+  tradeLevel: integer('trade_level').notNull().default(0),
+  // Supplies in stock at the station, and what the current run took with it.
+  supplies: jsonb('supplies').$type<Record<string, number>>().notNull().default({}),
+  runSupplies: jsonb('run_supplies').$type<Record<string, number>>(),
+  // Station contracts completed today (UTC day key + indices).
+  contractsDay: text('contracts_day'),
+  contractsDone: jsonb('contracts_done').$type<number[]>().notNull().default([]),
+  unlockedSkills: jsonb('unlocked_skills').$type<string[]>().notNull().default(['seeker']),
+  equippedSkill: text('equipped_skill').notNull().default('seeker'),
+  skillNodes: jsonb('skill_nodes').$type<Record<string, string[]>>().notNull().default({})
+})
+
+// Crafted gear. Tier, rarity and affixes are rolled on the server at craft time.
+export const voidItems = pgTable('void_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  type: text('type').notNull(),
+  tier: integer('tier').notNull().default(1),
+  rarity: integer('rarity').notNull().default(0),
+  level: integer('level').notNull().default(0),
+  affixes: jsonb('affixes').$type<Record<string, number>>().notNull().default({}),
+  mod: text('mod'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [
+  index('void_items_userId_idx').on(t.userId)
+])
+
+export const voidRunHistory = pgTable('void_run_history', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  sector: integer('sector').notNull().default(1),
+  shipId: text('ship_id').notNull().default('sparrow'),
+  durationMs: integer('duration_ms').notNull().default(0),
+  haul: jsonb('haul').$type<Record<string, number>>().notNull().default({}),
+  haulValue: integer('haul_value').notNull().default(0),
+  extracted: boolean('extracted').notNull().default(false),
+  reason: text('reason').notNull(),
+  kills: integer('kills').notNull().default(0),
+  wardenKilled: boolean('warden_killed').notNull().default(false),
+  // Balance audit blob: the ship that flew, what the server granted and the run's own telemetry.
+  meta: jsonb('meta').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [
+  index('void_run_history_userId_createdAt_idx').on(t.userId, t.createdAt)
 ])
 
 // ─── MEADOWBRAWL ─────────────────────────────────────────────────────────
@@ -298,6 +404,8 @@ export const shapezzState = pgTable('shapezz_state', {
   shotgunPurchasePrice: integer('shotgun_purchase_price').notNull().default(0),
   arcCoilRarity: text('arc_coil_rarity'), // null = not owned
   arcCoilPurchasePrice: integer('arc_coil_purchase_price').notNull().default(0),
+  railgunRarity: text('railgun_rarity'), // null = not owned
+  railgunPurchasePrice: integer('railgun_purchase_price').notNull().default(0),
   runsPlayed: integer('runs_played').notNull().default(0),
   totalCoinsEarned: integer('total_coins_earned').notNull().default(0),
   bestSurvivalMs: integer('best_survival_ms').notNull().default(0),
@@ -409,6 +517,37 @@ export const firewallRuns = pgTable('firewall_runs', {
   saveVersion: integer('save_version').notNull(),
   runState: jsonb('run_state').$type<FirewallRunSave>().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull()
+})
+
+// ─── GOLD MINER ──────────────────────────────────────────────────────────
+
+// Lifetime stats plus the one run a player can have going. `phase` is null
+// between runs; while it is set, every run column below it is live. Levels,
+// bags and the shop all roll off `secret`, which never leaves the server: the
+// client only gets the current level's layout seed once that level is dealt.
+export const goldMinerState = pgTable('gold_miner_state', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  runsPlayed: integer('runs_played').notNull().default(0),
+  bestLevel: integer('best_level').notNull().default(0),
+  bestPayout: numeric('best_payout', { precision: 19, scale: 4 }).notNull().default('0'),
+  totalStaked: numeric('total_staked', { precision: 19, scale: 4 }).notNull().default('0'),
+  totalPaid: numeric('total_paid', { precision: 19, scale: 4 }).notNull().default('0'),
+  phase: text('phase').$type<'level' | 'shop'>(),
+  stake: numeric('stake', { precision: 19, scale: 4 }).notNull().default('0'),
+  secret: integer('secret').notNull().default(0),
+  level: integer('level').notNull().default(0),
+  cash: integer('cash').notNull().default(0),
+  dynamite: integer('dynamite').notNull().default(0),
+  strength: boolean('strength').notNull().default(false),
+  clover: boolean('clover').notNull().default(false),
+  book: boolean('book').notNull().default(false),
+  polish: boolean('polish').notNull().default(false),
+  // When the level clock starts (a few seconds after the level is dealt, for the intro card).
+  levelStartsAt: timestamp('level_starts_at'),
+  offers: jsonb('offers').$type<GmOffer[]>().notNull().default([]),
+  bought: jsonb('bought').$type<GmShopItem[]>().notNull().default([]),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull()
 })
 
@@ -859,6 +998,9 @@ export const hackOps = pgTable('hack_ops', {
   startedAt: timestamp('started_at').defaultNow().notNull(),
   completesAt: timestamp('completes_at').notNull(),
   collected: boolean('collected').notNull().default(false),
+  // When set, collecting this op immediately dispatches the same template with
+  // the same squad (and carries the flag over), so a grind loop needs no clicks.
+  autoRedeploy: boolean('auto_redeploy').notNull().default(false),
   reward: jsonb('reward')
 }, t => [index('hack_ops_userId_idx').on(t.userId)])
 
@@ -1605,6 +1747,14 @@ export const tcgTradeOffer = pgTable('tcg_trade_offers', {
   toUserId: text('to_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   senderCoins: numeric('sender_coins', { precision: 19, scale: 4 }).notNull().default('0'),
   receiverCoins: numeric('receiver_coins', { precision: 19, scale: 4 }).notNull().default('0'),
+  /**
+   * Coins actually held for this offer, debited from the sender when it was
+   * created (§7.1, the buy-order pattern). Not a duplicate of senderCoins: it
+   * is 0 on offers made before escrow existed, and is cleared when the offer
+   * resolves — released back to the sender on cancel or decline, consumed by
+   * the payout on accept. So the sum of this column IS the coins in escrow.
+   */
+  senderEscrow: numeric('sender_escrow', { precision: 19, scale: 4 }).notNull().default('0'),
   note: text('note'),
   state: text('state').notNull().default('open'), // 'open' | 'accepted' | 'declined' | 'cancelled'
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -1746,7 +1896,11 @@ export const userRelations = relations(user, ({ many, one }) => ({
   pirateRunHistory: many(pirateRunHistory),
   shapezzState: one(shapezzState),
   pathwardenState: one(pathwardenState),
-  firewallState: one(firewallState)
+  voidState: one(voidState),
+  voidRunHistory: many(voidRunHistory),
+  voidItems: many(voidItems),
+  firewallState: one(firewallState),
+  goldMinerState: one(goldMinerState)
 }))
 
 export const minerStateRelations = relations(minerState, ({ one }) => ({
@@ -1765,6 +1919,18 @@ export const pirateRunHistoryRelations = relations(pirateRunHistory, ({ one }) =
   user: one(user, { fields: [pirateRunHistory.userId], references: [user.id] })
 }))
 
+export const voidStateRelations = relations(voidState, ({ one }) => ({
+  user: one(user, { fields: [voidState.userId], references: [user.id] })
+}))
+
+export const voidItemsRelations = relations(voidItems, ({ one }) => ({
+  user: one(user, { fields: [voidItems.userId], references: [user.id] })
+}))
+
+export const voidRunHistoryRelations = relations(voidRunHistory, ({ one }) => ({
+  user: one(user, { fields: [voidRunHistory.userId], references: [user.id] })
+}))
+
 export const shapezzStateRelations = relations(shapezzState, ({ one }) => ({
   user: one(user, { fields: [shapezzState.userId], references: [user.id] })
 }))
@@ -1781,12 +1947,209 @@ export const firewallRunsRelations = relations(firewallRuns, ({ one }) => ({
   user: one(user, { fields: [firewallRuns.userId], references: [user.id] })
 }))
 
+export const goldMinerStateRelations = relations(goldMinerState, ({ one }) => ({
+  user: one(user, { fields: [goldMinerState.userId], references: [user.id] })
+}))
+
 export const meadowbrawlStateRelations = relations(meadowbrawlState, ({ one }) => ({
   user: one(user, { fields: [meadowbrawlState.userId], references: [user.id] })
 }))
 
 export const callOfXenoStateRelations = relations(callOfXenoState, ({ one }) => ({
   user: one(user, { fields: [callOfXenoState.userId], references: [user.id] })
+}))
+
+// ─── Polytown ─────────────────────────────────────────────────────────────────
+
+/**
+ * One row per player town. Production is settled lazily from elapsed real time
+ * (see server/utils/town.ts:settleTownState) under a FOR UPDATE lock on this
+ * row — there is no server-side loop. Happiness and tick progress are the only
+ * simulation carry-overs; everything else is derived from buildings + inventory.
+ */
+export const townState = pgTable('town_state', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  happiness: integer('happiness').notNull().default(50),
+  /** Speed-scaled ms of progress toward the next tick, carried between settles. */
+  tickProgressMs: integer('tick_progress_ms').notNull().default(0),
+  lastSettledAt: timestamp('last_settled_at').defaultNow().notNull(),
+  /** Plots ever bought from the system (the founding plot counts). Drives price + cooldown. */
+  plotsBought: integer('plots_bought').notNull().default(1),
+  lastPlotBoughtAt: timestamp('last_plot_bought_at').defaultNow().notNull(),
+  /** Milestone ids already paid out. Claiming appends under a NOT-contains guard (claim-then-reward). */
+  milestonesClaimed: jsonb('milestones_claimed').$type<string[]>().notNull().default([]),
+  /** Lifetime coins earned from selling resources (floor + player fills). Drives the merchant milestones. */
+  coinsEarned: numeric('coins_earned', { precision: 19, scale: 4 }).notNull().default('0'),
+  /** Lifetime units produced per resource — the tier gate a rich mayor cannot buy past. Written under the state lock. */
+  produced: jsonb('produced').$type<Record<string, number>>().notNull().default({}),
+  /** Build crews owned. Three come free; the rest are bought with gems, permanently. */
+  builders: integer('builders').notNull().default(3),
+  /** Per building, per resource: fractions of a unit made but not yet handed over, carried between ticks. Written under the state lock. */
+  carry: jsonb('carry').$type<Record<string, Record<string, number>>>().notNull().default({}),
+  /** The research project running right now, if any. Only ever one at a time. */
+  researchId: text('research_id'),
+  researchCompletesAt: timestamp('research_completes_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+})
+
+/**
+ * One row, holding whatever the realm as a whole has to remember.
+ *
+ * Right now that is the founding scan's high-water mark. Without it every new
+ * town walked the spiral from index zero against every plot in the world,
+ * which is quadratic in towns and hard-failed at the 100k-iteration guard once
+ * a few thousand towns existed. The cursor only ever moves forward, so a town
+ * founded today starts its search where the last one finished.
+ */
+export const townRealm = pgTable('town_realm', {
+  id: integer('id').primaryKey().default(1),
+  /** Lowest spiral index that might still be free. */
+  foundingCursor: integer('founding_cursor').notNull().default(0)
+})
+
+/**
+ * A finished research project. The unique (user, project) pair is the guard:
+ * settling a finished project inserts here, and a second concurrent settle
+ * conflicts instead of granting the effect twice.
+ */
+export const townResearch = pgTable('town_research', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  researchId: text('research_id').notNull(),
+  completedAt: timestamp('completed_at').defaultNow().notNull()
+}, table => [
+  unique('town_research_user_project').on(table.userId, table.researchId)
+])
+
+/**
+ * One 8x8 plot on the shared endless grid. The unique (x, y) constraint is the
+ * claim guard: the player picks the square, the insert either wins it or
+ * conflicts. Founding plots take the first free square on a spiral from the
+ * origin; later plots must touch one the player already owns.
+ */
+export const townPlots = pgTable('town_plots', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  /** Asking price while the owner has this (empty) plot on the market, else null. */
+  listPrice: numeric('list_price', { precision: 19, scale: 4 }),
+  /**
+   * What the current owner actually paid for this square — the land office
+   * price, the price a neighbour asked, or 0 for a founding plot. The refund
+   * is a share of THIS, never of a counter a player can pump by trading.
+   */
+  paidPrice: numeric('paid_price', { precision: 19, scale: 4 }).notNull().default('0'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [
+  index('town_plots_userId_idx').on(t.userId),
+  unique('town_plots_xy_unique').on(t.x, t.y)
+])
+
+/**
+ * One building on one tile. level 0 = still under first construction
+ * (completesAt in the future). upgradingTo is set while an upgrade is in
+ * progress; settle bakes it into level once completesAt passes.
+ */
+export const townBuildings = pgTable('town_buildings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  plotId: text('plot_id').notNull().references(() => townPlots.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  tileX: integer('tile_x').notNull(),
+  tileY: integer('tile_y').notNull(),
+  rotation: integer('rotation').notNull().default(0), // clockwise quarter turns; cosmetic only
+  level: integer('level').notNull().default(0),
+  upgradingTo: integer('upgrading_to'),
+  completesAt: timestamp('completes_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [
+  index('town_buildings_userId_idx').on(t.userId),
+  unique('town_buildings_tile_unique').on(t.plotId, t.tileX, t.tileY)
+])
+
+/**
+ * What each settle produced, per resource — the data behind the production
+ * chart. One row per (settle, resource) with a positive amount; consumption is
+ * not logged here, the chart is about goods being made.
+ */
+export const townProduction = pgTable('town_production', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  resource: text('resource').notNull(),
+  amount: integer('amount').notNull(),
+  /** Window covered by the settle, so bucketing can spread it over the hours it spanned. */
+  fromAt: timestamp('from_at').notNull(),
+  toAt: timestamp('to_at').notNull()
+}, t => [index('town_production_user_to_idx').on(t.userId, t.toAt)])
+
+/** Per-player resource stock. Always written as increments (amount = amount + delta). */
+export const townInventory = pgTable('town_inventory', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  resource: text('resource').notNull(),
+  /** Units held. bigint because a late-game market fill can name more than int4 holds. */
+  amount: bigint('amount', { mode: 'number' }).notNull().default(0)
+}, t => [
+  // The unique pair's leading column already serves every by-user lookup.
+  unique('town_inventory_unique').on(t.userId, t.resource)
+])
+
+/** Per-resource limit order book, same shape as gem_orders. Buys escrow coins, sells escrow the resource. */
+export const townOrders = pgTable('town_orders', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  resource: text('resource').notNull(),
+  side: text('side').notNull(), // 'buy' | 'sell'
+  price: numeric('price', { precision: 19, scale: 4 }).notNull(),
+  quantity: integer('quantity').notNull(),
+  filled: integer('filled').notNull().default(0),
+  status: text('status').notNull().default('open'), // 'open' | 'filled' | 'cancelled'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull()
+}, t => [
+  index('town_orders_book_idx').on(t.resource, t.status, t.side, t.price),
+  index('town_orders_userId_idx').on(t.userId, t.status)
+])
+
+/** One row per executed match — the per-resource price history. */
+export const townTrades = pgTable('town_trades', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resource: text('resource').notNull(),
+  buyerId: text('buyer_id').references(() => user.id, { onDelete: 'set null' }),
+  sellerId: text('seller_id').references(() => user.id, { onDelete: 'set null' }),
+  takerId: text('taker_id').references(() => user.id, { onDelete: 'set null' }),
+  price: numeric('price', { precision: 19, scale: 4 }).notNull(),
+  quantity: integer('quantity').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [
+  index('town_trades_resource_createdAt_idx').on(t.resource, t.createdAt),
+  // All three are ON DELETE SET NULL, and deleting a town scans by them.
+  index('town_trades_buyer_idx').on(t.buyerId),
+  index('town_trades_seller_idx').on(t.sellerId),
+  index('town_trades_taker_idx').on(t.takerId)
+])
+
+/**
+ * What happened to a town while its mayor was not looking: a build or upgrade
+ * that finished, a project banked, a resting offer another mayor took. The
+ * notification centre lists these newest first. Nothing tracks read state.
+ *
+ * `createdAt` is the moment the thing happened, not the moment it was written
+ * — a build that finished six hours ago is written by the settle that notices
+ * it, but still lists at the time it finished.
+ */
+export const townEvents = pgTable('town_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), // 'built' | 'upgraded' | 'research' | 'trade'
+  data: jsonb('data').$type<TownEventData>().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+}, t => [index('town_events_user_createdAt_idx').on(t.userId, t.createdAt)])
+
+export const townStateRelations = relations(townState, ({ one }) => ({
+  user: one(user, { fields: [townState.userId], references: [user.id] })
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({

@@ -10,6 +10,7 @@ await fetchSession()
 const { inDebt: bankGarnishing, refresh: refreshBankStatus } = useBankStatus()
 if (user.value) await refreshBankStatus()
 const appConfig = useAppConfig()
+const softStudio = useSoftStudio()
 const open = ref(true)
 const menuOpen = ref(false)
 const siteVersion = `v${packageJson.version.split('.').slice(0, 2).join('.')}`
@@ -37,16 +38,17 @@ const platformItems: NavigationMenuItem[] = [
 ]
 
 const idleGameItems: NavigationMenuItem[] = [
-  { label: 'Miner', class: 'mb-1', icon: 'i-lucide-pickaxe', to: '/miner' },
   { label: 'Xeno', class: 'mb-1', icon: 'i-lucide-sprout', to: '/xeno' },
   { label: 'Hack Ops', class: 'mb-1', icon: 'i-lucide-terminal', to: '/hack' },
   { label: 'Colony', class: 'mb-1', icon: 'i-lucide-bug', to: '/colony' },
+  { label: 'Polytown', class: 'mb-1', icon: 'i-lucide-building-2', to: '/polytown' },
   { label: 'Hero Quest', class: 'mb-1', icon: 'i-lucide-swords', to: '/hero-quest' }
 ]
 
 const activeGameItems: NavigationMenuItem[] = [
-  { label: 'Pathwarden', class: 'mb-1', icon: 'i-lucide-castle', to: '/pathwarden' },
+  { label: 'Void Runner', class: 'mb-1', icon: 'i-lucide-rocket', to: '/void' },
   { label: 'Pirate Raid', class: 'mb-1', icon: 'i-lucide-anchor', to: '/pirates' },
+  { label: 'Pathwarden', class: 'mb-1', icon: 'i-lucide-castle', to: '/pathwarden' },
   { label: 'SHAPEZZ', class: 'mb-1', icon: 'i-lucide-shapes', to: '/shapezz' },
   { label: 'Call of Xeno', class: 'mb-1', icon: 'i-lucide-skull', to: '/call-of-xeno' },
   { label: 'Voxel Arena', class: 'mb-1', icon: 'i-lucide-boxes', to: '/voxel-arena' },
@@ -61,7 +63,10 @@ const slotItems: NavigationMenuItem[] = [
   { label: 'Aether Gates', class: 'mb-1', icon: 'i-lucide-zap', to: '/games/aethergates' },
   { label: 'Fire in the Hole', class: 'mb-1', icon: 'i-lucide-flame', to: '/games/fireinthehole' },
   { label: 'Book of Shadows', class: 'mb-1', icon: 'i-lucide-book-open', to: '/games/bookofshadows' },
-  { label: 'Spiñata Slots', class: 'mb-1', icon: 'i-lucide-party-popper', to: '/games/spinata' }
+  { label: 'Spiñata Slots', class: 'mb-1', icon: 'i-lucide-party-popper', to: '/games/spinata' },
+  { label: 'Trash Panda Heist', class: 'mb-1', icon: 'i-lucide-trash-2', to: '/games/trashpanda' },
+  { label: 'Ember Portals', class: 'mb-1', icon: 'i-lucide-orbit', to: '/games/emberportals' },
+  { label: 'PolyMasters', class: 'mb-1', icon: 'i-lucide-plane', to: '/games/polymasters' }
 ]
 
 const casinoItems: NavigationMenuItem[] = [
@@ -360,6 +365,12 @@ const globalSearch = useGlobalSearch()
               <USeparator class="my-1" />
 
               <div class="px-3 py-2 space-y-2.5">
+                <USwitch
+                  v-model="softStudio"
+                  label="Soft Studio"
+                  size="sm"
+                />
+                <USeparator />
                 <div>
                   <p class="text-xs font-medium text-muted mb-1.5">
                     Primary

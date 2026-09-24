@@ -2,9 +2,11 @@ import type { H3Event } from 'h3'
 import { MIN_DEPLOY_SUCCESS, opSuccessChance } from '#shared/utils/hack-config'
 import { ARTIFACT_TYPES, effectiveGrowTime, getPlant, MUTATIONS, PLANT_TYPES } from '#shared/utils/xeno'
 import { BANK_MAX_AMOUNT } from '#shared/utils/limits'
+import { getTownResource, TOWN_MAX_BUILDERS } from '#shared/utils/gamelogic/town'
 import type { AiToolCall } from '#shared/utils/ai'
 import { playCasinoRounds, playNamedCasinoRounds } from './casino'
 import { getErrorMessage, toolHeaders } from './helpers'
+import { planTownSale, townUpgradeCandidates, type TownBuildingSnapshot } from './town'
 
 /**
  * The typed-route union behind $fetch has grown past TypeScript's
@@ -102,41 +104,6 @@ interface ColonyState {
     builderCount: number
 }
 
-interface MinerState {
-    walletBalance: number
-    rigLevel: number
-    rigMaxLevel: number
-    rigUpgradeCost: number
-    vaultLevel: number
-    vaultMaxLevel: number
-    vaultUpgradeCost: number
-    factoryLevel: number
-    factoryMaxLevel: number
-    factoryUpgradeCost: number
-    pendingCash: number
-    pendingGems: number
-    income: number
-    cap: number
-    rate: number
-    gemCap: number
-    gems: number
-    lootboxSlots: number
-    lootboxMaxSlots: number
-    lootboxNextSlotCost: number
-    lootboxFreeOpensRemaining: number
-    overclockLevel: number
-    overclockMaxLevel: number
-    overclockNextCost: number | null
-    catalystLevel: number
-    catalystMaxLevel: number
-    catalystNextCost: number | null
-    incomeMultiplier: number
-    gemRateMultiplier: number
-    gemPrice: number
-    lootboxAvgValue: number
-    lootboxOpenPrice: number
-}
-
 interface GemExchangeState {
     guidePrice: number
     bestBid: number | null
@@ -144,7 +111,40 @@ interface GemExchangeState {
     userGems: number | null
 }
 
-function parseArguments(raw: string): Record<string, unknown> {
+interface TownMilestone {
+    id: string
+    title: string
+    reward: number
+    gems: number
+    complete: boolean
+    claimed: boolean
+}
+
+type TownState = { initialized: false } | {
+    initialized: true
+    happiness: number
+    mood: { name: string }
+    popCap: number
+    workersDemanded: number
+    workersEmployed: number
+    storageCap: number
+    floorIncomePerDay: number
+    coinsEarned: number
+    unlockedTiers: number[]
+    needs: Array<{ resource: string, active: boolean, satisfied: boolean, stock: number }>
+    builders: { owned: number, busy: number, nextGemCost: number | null }
+    buildings: Array<TownBuildingSnapshot & { name?: string }>
+    inventory: Record<string, number>
+    milestones: TownMilestone[]
+}
+
+/**
+ * Tool arguments as the model sent them. Some models send an empty string
+ * instead of `{}` for a tool without parameters, so that is treated as no
+ * arguments rather than as malformed JSON.
+ */
+export function parseToolArguments(raw: string): Record<string, unknown> {
+    if (!raw.trim()) return {}
     try {
         const value = JSON.parse(raw) as unknown
         return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -155,12 +155,12 @@ function parseArguments(raw: string): Record<string, unknown> {
 
 async function getOverview(event: H3Event) {
     const headers = toolHeaders(event)
-    const [xeno, colony, hack, miner, gemExchange] = await Promise.all([
+    const [xeno, colony, hack, gemExchange, town] = await Promise.all([
         uf(event.$fetch)<XenoState>('/api/xeno/state', { headers }),
         uf(event.$fetch)<ColonyState>('/api/colony/state', { headers }),
         uf(event.$fetch)<HackState>('/api/hack/state', { headers }),
-        uf(event.$fetch)<MinerState>('/api/miner/state', { headers }),
-        uf(event.$fetch)<GemExchangeState>('/api/gem-exchange/state', { headers })
+        uf(event.$fetch)<GemExchangeState>('/api/gem-exchange/state', { headers }),
+        uf(event.$fetch)<TownState>('/api/town/state', { headers })
     ])
 
     const colonyCoinsPerHour = colony.bugs.reduce((sum, bug) => sum + bug.itemsPerHour * bug.itemSellValue, 0)
@@ -222,59 +222,155 @@ async function getOverview(event: H3Event) {
             freeAgents: hack.agents.filter(agent => !agent.onOp),
             missionTemplates: hack.opTemplates
         },
-        miner: {
-            walletCoins: miner.walletBalance,
-            rig: {
-                level: miner.rigLevel,
-                maxLevel: miner.rigMaxLevel,
-                incomePerDay: miner.income,
-                pendingCoins: miner.pendingCash,
-                storageCapCoins: miner.cap,
-                nextUpgradeCostCoins: miner.rigUpgradeCost
-            },
-            vault: {
-                level: miner.vaultLevel,
-                maxLevel: miner.vaultMaxLevel,
-                storageCapCoins: miner.cap,
-                nextUpgradeCostCoins: miner.vaultUpgradeCost
-            },
-            factory: {
-                level: miner.factoryLevel,
-                maxLevel: miner.factoryMaxLevel,
-                gemsPerDay: miner.rate,
-                pendingGems: miner.pendingGems,
-                storageCapGems: miner.gemCap,
-                nextUpgradeCostCoins: miner.factoryUpgradeCost
-            },
-            overclock: {
-                level: miner.overclockLevel,
-                maxLevel: miner.overclockMaxLevel,
-                rigAndLootboxCashMultiplier: miner.incomeMultiplier,
-                nextUpgradeCostGems: miner.overclockNextCost
-            },
-            catalyst: {
-                level: miner.catalystLevel,
-                maxLevel: miner.catalystMaxLevel,
-                factoryRateMultiplier: miner.gemRateMultiplier,
-                nextUpgradeCostGems: miner.catalystNextCost
-            },
-            lootboxes: {
-                slots: miner.lootboxSlots,
-                maxSlots: miner.lootboxMaxSlots,
-                freeOpensRemainingToday: miner.lootboxFreeOpensRemaining,
-                nextSlotCostCoins: miner.lootboxNextSlotCost,
-                expectedValueCoins: miner.lootboxAvgValue,
-                paidOpenCostCoins: miner.lootboxOpenPrice,
-                liveGemPriceCoins: miner.gemPrice
-            },
-            gems: miner.gems
-        },
         gemExchange: {
             guidePrice: gemExchange.guidePrice,
             bestBuyOffer: gemExchange.bestBid,
             bestSellOffer: gemExchange.bestAsk,
             userGems: gemExchange.userGems
+        },
+        town: summarizeTown(town)
+    }
+}
+
+function summarizeTown(town: TownState) {
+    if (!town.initialized) return { initialized: false as const }
+
+    const byType = new Map<string, { type: string, count: number, minLevel: number, maxLevel: number, upgrading: number, disconnected: number }>()
+    for (const building of town.buildings) {
+        const group = byType.get(building.type) ?? { type: building.type, count: 0, minLevel: Infinity, maxLevel: 0, upgrading: 0, disconnected: 0 }
+        group.count++
+        group.minLevel = Math.min(group.minLevel, building.level)
+        group.maxLevel = Math.max(group.maxLevel, building.level)
+        if (building.level === 0 || building.upgradingTo !== null) group.upgrading++
+        if (!building.connected) group.disconnected++
+        byType.set(building.type, group)
+    }
+
+    return {
+        initialized: true as const,
+        happiness: town.happiness,
+        mood: town.mood.name,
+        population: { capacity: town.popCap, workersEmployed: town.workersEmployed, workersDemanded: town.workersDemanded },
+        storageCapPerResource: town.storageCap,
+        floorIncomePerDay: town.floorIncomePerDay,
+        coinsEarnedLifetime: town.coinsEarned,
+        unlockedTiers: town.unlockedTiers,
+        unmetNeeds: town.needs.filter(need => need.active && !need.satisfied).map(need => need.resource),
+        builders: { owned: town.builders.owned, busy: town.builders.busy, idle: Math.max(0, town.builders.owned - town.builders.busy), nextGemCost: town.builders.nextGemCost },
+        stock: Object.entries(town.inventory)
+            .filter(([, quantity]) => quantity > 0)
+            .map(([resource, quantity]) => ({
+                resource,
+                name: getTownResource(resource)?.name ?? resource,
+                quantity,
+                floorPrice: getTownResource(resource)?.floorPrice ?? null,
+                atStorageCap: quantity >= town.storageCap
+            })),
+        buildings: [...byType.values()],
+        upgradeCandidates: townUpgradeCandidates(town.buildings, { limit: TOWN_MAX_BUILDERS + 2 }),
+        claimableMilestones: town.milestones
+            .filter(milestone => milestone.complete && !milestone.claimed)
+            .map(milestone => ({ id: milestone.id, title: milestone.title, coins: milestone.reward, gems: milestone.gems }))
+    }
+}
+
+async function runTownDailies(event: H3Event, args: Record<string, unknown>) {
+    const upgrades = args.upgrades !== false
+    const preferTypes = Array.isArray(args.preferTypes) ? args.preferTypes.filter((type): type is string => typeof type === 'string') : []
+    const maxUpgrades = args.maxUpgrades == null ? TOWN_MAX_BUILDERS : Number(args.maxUpgrades)
+    if (!Number.isInteger(maxUpgrades) || maxUpgrades < 1 || maxUpgrades > TOWN_MAX_BUILDERS) {
+        throw createError({ statusCode: 400, statusMessage: `maxUpgrades must be an integer from 1 to ${TOWN_MAX_BUILDERS}` })
+    }
+
+    const headers = toolHeaders(event)
+    const town = await uf(event.$fetch)<TownState>('/api/town/state', { headers })
+    if (!town.initialized) return { initialized: false as const, message: 'The player has not founded a town yet.' }
+
+    const milestonesClaimed: Array<{ id: string, title: string, coins: number, gems: number }> = []
+    const errors: Array<{ action: string, error: string }> = []
+    for (const milestone of town.milestones.filter(item => item.complete && !item.claimed)) {
+        try {
+            await uf(event.$fetch)('/api/town/milestone/claim', { method: 'POST', headers, body: { id: milestone.id } })
+            milestonesClaimed.push({ id: milestone.id, title: milestone.title, coins: milestone.reward, gems: milestone.gems })
+        } catch (error) {
+            errors.push({ action: `claim_milestone_${milestone.id}`, error: getErrorMessage(error) })
         }
+    }
+
+    const idleBuilders = Math.max(0, town.builders.owned - town.builders.busy)
+    const upgradeBudget = Math.min(idleBuilders, maxUpgrades)
+    // More candidates than builders: a pick the purse cannot cover is skipped
+    // and the next one tried, so cheap upgrades still start after an expensive
+    // miss. One request per building keeps the cap exact, which the bulk
+    // endpoint cannot do because it uses every idle builder it finds.
+    const candidates = townUpgradeCandidates(town.buildings, { preferTypes, limit: upgradeBudget * 4 })
+    const started: Array<{ buildingId: string, type: string, name: string, level: number, completesAt: number }> = []
+    const skipped: Array<{ buildingId: string, name: string, reason: string }> = []
+    let upgradeNote: string | null = null
+    if (!upgrades) {
+        upgradeNote = 'Upgrades skipped as requested'
+    } else if (!upgradeBudget) {
+        upgradeNote = 'Every builder is busy'
+    } else if (!candidates.length) {
+        upgradeNote = 'No connected building is waiting for an upgrade'
+    } else {
+        for (const candidate of candidates) {
+            if (started.length >= upgradeBudget) break
+            try {
+                const result = await uf(event.$fetch)<{ buildingId: string, level: number, completesAt: number }>(
+                    '/api/town/building/upgrade',
+                    { method: 'POST', headers, body: { buildingId: candidate.buildingId } }
+                )
+                started.push({ ...result, type: candidate.type, name: candidate.name })
+            } catch (error) {
+                const reason = getErrorMessage(error)
+                skipped.push({ buildingId: candidate.buildingId, name: candidate.name, reason })
+                if (reason === 'Every builder is busy') break
+            }
+        }
+        if (!started.length) upgradeNote = skipped[0]?.reason ?? 'Nothing could be upgraded'
+    }
+
+    return {
+        initialized: true as const,
+        milestonesClaimed,
+        upgradesStarted: started,
+        upgradesSkipped: skipped,
+        idleBuildersBefore: idleBuilders,
+        idleBuildersAfter: Math.max(0, idleBuilders - started.length),
+        upgradeNote,
+        errors
+    }
+}
+
+async function sellTownResources(event: H3Event, args: Record<string, unknown>) {
+    const resources = args.resources == null
+        ? undefined
+        : Array.isArray(args.resources) ? args.resources.map(String) : [String(args.resources)]
+    const headers = toolHeaders(event)
+    const town = await uf(event.$fetch)<TownState>('/api/town/state', { headers })
+    if (!town.initialized) return { initialized: false as const, message: 'The player has not founded a town yet.', total: 0, lines: [] }
+
+    const plan = planTownSale(town.inventory, {
+        percent: Number(args.percent),
+        resources,
+        keepQuantity: args.keepQuantity == null ? undefined : Number(args.keepQuantity)
+    })
+    if (!plan.length) return { initialized: true as const, total: 0, lines: [], message: 'Nothing to sell at that percentage' }
+
+    const result = await uf(event.$fetch)<{ total: number, lines: Array<{ resource: string, quantity: number, price: number, total: number }> }>(
+        '/api/town/market/sell-bulk',
+        { method: 'POST', headers, body: { items: plan.map(line => ({ resource: line.resource, quantity: line.quantity })) } }
+    )
+    return {
+        initialized: true as const,
+        percent: Number(args.percent),
+        total: result.total,
+        lines: result.lines.map(line => ({
+            ...line,
+            name: getTownResource(line.resource)?.name ?? line.resource,
+            kept: Math.max(0, (plan.find(entry => entry.resource === line.resource)?.stock ?? 0) - line.quantity)
+        }))
     }
 }
 
@@ -648,102 +744,6 @@ async function findBestHackOpsMission(event: H3Event) {
     }
 }
 
-async function runMinerDailies(event: H3Event) {
-    const headers = toolHeaders(event)
-    const initial = await uf(event.$fetch)<MinerState>('/api/miner/state', { headers })
-    const result: {
-        minerCash: unknown | null
-        factoryGems: unknown | null
-        freeLootboxes: unknown[]
-        errors: Array<{ action: string, error: string }>
-    } = {
-        minerCash: null,
-        factoryGems: null,
-        freeLootboxes: [],
-        errors: []
-    }
-
-    if (initial.pendingCash >= 0.01) {
-        try {
-            result.minerCash = await uf(event.$fetch)('/api/miner/collect', { method: 'POST', headers })
-        } catch (error) {
-            result.errors.push({ action: 'collect_miner_cash', error: getErrorMessage(error) })
-        }
-    }
-
-    if (Math.floor(initial.pendingGems) >= 1) {
-        try {
-            result.factoryGems = await uf(event.$fetch)('/api/miner/collect-gems', { method: 'POST', headers })
-        } catch (error) {
-            result.errors.push({ action: 'collect_factory_gems', error: getErrorMessage(error) })
-        }
-    }
-
-    for (let open = 0; open < initial.lootboxFreeOpensRemaining; open++) {
-        try {
-            result.freeLootboxes.push(await uf(event.$fetch)('/api/miner/lootbox/open', {
-                method: 'POST',
-                headers,
-                body: { mode: 'free' }
-            }))
-        } catch (error) {
-            result.errors.push({ action: `open_free_lootbox_${open + 1}`, error: getErrorMessage(error) })
-            break
-        }
-    }
-
-    return {
-        ...result,
-        requestedFreeLootboxes: initial.lootboxFreeOpensRemaining,
-        openedFreeLootboxes: result.freeLootboxes.length
-    }
-}
-
-const MINER_UPGRADE_ENDPOINTS = {
-    rig: '/api/miner/upgrade-rig',
-    vault: '/api/miner/upgrade-vault',
-    factory: '/api/miner/upgrade-factory',
-    overclock: '/api/miner/shop/overclock',
-    catalyst: '/api/miner/shop/catalyst',
-    lootbox_slot: '/api/miner/lootbox/buy-slot',
-    rakeback_unlock: '/api/user/unlock-rakeback'
-} as const
-
-async function purchaseMinerUpgrades(event: H3Event, args: Record<string, unknown>) {
-    const upgrade = typeof args.upgrade === 'string' ? args.upgrade : ''
-    const levels = Number(args.levels)
-    if (!(upgrade in MINER_UPGRADE_ENDPOINTS)) {
-        throw createError({ statusCode: 400, statusMessage: 'Unknown Miner upgrade' })
-    }
-    if (!Number.isInteger(levels) || levels < 1 || levels > 20) {
-        throw createError({ statusCode: 400, statusMessage: 'levels must be an integer from 1 to 20' })
-    }
-    if (upgrade === 'rakeback_unlock' && levels !== 1) {
-        throw createError({ statusCode: 400, statusMessage: 'Rakeback can only be unlocked once' })
-    }
-
-    const headers = toolHeaders(event)
-    const endpoint = MINER_UPGRADE_ENDPOINTS[upgrade as keyof typeof MINER_UPGRADE_ENDPOINTS]
-    const purchases: unknown[] = []
-    let stoppedReason: string | null = null
-    for (let level = 0; level < levels; level++) {
-        try {
-            purchases.push(await uf(event.$fetch)(endpoint, { method: 'POST', headers }))
-        } catch (error) {
-            stoppedReason = getErrorMessage(error)
-            break
-        }
-    }
-
-    return {
-        upgrade,
-        requestedLevels: levels,
-        purchasedLevels: purchases.length,
-        stoppedReason,
-        purchases
-    }
-}
-
 async function tradeGems(event: H3Event, args: Record<string, unknown>) {
     const action = args.action === 'buy' ? 'buy' : args.action === 'sell' ? 'sell' : ''
     const gems = Number(args.gems)
@@ -769,7 +769,7 @@ async function tradeGems(event: H3Event, args: Record<string, unknown>) {
 }
 
 export async function executeAiTool(event: H3Event, toolCall: AiToolCall): Promise<unknown> {
-    const args = parseArguments(toolCall.function.arguments)
+    const args = parseToolArguments(toolCall.function.arguments)
     const headers = toolHeaders(event)
 
     switch (toolCall.function.name) {
@@ -822,10 +822,10 @@ export async function executeAiTool(event: H3Event, toolCall: AiToolCall): Promi
             return findBestHackOpsMission(event)
         case 'dispatch_hackops_mission':
             return dispatchHackOpsMission(event, args)
-        case 'run_miner_dailies':
-            return runMinerDailies(event)
-        case 'purchase_miner_upgrades':
-            return purchaseMinerUpgrades(event, args)
+        case 'run_town_dailies':
+            return runTownDailies(event, args)
+        case 'sell_town_resources':
+            return sellTownResources(event, args)
         case 'trade_gems':
             return tradeGems(event, args)
         case 'play_casino_rounds':
@@ -840,11 +840,13 @@ export async function executeAiTool(event: H3Event, toolCall: AiToolCall): Promi
         case 'play_fireinthehole_rounds':
         case 'play_bookofshadows_rounds':
         case 'play_spinata_rounds':
+        case 'play_trashpanda_rounds':
+        case 'play_emberportals_rounds':
             return playNamedCasinoRounds(event, toolCall.function.name, args)
         case 'call_game_api': {
             const path = typeof args.path === 'string' ? args.path : ''
             const method = args.method === 'GET' ? 'GET' : args.method === 'POST' ? 'POST' : ''
-            const gamePath = /^\/api\/(xeno|colony|hack|miner|pirates|gem-exchange|games)(?:\/[a-z0-9-]+)*$/
+            const gamePath = /^\/api\/(xeno|colony|hack|town|pirates|gem-exchange|games)(?:\/[a-z0-9-]+)*$/
             if (!gamePath.test(path) || !method) {
                 throw createError({ statusCode: 400, statusMessage: 'Only authenticated game API paths and GET/POST methods are allowed' })
             }

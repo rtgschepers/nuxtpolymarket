@@ -8,6 +8,9 @@ import { playAetherGates } from './gamelogic/aethergates'
 import { playFireInTheHole } from './gamelogic/fireinthehole'
 import { playBookOfShadows } from './gamelogic/bookofshadows'
 import { playSpinata } from './gamelogic/spinata'
+import { playTrashPanda } from './gamelogic/trashpanda'
+import { playPolyMasters } from './gamelogic/polymasters'
+import { playEmberPortals } from './gamelogic/emberportals'
 
 export interface GameResult {
   payout: number
@@ -48,6 +51,15 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
   },
   spinata: {
     play: playSpinata
+  },
+  trashpanda: {
+    play: playTrashPanda
+  },
+  polymasters: {
+    play: playPolyMasters
+  },
+  emberportals: {
+    play: playEmberPortals
   }
 }
 

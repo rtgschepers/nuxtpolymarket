@@ -95,6 +95,7 @@ function place(candidate: DisplayCandidate) {
     assetNumber: candidate.assetNumber,
     maskKind: null,
     foilEffect: null,
+    foilMask: null,
     rarity: null,
     cardNumber: null,
     setTotal: null,
@@ -136,7 +137,6 @@ async function save() {
         slots: layout.value.map(slot => slot?.copyId ?? null)
       }
     })
-    toast.add({ title: 'Display saved', color: 'success' })
     dirty.value = false
     editing.value = false
     await refresh()
@@ -159,6 +159,7 @@ function inspect(slot: DisplaySlotView, event: MouseEvent) {
     assetNumber: slot.assetNumber,
     maskKind: slot.maskKind,
     foilEffect: slot.foilEffect,
+    foilMask: slot.foilMask,
     legacySet: slot.bundle ? null : legacySetOf(slot.plaatjesCardId),
     holo: slot.finish === 'holo',
     name: slot.cardName,

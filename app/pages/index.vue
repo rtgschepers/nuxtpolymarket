@@ -19,7 +19,7 @@ const slotGames: {
   },
   {
     name: 'Candy Madness',
-    description: '6×5 cluster-pays cascade with stacking multipliers & free spins',
+    description: '7×7 cluster-pays cascade with stacking multipliers & free spins',
     icon: 'i-lucide-candy',
     to: '/games/candymadness',
     gradient: 'from-pink-950 to-slate-900',
@@ -48,6 +48,30 @@ const slotGames: {
     to: '/games/spinata',
     gradient: 'from-orange-950 to-slate-900',
     iconColor: 'text-orange-400',
+  },
+  {
+    name: 'Trash Panda Heist',
+    description: '5×4 reels, 1,024 ways, sticky multiplier-wild free spins & a Dumpster Dive pick game',
+    icon: 'i-lucide-trash-2',
+    to: '/games/trashpanda',
+    gradient: 'from-indigo-950 to-slate-900',
+    iconColor: 'text-yellow-400'
+  },
+  {
+    name: 'Ember Portals',
+    description: '7×7 cluster tumbles with wandering portal wilds that grow, merge and stay open through free spins',
+    icon: 'i-lucide-orbit',
+    to: '/games/emberportals',
+    gradient: 'from-orange-950 to-slate-900',
+    iconColor: 'text-orange-400'
+  },
+  {
+    name: 'PolyMasters',
+    description: 'Crash game: fly through multipliers, dodge rockets and land on the island to cash out',
+    icon: 'i-lucide-plane',
+    to: '/games/polymasters',
+    gradient: 'from-sky-950 to-slate-900',
+    iconColor: 'text-sky-400'
   },
 ]
 
@@ -150,6 +174,14 @@ const arcadeGames = [
     to: '/pirates',
     gradient: 'from-sky-950 to-slate-900',
     iconColor: 'text-sky-300'
+  },
+  {
+    name: 'Void Runner',
+    description: 'Third-person space shooter — crack ore, fight wardens and build up to a twelve-turret dreadnought',
+    icon: 'i-lucide-rocket',
+    to: '/void',
+    gradient: 'from-indigo-950 via-purple-950 to-slate-950',
+    iconColor: 'text-indigo-300'
   },
   {
     name: 'Firewall',
