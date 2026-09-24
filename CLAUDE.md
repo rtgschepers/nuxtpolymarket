@@ -4,7 +4,7 @@ For Hero Quest see @docs/games/hero-quest/CLAUDE.md
 ## Stack
 
 - **Framework**: Nuxt 4 with Vue 3
-- **UI**: Nuxt UI (v3) — use its components and design tokens wherever possible
+- **UI**: Nuxt UI (v4) — use its components and design tokens wherever possible
 - **ORM**: Drizzle ORM with PostgreSQL
 - **Auth**: better-auth — session is retrieved server-side via `auth.api.getSession({ headers: event.headers })`
 - **Package manager**: bun, exclusively. Use `bun` for installing packages and running scripts — never `pnpm`, `npm`, or `yarn`. `bun.lock` is the only lockfile; the others are gitignored so they cannot come back.
