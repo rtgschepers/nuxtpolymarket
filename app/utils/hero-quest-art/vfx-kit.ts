@@ -14,14 +14,46 @@ const R = Math.round
 
 /** Layout every VFX sheet is authored against: party left, three enemies right. */
 export const VL = {
-    W: 160,
+    /**
+     * Wider than the old 160: the two formations sit on the thirds of the 320px scene, which
+     * puts the far enemy mark past where a 160-wide stage could reach. Drawn at OX=64, so the
+     * stage still lands inside the scene.
+     */
+    W: 200,
     H: 88,
-    floor: 80,
-    /** Party positions (back row → front); the caster is the front one. */
-    allies: [{ x: 14, y: 60 }, { x: 30, y: 60 }, { x: 46, y: 60 }] as const,
-    caster: { x: 46, y: 60 },
-    /** Enemy chest positions, front → back. */
-    foes: [{ x: 104, y: 60 }, { x: 124, y: 60 }, { x: 144, y: 60 }] as const
+    /** The near rank's ground, and what VFX treat as the floor. */
+    floor: 84,
+    /**
+     * Six marks a side: indices 0-2 the **front row**, 3-5 the **back row**, as the game models
+     * formation (3 front / 3 back, `classes-and-combat.md` §6).
+     *
+     * The camera looks along the line of battle, so a row's three members are not side by side
+     * on screen — they recede into the scene. Front and back therefore read as *left and right*
+     * (toward and away from the enemy), while a row's three members read as *depth*. What the
+     * player sees is three ranks of two, each rank pairing one front-row body with its back-row
+     * partner; what the game reasons about is still two rows of three.
+     *
+     * `y` is chest height and `g` the ground the body stands on. Each rank back stands 16px up
+     * the slope, and the middle rank pushes 10px toward the enemy while the near and far ranks
+     * share an x — so each side forms a chevron, the two pointing at each other across the gap.
+     * The two rows sit 24px apart, far enough that no body hides the one beside it.
+     *
+     * The rear rank is pinned where it is, just clear of the hedgerow; the extra air between
+     * ranks is bought by dropping the middle and near ones, which is why `floor` sits below the
+     * scenery's own floor line.
+     *
+     * Each formation is centred on a third of the scene — the party on 33%, the wave on 66% —
+     * which in stage space (drawn at OX=64) puts their centres at x 42 and 147.
+     */
+    allies: [
+        { x: 51, y: 32, g: 52 }, { x: 61, y: 48, g: 68 }, { x: 51, y: 64, g: 84 },
+        { x: 27, y: 32, g: 52 }, { x: 37, y: 48, g: 68 }, { x: 27, y: 64, g: 84 }
+    ] as const,
+    caster: { x: 51, y: 64 },
+    foes: [
+        { x: 138, y: 64, g: 84 }, { x: 128, y: 48, g: 68 }, { x: 138, y: 32, g: 52 },
+        { x: 162, y: 64, g: 84 }, { x: 152, y: 48, g: 68 }, { x: 162, y: 32, g: 52 }
+    ] as const
 }
 
 export function qt(t: number): number { return frameTime(t) }

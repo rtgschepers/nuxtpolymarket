@@ -463,7 +463,8 @@ export function cinematicStage(skillId: string): (d: Surface) => void {
         for (let y = 0; y < FLOOR; y += 4) rect(d, 0, y, VL.W, 2, y < FLOOR / 2 ? C.void : C.night0)
         rect(d, 0, FLOOR, VL.W, VL.H - FLOOR, C.night0)
         rect(d, 0, FLOOR, VL.W, 1, C.night2)
-        for (const f of F) drawCreature(d, f.x, FLOOR, TRAINING_DUMMY, 'static', 0, -1)
+        // furthest rank first, so the nearer bodies overlap it
+        for (const f of [...F].sort((a, b) => a.g - b.g)) drawCreature(d, f.x, f.g, TRAINING_DUMMY, 'static', 0, -1)
         const art = HERO_ART[classId]!
         STAGE_ACTOR.draw(d, CX, FLOOR, art.look, art.clips.idle, 0)
     }

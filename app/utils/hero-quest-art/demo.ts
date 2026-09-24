@@ -1,16 +1,23 @@
 // A live battle vignette built from the finished assets — the proof that they play together.
 //
-// Party on the left (the Hero in any class plus two Champions), a pack of the chosen world's
-// trash on the right with an elite in the middle, and every fourth wave that world's boss
-// making its entrance. Each unit runs the state machine the art is authored for:
+// Party on the left (the Hero in any class plus five Champions), a wave of six of the chosen
+// world's trash on the right with an elite among them, and every fourth wave that world's boss
+// making its entrance. Both sides stand on the 3 front / 3 back formation grid, which the
+// side-on camera shows as three ranks of two. Each unit runs the state machine the art is
+// authored for:
 //
 //     IDLE → CHARGE → CAST → RECOVER → IDLE
 //
 // with the hit landing at the Cast boundary (the clip's `impact`). Hits spawn pooled
 // particles and damage numbers; Hero and Champion casts play their ability VFX.
 //
-// Everything is baked to frames at setup, so the 60 Hz update and the render allocate
-// nothing: the loop only moves numbers and blits surfaces.
+// Between waves the party marches: it holds its marks and plays its gait while the scenery
+// parallax-scrolls past and the next wave closes in from the right edge.
+//
+// Every body is baked to frames at setup, so the 60 Hz update and the render allocate nothing:
+// the loop only moves numbers and blits surfaces. The scene behind them is the one exception —
+// it is drawn live each frame (~1 ms) because a baked strip is fixed at scroll 0 and could not
+// parallax.
 
 import { ANIM_FPS, Phase, phaseAt, type Clip } from './anim'
 import { C, CLEAR } from './palette'
@@ -23,7 +30,7 @@ import { CHASSIS } from './champions'
 import { ENEMY_RIGS, ELITE_MARK, drawEliteMark, type EnemyWeapon } from './enemies'
 import { NUMBER_STYLES, type NumberStyle } from './feedback'
 import { VL } from './vfx-kit'
-import { SW, SH, FLOOR_Y, WORLD_SCENES, reflectWater } from './scenery'
+import { SW, SH, FLOOR_Y, SCROLL_PERIOD, WORLD_SCENES, reflectWater, type WorldScene } from './scenery'
 import { CINEMATIC_BY_ID, type CinematicVfx } from './vfx-cinematic'
 import { drawSkillBanner, tintLut, applyTint } from './presentation'
 import { CLASS_BY_ID } from '../../../shared/utils/hero-quest/content/classes'
@@ -35,13 +42,43 @@ export const DEMO_H = SH
 
 /** VL (the VFX stage) is placed inside the scene so effects line up with bodies. */
 const OX = 64
-const OY = FLOOR_Y - VL.floor
+/**
+ * The near rank stands a little below the scenery's floor line. That is what buys the ranks
+ * their extra spacing without shoving the rear one up into the hedgerow, and the field runs
+ * deep enough to take it.
+ */
+const BATTLE_FLOOR = FLOOR_Y + 4
+const OY = BATTLE_FLOOR - VL.floor
 
-const enum U { Idle, Attack, Cast, Hit, Death, Entry, Gone }
+/** A formation mark in VL space: `x` horizontal, `y` chest height, `g` the ground it stands on. */
+type Mark = { readonly x: number, readonly y: number, readonly g: number }
+
+/** Party size, and so the index in `units` where the enemy wave starts. */
+const PARTY = 6
+
+/** Which ally marks the Champions take: the Hero holds the near front mark, they take the rest. */
+const CHAMP_MARKS = [0, 1, 3, 4, 5] as const
+
+/**
+ * How long the party runs between battles. The speed is derived so one march covers exactly one
+ * SCROLL_PERIOD, which is what puts the scenery's framing pines back at the edges of the screen
+ * by the time the next fight starts.
+ */
+const MARCH_DUR = 2.4
+const MARCH_SPEED = SCROLL_PERIOD / MARCH_DUR
+
+/** The scene ground lines the formation stands on, furthest rank first — the draw order. */
+const RANK_Y = [...new Set(VL.foes.map(f => f.g))].sort((a, b) => a - b).map(g => OY + g)
+
+const enum U { Idle, Attack, Cast, Hit, Death, Entry, Gone, Move }
 
 interface Unit {
     side: 0 | 1
     x: number
+    /** The ground this body stands on: the floor for the front rank, higher for the rear. */
+    y: number
+    /** Horizontal offset from the mark — how far a wave still has to close before the fight. */
+    ox: number
     elite: boolean
     boss: boolean
     frames: Baked[] // indexed by U
@@ -113,7 +150,7 @@ function blitAt(dst: Surface, b: Baked, t: number, x: number, y: number, fade = 
 export class BattleDemo {
     readonly frame = new Surface(DEMO_W, DEMO_H, 0, 0)
     private particles = new Particles(900)
-    private bg: Baked | null = null
+    private scene: WorldScene | null = null
     private units: Unit[] = []
     private fx: Fx[] = Array.from({ length: 8 }, () => ({ live: false, baked: null, t: 0 }))
     private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, t: 0, style: NUMBER_STYLES[0]!, text: '', hold: false }))
@@ -124,6 +161,10 @@ export class BattleDemo {
     private time = 0
     private wave = 0
     private waveTimer = 0
+    /** Seconds left in the march to the next battle; 0 when a fight is on. */
+    private march = 0
+    /** How far the world has travelled, in px — what every scenery layer parallaxes against. */
+    private scroll = 0
     private numCursor = 0
     private world = 1
     private classId = 'class_beginner'
@@ -140,23 +181,25 @@ export class BattleDemo {
         this.world = world
         this.classId = classId
         const w = WORLDS[world - 1]!
-        this.bg = bake(artById(`bg/world/${w.id}`)!)
+        this.scene = WORLD_SCENES[world - 1]!
         const hero = HERO_ART[classId]!
-        const heroFrames = ['idle', 'attack', 'cast', 'hit', 'death'].map(st => bake(artById(`hero/${classId}/${st}`)!))
+        const heroFrames = ['idle', 'attack', 'cast', 'hit', 'death', 'idle', 'move'].map(st => bake(artById(`hero/${classId}/${st}`)!))
         const skill = CLASS_BY_ID[classId as keyof typeof CLASS_BY_ID]!.skill.id
-        const heroUnit = this.unit(0, OX + VL.allies[2].x, heroFrames, [hero.clips.attack, hero.clips.cast], bake(artById(`vfx/${skill}`)!))
+        const heroUnit = this.unit(0, VL.allies[2], heroFrames, [hero.clips.attack, hero.clips.cast], bake(artById(`vfx/${skill}`)!))
         this.heroCine = CINEMATIC_BY_ID[skill] ?? null
         this.cine = null
         const scene = WORLD_SCENES[world - 1]!
         this.water = scene.water ?? -1
         this.glitter = scene.glitter ?? -1
-        // two Champions: a support in the back, a damage dealer in the middle, varied by world
+        // five Champions around the Hero, varied by world: the melee pair share his front rank,
+        // the ranged three fall in behind — the archetypes' own default rows (§6).
         const pick = (arch: string, k: number) => CHAMPIONS.filter(c => c.archetype === arch)[(world * 3 + k) % 12]!.id
-        const champs = [pick('support', 1), pick('damage', 2)].map((id, i) => {
+        const roster = [pick('tank', 1), pick('damage', 2), pick('support', 3), pick('control', 4), pick('damage', 5)]
+        const champs = roster.map((id, i) => {
             const def = CHAMPION_BY_ID[id]!
-            const frames = ['idle', 'attack', 'cast', 'hit', 'death'].map(st => bake(artById(`champion/${id}/${st}`)!))
+            const frames = ['idle', 'attack', 'cast', 'hit', 'death', 'idle', 'move'].map(st => bake(artById(`champion/${id}/${st}`)!))
             const ability = def.abilities[0]!.id
-            return this.unit(0, OX + VL.allies[i]!.x, frames, [CHASSIS[def.archetype].attack, CHASSIS[def.archetype].cast], bake(artById(`vfx/${ability}`)!))
+            return this.unit(0, VL.allies[CHAMP_MARKS[i]!]!, frames, [CHASSIS[def.archetype].attack, CHASSIS[def.archetype].cast], bake(artById(`vfx/${ability}`)!))
         })
         // the world's trash on three rigs, the middle one elite
         const rigs: EnemyWeapon[] = ['sword', 'axe', 'staff', 'bow']
@@ -166,9 +209,9 @@ export class BattleDemo {
         this.rigFrames = this.trash.map(rig => [rig[0]!, rig[1]!, rig[1]!, rig[2]!, rig[3]!, rig[0]!, rig[0]!])
         const b = this.bossBaked
         const bossFrames = [b[0]!, b[1]!, b[1]!, b[2]!, b[3]!, b[4]!, b[0]!]
-        // a fixed pool: three trash bodies and one boss, reset in place each wave
-        const foes = [0, 1, 2].map(i => this.unit(1, OX + VL.foes[i]!.x, this.rigFrames[i]!, [ENEMY_RIGS.sword.attack], null))
-        const boss = this.unit(1, OX + VL.foes[1].x + 6, bossFrames, [], null)
+        // a fixed pool: a wave of six trash bodies and one boss, reset in place each wave
+        const foes = [0, 1, 2, 3, 4, 5].map(i => this.unit(1, VL.foes[i]!, this.rigFrames[i % 4]!, [ENEMY_RIGS.sword.attack], null))
+        const boss = this.unit(1, VL.foes[1], bossFrames, [], null, 6)
         boss.boss = true
         this.units = [heroUnit, ...champs, ...foes, boss]
         for (const u of [...foes, boss]) u.state = U.Gone
@@ -181,11 +224,11 @@ export class BattleDemo {
         for (const n of this.nums) n.live = false
     }
 
-    private unit(side: 0 | 1, x: number, frames: Baked[], clips: (Clip | null)[], vfx: Baked | null): Unit {
-        const [idle, attack, cast, hit, death, entry] = frames
+    private unit(side: 0 | 1, mark: Mark, frames: Baked[], clips: (Clip | null)[], vfx: Baked | null, dx = 0): Unit {
+        const [idle, attack, cast, hit, death, entry, move] = frames
         return {
-            side, x, elite: false, boss: false,
-            frames: [idle!, attack!, cast ?? attack!, hit!, death!, entry ?? idle!, idle!],
+            side, x: OX + mark.x + dx, y: OY + mark.g, ox: 0, elite: false, boss: false,
+            frames: [idle!, attack!, cast ?? attack!, hit!, death!, entry ?? idle!, idle!, move ?? idle!],
             clips: [null, clips[0] ?? null, clips[1] ?? null],
             impact: [0, clips[0]?.impact ?? 0.45 * attack!.frames.length / ANIM_FPS, clips[1]?.impact ?? 0.45 * (cast ?? attack!).frames.length / ANIM_FPS],
             vfx, state: U.Idle, t: 0, wait: 0.5 + Math.random() * 1.2, fired: false, hp: 4, phase: Phase.Idle, stack: 0
@@ -194,7 +237,7 @@ export class BattleDemo {
 
     private spawnWave(): void {
         const bossWave = this.wave % 4 === 3
-        for (let i = 3; i < this.units.length; i++) {
+        for (let i = PARTY; i < this.units.length; i++) {
             const u = this.units[i]!
             const active = u.boss ? bossWave : !bossWave
             u.state = active ? U.Entry : U.Gone
@@ -202,7 +245,7 @@ export class BattleDemo {
             u.fired = false
             u.wait = 0.5 + Math.random() * 1.2
             if (!u.boss && active) {
-                const slot = i - 3
+                const slot = i - PARTY
                 u.frames = this.rigFrames[(slot + this.wave) % 4]!
                 u.elite = slot === 1
                 u.hp = u.elite ? 6 : 3
@@ -211,6 +254,35 @@ export class BattleDemo {
         }
         this.wave++
         this.label = this.labels[(this.wave - 1) % this.labels.length]!
+    }
+
+    /**
+     * Set off for the next battle. The party holds its marks and plays its gait while the world
+     * scrolls past, and the wave spawns off the right edge to close as the ground is covered —
+     * so the next pack is walked into rather than appearing out of nowhere.
+     */
+    private startMarch(): void {
+        this.march = MARCH_DUR
+        this.spawnWave()
+        for (let i = 0; i < this.units.length; i++) {
+            const u = this.units[i]!
+            if (i < PARTY) {
+                if (u.state === U.Gone) continue
+                u.state = U.Move
+                u.t = Math.random() * 0.4 // break the lockstep: six units on one cycle reads as a chorus line
+            } else if (u.state !== U.Gone) {
+                u.ox = MARCH_SPEED * MARCH_DUR
+            }
+        }
+    }
+
+    private endMarch(): void {
+        this.march = 0
+        for (let i = 0; i < this.units.length; i++) {
+            const u = this.units[i]!
+            u.ox = 0
+            if (i < PARTY && u.state === U.Move) { u.state = U.Idle; u.t = 0; u.wait = 0.3 + Math.random() * 0.8 }
+        }
     }
 
     private target(side: 0 | 1): Unit | null {
@@ -250,16 +322,16 @@ export class BattleDemo {
             if (standing(u) && pick-- === 0) { tgt = u; break }
         }
         if (!c.first) c.first = tgt
-        const top = FLOOR_Y - (tgt.boss ? 52 : 40)
+        const top = tgt.y - (tgt.boss ? 52 : 40)
         this.number(tgt.x, top - tgt.stack * 7, 'normal', true)
         tgt.stack++
-        this.particles.burst(tgt.x, FLOOR_Y - 14, 16, 80, 0.6, 'ember', 140, FLOOR_Y)
+        this.particles.burst(tgt.x, tgt.y - 14, 16, 80, 0.6, 'ember', 140, tgt.y)
         tgt.hp -= 2
         tgt.state = tgt.hp <= 0 ? U.Death : U.Hit
         tgt.t = 0
         if (i === c.def.cinematic.hits.length - 1) {
             const f = c.first
-            this.number(f.x + 6, FLOOR_Y - (f.boss ? 52 : 40) - f.stack * 7 - 4, 'total', true)
+            this.number(f.x + 6, f.y - (f.boss ? 52 : 40) - f.stack * 7 - 4, 'total', true)
         }
     }
 
@@ -276,17 +348,17 @@ export class BattleDemo {
         if (cast && u.vfx) this.playFx(u.vfx)
         if (!tgt) return
         const roll = Math.random()
-        const y = FLOOR_Y - (tgt.boss ? 30 : 14)
+        const y = tgt.y - (tgt.boss ? 30 : 14)
         if (roll < 0.08) { this.number(tgt.x, y - 8, 'miss'); return }
         const crit = cast || roll > 0.82
         this.number(tgt.x, y - 8, crit ? 'crit' : 'normal')
-        this.particles.burst(tgt.x - (tgt.side ? 4 : -4), y, crit ? 14 : 8, crit ? 70 : 45, 0.5, tgt.side ? 'spark' : 'blood', 120, FLOOR_Y)
+        this.particles.burst(tgt.x - (tgt.side ? 4 : -4), y, crit ? 14 : 8, crit ? 70 : 45, 0.5, tgt.side ? 'spark' : 'blood', 120, tgt.y)
         tgt.hp -= crit ? 2 : 1
         if (tgt.side === 0) tgt.hp = Math.max(1, tgt.hp) // the party doesn't die in the showcase
         tgt.state = tgt.hp <= 0 ? U.Death : U.Hit
         tgt.t = 0
-        if (tgt.state === U.Death) this.particles.burst(tgt.x, FLOOR_Y - 10, 18, 40, 0.8, 'dust', 60, FLOOR_Y)
-        if (u.side === 0 && Math.random() < 0.25) { const ally = this.units[0]!; this.number(ally.x - 16, FLOOR_Y - 30, 'heal') }
+        if (tgt.state === U.Death) this.particles.burst(tgt.x, tgt.y - 10, 18, 40, 0.8, 'dust', 60, tgt.y)
+        if (u.side === 0 && Math.random() < 0.25) { const ally = this.units[0]!; this.number(ally.x - 16, ally.y - 30, 'heal') }
     }
 
     update(dt: number): void {
@@ -301,7 +373,7 @@ export class BattleDemo {
                 case U.Idle:
                     u.phase = Phase.Idle
                     // everyone holds while a Hero skill has the stage
-                    if (!this.cine && u.t >= u.wait && this.target(u.side)) {
+                    if (!this.cine && !this.march && u.t >= u.wait && this.target(u.side)) {
                         const cast = u.side === 0 ? Math.random() < 0.3 : false
                         u.state = cast ? U.Cast : U.Attack
                         u.t = 0
@@ -326,6 +398,7 @@ export class BattleDemo {
                 case U.Entry:
                     if (u.t >= (u.boss ? dur : 0.6)) { u.state = U.Idle; u.t = 0 }
                     break
+                case U.Move:
                 case U.Gone:
                     break
             }
@@ -337,12 +410,22 @@ export class BattleDemo {
             while (c.next < hits.length && c.t >= hits[c.next]!) this.cineHit(c, c.next++)
             if (c.t >= c.def.dur + 0.3) this.cine = null
         }
-        // next wave once the pack is down
-        let foes = 0
-        for (let i = 0; i < this.units.length; i++) if (this.units[i]!.side === 1 && this.units[i]!.state !== U.Gone) foes++
-        if (foes === 0) {
-            this.waveTimer += dt
-            if (this.waveTimer > 1.0) { this.waveTimer = 0; this.spawnWave() }
+        // march to the next battle once the pack is down
+        if (this.march > 0) {
+            this.march -= dt
+            this.scroll += MARCH_SPEED * dt
+            // The wave stands still in the world; it is the party closing the distance. Its
+            // offset is just the ground still to cover, so it slides at exactly the scroll rate.
+            const slide = Math.round(MARCH_SPEED * Math.max(0, this.march))
+            for (let i = PARTY; i < this.units.length; i++) this.units[i]!.ox = slide
+            if (this.march <= 0) this.endMarch()
+        } else {
+            let foes = 0
+            for (let i = 0; i < this.units.length; i++) if (this.units[i]!.side === 1 && this.units[i]!.state !== U.Gone) foes++
+            if (foes === 0) {
+                this.waveTimer += dt
+                if (this.waveTimer > 0.7) { this.waveTimer = 0; this.startMarch() }
+            }
         }
         for (let i = 0; i < this.fx.length; i++) {
             const f = this.fx[i]!
@@ -358,22 +441,28 @@ export class BattleDemo {
 
     render(): Surface {
         const s = this.frame
-        if (!this.bg) return s
-        s.data.set(frameAt(this.bg, this.time).data)
+        if (!this.scene) return s
+        // Drawn live rather than blitted from a baked strip: a bake is fixed at scroll 0, and the
+        // march needs every layer to parallax against `scroll`. Measured at ~1 ms, 6% of a frame.
+        this.scene.draw(s, this.scroll, this.time)
         const c = this.cine
         if (c) {
             // the scene dims toward the skill's colour, stepping in and out through the dither
             const out = c.def.dur + 0.3 - c.t
             applyTint(s, c.lut, Math.min(16, Math.floor(Math.min(c.t / 0.2, out / 0.3) * 16)))
         }
-        // back row first: party right-to-left overlaps correctly, enemies left-to-right
-        for (let i = this.units.length - 1; i >= 0; i--) {
-            const u = this.units[i]!
-            if (u.state === U.Gone) continue
-            const b = u.frames[u.state]!
-            const fade = u.state === U.Entry && !u.boss ? Math.max(0, 16 - Math.floor(u.t * 30)) : 0
-            blitAt(s, b, u.t, u.x, FLOOR_Y, fade, u.elite && u.state !== U.Death && fade === 0 ? ELITE_MARK : CLEAR)
-            if (u.elite && u.state !== U.Death) drawEliteMark(s, u.x, FLOOR_Y - 36, this.time)
+        // Painter's order: furthest rank first, each nearer one drawn over it. Within a rank the
+        // old right-to-left walk stands, so party and enemies overlap the way they always did.
+        for (let r = 0; r < RANK_Y.length; r++) {
+            const gy = RANK_Y[r]!
+            for (let i = this.units.length - 1; i >= 0; i--) {
+                const u = this.units[i]!
+                if (u.state === U.Gone || u.y !== gy) continue
+                const b = u.frames[u.state]!
+                const fade = u.state === U.Entry && !u.boss ? Math.max(0, 16 - Math.floor(u.t * 30)) : 0
+                blitAt(s, b, u.t, u.x + u.ox, u.y, fade, u.elite && u.state !== U.Death && fade === 0 ? ELITE_MARK : CLEAR)
+                if (u.elite && u.state !== U.Death) drawEliteMark(s, u.x + u.ox, u.y - 36, this.time)
+            }
         }
         for (let i = 0; i < this.fx.length; i++) { const f = this.fx[i]!; if (f.live) blitAt(s, f.baked!, f.t, OX, OY) }
         this.particles.draw(s)
