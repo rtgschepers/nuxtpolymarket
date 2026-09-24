@@ -51,6 +51,7 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 |---|---|
 | 2 · video style | **Heroes** Beginner, Warrior, Sorcerer, Hunter on the chibi body (5 states each) · their **skills** Haste, Whirlwind, Meteor Shower, Kill Shot as cinematics · **skill banners** · **damage numbers** (hit/crit) · **training dummy** as the video's scarecrow · **World 1 Thornwick Vale** background · live-stage presentation (tint, banner, stacked numbers, water reflection) |
 | 3 · scenery tier | Palette split into a character tier and a scenery tier · World 1 moved onto it · specs enforcing the split · palette swatch sheets in the gallery |
+| 4 · formation & march | Both sides on the 3 front / 3 back grid, shown as three ranks of two · World 1's field deepened to hold them · a sixth `move` state on every Hero and chassis (`walkClip` / `floatClip` in `rig.ts`, generated from each unit's own rest pose) · the party marches between waves while the scenery parallax-scrolls and the next wave closes in |
 
 ### Open
 
