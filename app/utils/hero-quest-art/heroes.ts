@@ -12,7 +12,7 @@ import { Ease, Phase, step, type Clip } from './anim'
 import { C } from './palette'
 import type { Surface} from './surface';
 import { line, px, rect } from './surface'
-import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest, type Look, type HKey } from './rig'
+import { HP, J, fxX, fxY, hclip, hitClip, deathClip, runClip, floatClip, poseOf, rest, type Look, type HKey } from './rig'
 import { HERO_SKIN, heroFace, heroHair, tunic, cape, pauldron, robeSkirt, smear, streak, sparks } from './hero-parts'
 import { CHIBI_HEROES } from './heroes-chibi'
 import { M, tip, sword, axe, hammer, staff, bow, shield, tome, fist, orb, Gem, ShieldStyle, type Mat } from './weapons'
@@ -20,7 +20,7 @@ import { M, tip, sword, axe, hammer, staff, bow, shield, tome, fist, orb, Gem, S
 export interface HeroClips { idle: Clip, attack: Clip, cast: Clip, hit: Clip, death: Clip }
 export interface HeroArt { look: Look, clips: HeroClips }
 
-export const HERO_STATES = ['idle', 'attack', 'cast', 'hit', 'death'] as const
+export const HERO_STATES = ['idle', 'attack', 'cast', 'hit', 'death', 'move'] as const
 export type HeroState = typeof HERO_STATES[number]
 
 const CH = Phase.Charge
@@ -754,6 +754,100 @@ const sorcerer: HeroArt = {
     }
 }
 
+// ═══════════════════════════════════════ Sorcerer, restyled on the full-body rig (round 5)
+//
+// The round-2 treatment carried onto the taller rig: flat blocks with one shadow side and one
+// lit edge per material, a single strong accent, and silhouette doing the work — the tall hat
+// folding back and a robe to the floor instead of boots. The face and hair stay the shared
+// Hero's, so he is still the same rookie re-outfitted.
+//
+// The clips are the classic Sorcerer's, unchanged: a restyle is a Look, not an animation.
+
+/** The tall hat, brim to folded tip, drawn from the head anchor. */
+function wizardHat(s: Surface, x: number, y: number, lit: boolean): void {
+    rect(s, x - 5, y - 9, 11, 2, C.red1)
+    rect(s, x - 5, y - 9, 11, 1, C.red2) // the brim catching the light
+    rect(s, x - 4, y - 10, 9, 1, C.gold1)
+    px(s, x - 1, y - 10, C.gold3)
+    // the cone, leaning back over his shoulder
+    for (let i = 0; i < 8; i++) {
+        const w = Math.max(2, 8 - i)
+        const bx = x - 3 - i
+        rect(s, bx, y - 11 - i, w, 1, i < 4 ? C.red1 : C.red0)
+        px(s, bx, y - 11 - i, C.red0)
+        if (i < 5) px(s, bx + w - 1, y - 11 - i, C.red2)
+    }
+    px(s, x - 11, y - 18, lit ? C.white : C.gold2)
+    px(s, x - 12, y - 18, lit ? C.gold3 : C.lava1)
+}
+
+const sorcererTall: HeroArt = {
+    look: baseLook({
+        accent: C.orange,
+        arm: C.red1, armLow: C.red1, armBack: C.red0, armBackLow: C.red0, hand: C.skin1,
+        back: (s, x, y) => {
+            // the high collar standing behind his head
+            rect(s, x - 6, y - 5, 2, 7, C.red0)
+            rect(s, x - 5, y - 7, 2, 3, C.red0)
+            px(s, x - 6, y - 6, C.purple0)
+        },
+        torso: (s, x, y) => {
+            rect(s, x - 4, y, 8, 9, C.red1)
+            rect(s, x - 4, y, 2, 9, C.red0) // shadow side
+            rect(s, x + 2, y + 1, 1, 7, C.red2) // lit edge
+            rect(s, x - 1, y, 2, 9, C.gold1) // front placket
+            px(s, x, y + 2, C.gold3)
+            px(s, x, y + 5, C.gold3)
+            rect(s, x - 4, y + 7, 8, 1, C.gold1) // belt
+            px(s, x + 1, y + 7, C.gold3)
+        },
+        lower: (s, x, hipY, _p, t) => {
+            // robe to the floor, flaring as it falls, hem swinging a pixel on the beat
+            const sway = Math.floor(t * 3) & 1
+            const floor = J.oy
+            for (let y = hipY; y < floor; y++) {
+                const u = (y - hipY) / Math.max(1, floor - hipY - 1)
+                const half = Math.round(3 + u * 5)
+                const off = y >= floor - 2 ? sway : 0
+                rect(s, x - half + off, y, half * 2, 1, C.red1)
+                rect(s, x - half + off, y, 2, 1, C.red0)
+                px(s, x + half - 2 + off, y, C.red2)
+            }
+            rect(s, x - 8 + sway, floor - 1, 16, 1, C.gold1)
+        },
+        head: (s, x, y, p) => {
+            const lit = p[HP.glow]! > 0.5
+            heroFace(s, x, y, p, lit ? C.orange : C.ink)
+            heroHair(s, x, y, 0)
+            wizardHat(s, x, y, lit)
+        },
+        weapon: (s, x, y, p, t) => staff(s, x, y, p[HP.wa]!, 15, M.wood, M.lava, Gem.Flame, p[HP.glow]!, t),
+        offhand: (s, x, y, p, t) => orb(s, x + 1, y - 4 + (Math.floor(t * 4) & 1), M.lava, p[HP.glow]!, t),
+        fx: (dst, p, t) => {
+            const k = step(t, 10, 8)
+            if (p[HP.glow]! > 0.3 || is(p, FXK.Embers)) {
+                // runes circling him whenever he is lit
+                for (let i = 0; i < 3; i++) {
+                    const a = (k / 8 + i / 3) * Math.PI * 2
+                    const rx = J.bx + Math.round(Math.cos(a) * 10)
+                    const ry = J.topY + 5 + Math.round(Math.sin(a) * 3)
+                    dst.set(fxX(rx), fxY(ry), C.gold3)
+                    dst.set(fxX(rx + 1), fxY(ry), C.orange)
+                }
+            }
+            if (is(p, FXK.Burst)) sparks(dst, tip.x + 2, tip.y, 7, 9, step(t, 10, 5), C.orange, C.gold3)
+            if (is(p, FXK.Embers)) {
+                for (let i = 0; i < 10; i++) {
+                    const hx = J.bx - 11 + ((i * 7 + k * 2) % 23)
+                    const hy = J.topY - 4 - ((i * 5 + k * 3) % 16)
+                    dst.set(fxX(hx), fxY(hy), i & 1 ? C.lava1 : C.gold2)
+                }
+            }
+        }
+    }),
+    clips: sorcerer.clips
+}
+
 // ═══════════════════════════════════════════════════════════════ Shaman (elite)
 // Leather and fur, a feathered headband, bone beads, and a carved spirit-totem staff.
 
@@ -1244,7 +1338,6 @@ export const HERO_ART: Readonly<Record<string, HeroArt>> = {
     class_paladin: paladin,
     class_mage: mage,
     class_wizard: wizard,
-    class_sorcerer: sorcerer,
     class_shaman: shaman,
     class_witch_doctor: witchDoctor,
     class_archer: archer,
@@ -1253,6 +1346,22 @@ export const HERO_ART: Readonly<Record<string, HeroArt>> = {
     class_hunter: hunter,
     class_beast_master: beastMaster,
     // round 2: the chibi rebuilds replace their classic entries by ID
-    ...CHIBI_HEROES
+    ...CHIBI_HEROES,
+    // round 5: the restyle on the full-body rig, one class at a time
+    class_sorcerer: sorcererTall
 }
 
+/** The robed caster line hovers on the march; everyone else runs. */
+const FLOATERS: ReadonlySet<string> = new Set([
+    'class_mage', 'class_wizard', 'class_sorcerer', 'class_shaman', 'class_witch_doctor'
+])
+
+/**
+ * How each class travels between battles, generated from its own idle rest pose so a marching
+ * Hero keeps the stance and weapon he stands in. Kept out of `HeroClips` deliberately: it is
+ * derived from a class rather than authored per class, so there is one place to change it.
+ */
+export const HERO_GAIT: Readonly<Record<string, Clip>> = Object.fromEntries(
+    Object.entries(HERO_ART).map(([id, art]) =>
+        [id, (FLOATERS.has(id) ? floatClip : runClip)(poseOf(art.clips.idle))])
+)

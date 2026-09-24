@@ -22,16 +22,16 @@ const ids = new Set(allArt().map(a => a.id))
 const count = (prefix: string) => allArt().filter(a => a.id.startsWith(prefix)).length
 
 describe('Hero Quest art coverage', () => {
-    it('gives every class node all five Hero states — 80 spritesheets', () => {
+    it('gives every class node all six Hero states — 96 spritesheets', () => {
         for (const node of CLASS_NODES) {
             expect(HERO_ART[node.id], node.id).toBeDefined()
             for (const st of HERO_STATES) expect(ids.has(`hero/${node.id}/${st}`), `${node.id} ${st}`).toBe(true)
         }
-        expect(count('hero/')).toBe(80)
+        expect(count('hero/')).toBe(96)
     })
 
-    it('has 4 Champion chassis × 5 states and a skin for all 48 Champions', () => {
-        expect(count('champion/chassis_')).toBe(20)
+    it('has 4 Champion chassis × 6 states and a skin for all 48 Champions', () => {
+        expect(count('champion/chassis_')).toBe(24)
         for (const c of CHAMPIONS) expect(hasChampionSkin(c.id), c.id).toBe(true)
         expect(CHAMPIONS).toHaveLength(48)
     })

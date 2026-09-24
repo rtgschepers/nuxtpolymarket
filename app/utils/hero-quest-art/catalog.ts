@@ -11,7 +11,7 @@ import { C, CLEAR, RARITY_COLORS, TRAIT_GRADES, SCENERY, SCENERY_RAMPS, type Col
 import { drawText } from './font'
 import type { Surface } from './surface'
 import { Actor } from './rig'
-import { HERO_ART, HERO_STATES } from './heroes'
+import { HERO_ART, HERO_GAIT, HERO_STATES } from './heroes'
 import { CHASSIS, CHAMPION_STATES, CHAMPION_ART_IDS, championLook } from './champions'
 import { DISCIPLE_CLIPS, DISCIPLE_LOOK, RAISED_DEAD_CLIPS, RAISED_DEAD_LOOK, SUMMON_STATES, WOLF } from './summons'
 import { ENEMY_RIGS, ENEMY_STATES, ENEMY_WEAPONS, ELITE_MARK, drawEliteMark, enemyLook } from './enemies'
@@ -153,7 +153,8 @@ function heroAssets(): ArtAsset[] {
     return Object.entries(HERO_ART).flatMap(([id, art]) => HERO_STATES.map(st => actorAsset(
         `hero/${id}/${st}`, 'heroes', CLASS_BY_ID[id as keyof typeof CLASS_BY_ID]?.name ?? id,
         st === 'cast' ? `Skill cast — ${CLASS_BY_ID[id as keyof typeof CLASS_BY_ID]?.skill.name}` : TITLE[st]!,
-        () => art.look, art.clips[st]
+        // `move` is derived per class rather than authored on it, so it comes from the gait table
+        () => art.look, st === 'move' ? HERO_GAIT[id]! : art.clips[st]
     )))
 }
 

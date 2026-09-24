@@ -10,15 +10,15 @@ import { Ease, Phase, step, type Clip } from './anim'
 import { C } from './palette'
 import type { Surface} from './surface';
 import { line, px, rect, disc, bayer } from './surface'
-import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest, type Look } from './rig'
+import { HP, J, fxX, fxY, hclip, hitClip, deathClip, runClip, floatClip, rest, type Look } from './rig'
 import { cape, pauldron, robeSkirt, smear, sparks, streak } from './hero-parts'
 import { M, tip, sword, axe, hammer, mace, spear, dagger, scythe, staff, shield, tome, orb, Gem, ShieldStyle, type Mat } from './weapons'
 import { CHAMPIONS, CHAMPION_BY_ID } from '../../../shared/utils/hero-quest/content/champions'
 import { RARITIES } from '../../../shared/utils/hero-quest/gacha'
 import type { ChampionArchetype } from '../../../shared/utils/hero-quest/types'
 
-export const CHAMPION_STATES = ['idle', 'attack', 'cast', 'hit', 'death'] as const
-export interface ChassisClips { idle: Clip, attack: Clip, cast: Clip, hit: Clip, death: Clip }
+export const CHAMPION_STATES = ['idle', 'attack', 'cast', 'hit', 'death', 'move'] as const
+export interface ChassisClips { idle: Clip, attack: Clip, cast: Clip, hit: Clip, death: Clip, move: Clip }
 
 const CH = Phase.Charge
 const CA = Phase.Cast
@@ -324,7 +324,8 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [1.2, { crouch: 0, hx: 3, hy: 6, wa: -1.0, lean: 0, glow: 0 }]
         ], DAMAGE_REST),
         hit: hitClip(DAMAGE_REST),
-        death: deathClip(DAMAGE_REST)
+        death: deathClip(DAMAGE_REST),
+        move: runClip(DAMAGE_REST)
     },
     tank: {
         idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 7, bhy: 4 }], [1.4, {}]], TANK_REST),
@@ -347,7 +348,8 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [1.3, { bhx: 5, bhy: 3, hx: 3, hy: 6, wa: -1.2, crouch: 0, kneel: 0, glow: 0 }]
         ], TANK_REST),
         hit: hitClip(TANK_REST, 0.5),
-        death: deathClip(TANK_REST)
+        death: deathClip(TANK_REST),
+        move: runClip(TANK_REST)
     },
     support: {
         idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 7, bhy: 6 }], [1.4, {}]], SUPPORT_REST),
@@ -368,7 +370,8 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [1.4, { jump: 0, hx: 4, hy: 6, wa: -1.4, bhx: 2, bhy: 5, headY: 0, glow: 0 }]
         ], SUPPORT_REST),
         hit: hitClip(SUPPORT_REST),
-        death: deathClip(SUPPORT_REST)
+        death: deathClip(SUPPORT_REST),
+        move: floatClip(SUPPORT_REST)
     },
     control: {
         idle: hclip('idle', 1.6, true, [[0, {}], [0.8, { jump: -2, hy: 4, bhy: 0 }], [1.6, {}]], CONTROL_REST),
@@ -389,7 +392,8 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [1.4, { hx: 5, hy: 3, wa: -0.6, bhx: 4, bhy: 1, jump: -1, glow: 0 }]
         ], CONTROL_REST),
         hit: hitClip(CONTROL_REST),
-        death: deathClip(CONTROL_REST, { jump: 0 })
+        death: deathClip(CONTROL_REST, { jump: 0 }),
+        move: floatClip(CONTROL_REST)
     }
 }
 

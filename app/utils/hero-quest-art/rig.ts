@@ -204,6 +204,46 @@ export function hitClip(rest: Float32Array, weight = 1, extra: Partial<Record<HP
     ], rest)
 }
 
+/**
+ * The pose a clip rests in: its first keyframe, which every clip here opens on. Lets a gait be
+ * generated from a unit's own stance, so its weapon and hands keep the silhouette they hold
+ * standing still rather than snapping to the generic rest.
+ */
+export function poseOf(clip: Clip): Float32Array {
+    return clip.values.slice(0, clip.np)
+}
+
+/**
+ * Standard humanoid Run: contact → drive → contact → drive, four frames at 10 fps. A long
+ * stride, the torso pitched forward, and a flight frame after each drive where both feet are
+ * off the ground and the whole body lifts — which is what separates it from a walk. The plant
+ * dips on `crouch` so the grounded foot stays put; the flight lifts on `jump`, which carries
+ * the feet with it.
+ */
+export function runClip(rest: Float32Array, extra: Partial<Record<HPName, number>> = {}): Clip {
+    return hclip('move', 0.4, true, [
+        [0, { ffx: 6, bfx: -5, ffy: 0, bfy: 1, crouch: 1, lean: 3, ...extra }],
+        [0.1, { ffx: 2, bfx: -2, ffy: 1, bfy: 5, crouch: 0, jump: -2, headY: -1, hx: 5, bhx: -3 }],
+        [0.2, { ffx: -4, bfx: 6, ffy: 1, bfy: 0, crouch: 1, jump: 0, headY: 0, hx: 3, bhx: -1 }],
+        [0.3, { ffx: 4, bfx: 1, ffy: 5, bfy: 1, crouch: 0, jump: -2, headY: -1, hx: 1, bhx: 1 }],
+        [0.4, { ffx: 6, bfx: -5, ffy: 0, bfy: 1, crouch: 1, jump: 0, headY: 0, hx: 3, bhx: -1 }]
+    ], rest)
+}
+
+/**
+ * Standard humanoid Float: no stride at all — the whole body rides clear of the ground and
+ * swells on its own cycle, hem and hands trailing. Uses `jump`, which carries the feet with it.
+ * Pitched forward and kept brisk so a hovering caster still reads as travelling, not drifting.
+ */
+export function floatClip(rest: Float32Array, extra: Partial<Record<HPName, number>> = {}): Clip {
+    return hclip('move', 0.8, true, [
+        [0, { jump: -3, lean: 2, ...extra }],
+        [0.3, { jump: -6, tilt: -1, hy: 8, bhy: 8 }],
+        [0.6, { jump: -4, tilt: 0, hy: 6, bhy: 6 }],
+        [0.8, { jump: -3 }]
+    ], rest)
+}
+
 /** Standard humanoid Death: stagger, kneel, slump, fall back, dissolve. */
 export function deathClip(rest: Float32Array, extra: Partial<Record<HPName, number>> = {}): Clip {
     return hclip('death', 1.4, false, [
