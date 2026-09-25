@@ -8,28 +8,41 @@
 //
 //     IDLE → CHARGE → CAST → RECOVER → IDLE
 //
-// with the hit landing at the Cast boundary (the clip's `impact`). Hits spawn pooled
-// particles and damage numbers; Hero and Champion casts play their ability VFX.
+// with the hit landing at the Cast boundary (the clip's `impact`), or, for a ranged unit, when
+// its arrow or bolt arrives. Hits spawn pooled particles and damage numbers; Hero and Champion
+// casts play their ability VFX.
+//
+// Two clocks, after Pixel Crusade: bodies play their held 10 fps frames, while everything that
+// flies (projectiles, particles, VFX, shake) and the scenery move at the 60 Hz of the loop.
+//
+// The hit feel is scaled to a crowd. Twelve bodies trading blows would stutter the whole
+// scene if every hit froze it, so an ordinary hit only holds the two bodies involved for a
+// few ticks, and the target flashes and jolts. The scene-wide freeze, shake, flash and slow
+// motion are kept for the moments that matter: a kill (gated, so a chain of kills can't
+// freeze it over and over), each impact of a Hero skill, the last kill of a wave, and a boss.
+// See JUICE. The dead shatter into their own pixels; bodies winding up are rim-lit in their
+// accent colour, and casters leave afterimages.
 //
 // Between waves the party marches: it holds its marks and plays its gait while the scenery
 // parallax-scrolls past and the next wave closes in from the right edge.
 //
 // Every body is baked to frames at setup, so the 60 Hz update and the render allocate nothing:
-// the loop only moves numbers and blits surfaces. The scene behind them is the one exception —
-// it is drawn live each frame (~1 ms) because a baked strip is fixed at scroll 0 and could not
-// parallax.
+// the loop only moves numbers and blits surfaces. The scene and the VFX are drawn live each
+// frame instead, under the smooth clock (`clock.smooth`): a baked strip is fixed at scroll 0
+// and on the 10 fps grid, and neither could parallax or move at 60 Hz.
 
 import { ANIM_FPS, Phase, phaseAt, type Clip } from './anim'
-import { C, CLEAR } from './palette'
-import { Surface, bayer } from './surface'
+import { C, CLEAR, RAMP, type RampName } from './palette'
+import { Surface, bayer, ring } from './surface'
 import { textOut } from './font'
 import { Particles } from './particles'
 import { artById, bake, type Baked } from './catalog'
 import { HERO_ART } from './heroes'
-import { CHASSIS } from './champions'
+import { CHASSIS, championLook } from './champions'
 import { ENEMY_RIGS, ELITE_MARK, drawEliteMark, type EnemyWeapon } from './enemies'
 import { NUMBER_STYLES, type NumberStyle } from './feedback'
-import { VL } from './vfx-kit'
+import { VL, clock } from './vfx-kit'
+import { VFX_BY_ID, type VfxDef } from './vfx'
 import { SW, SH, FLOOR_Y, SCROLL_PERIOD, WORLD_SCENES, reflectWater, type WorldScene } from './scenery'
 import { CINEMATIC_BY_ID, type CinematicVfx } from './vfx-cinematic'
 import { drawSkillBanner, tintLut, applyTint } from './presentation'
@@ -39,6 +52,7 @@ import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
 
 export const DEMO_W = SW
 export const DEMO_H = SH
+
 
 /** VL (the VFX stage) is placed inside the scene so effects line up with bodies. */
 const OX = 64
@@ -72,6 +86,43 @@ const RANK_Y = [...new Set(VL.foes.map(f => f.g))].sort((a, b) => a - b).map(g =
 
 const enum U { Idle, Attack, Cast, Hit, Death, Entry, Gone, Move }
 
+/**
+ * The hit feel, per event. `hold` is 60 Hz ticks the bodies involved stop animating; `freeze`
+ * is ticks the whole stage stops; `shake` is px of screen shake for `shakeFor` seconds; `flash`
+ * is the strength of a dithered full-screen flash; `slowmo` is seconds of the stage at 35%.
+ */
+const JUICE = {
+    hit: { hold: 3 },
+    crit: { hold: 5, shake: 1, shakeFor: 0.1 },
+    bossHit: { shake: 1, shakeFor: 0.1 },
+    kill: { freeze: 3, shake: 1, shakeFor: 0.15 },
+    waveEnd: { freeze: 8, shake: 2, shakeFor: 0.3, slowmo: 0.6 },
+    skill: { freeze: 4, shake: 2, shakeFor: 0.2, flash: 0.5 },
+    bossDown: { freeze: 14, shake: 4, shakeFor: 0.7, flash: 1, slowmo: 1 }
+} as const
+/** Seconds after a freeze before an ordinary kill may freeze the stage again. */
+const FREEZE_GAP = 0.35
+/** How far into the Hit clip a struck body starts: straight onto its white flash frame. */
+const HIT_FLASH_AT = 0.1
+/** How long a cast's afterimages trail it once the strike begins. */
+const AFTERIMAGE_FOR = 0.25
+/** The seconds between the arrows of one multi-strike volley — the bow clip's release cadence. */
+const VOLLEY_GAP = 0.3
+
+/** What a ranged unit looses: an arrow (fletched in its accent) or a bolt burning through a ramp. */
+interface Shot { kind: 'arrow' | 'bolt', ramp: RampName }
+const ARROW: Shot = { kind: 'arrow', ramp: 'spark' }
+const bolt = (ramp: RampName): Shot => ({ kind: 'bolt', ramp })
+const HERO_SHOTS: Readonly<Record<string, Shot>> = {
+    class_archer: ARROW, class_bowman: ARROW, class_marksman: ARROW, class_hunter: ARROW, class_beast_master: ARROW,
+    class_mage: bolt('arcane'), class_wizard: bolt('frost'), class_sorcerer: bolt('fire'),
+    class_shaman: bolt('water'), class_witch_doctor: bolt('poison')
+}
+/** Champion archetypes that fight at range: the casters float at the back and throw bolts. */
+const CHAMPION_SHOTS: Readonly<Record<string, Shot>> = { support: bolt('holy'), control: bolt('arcane') }
+/** Enemy rigs, in the order `setup` builds them: sword, axe, staff, bow. */
+const RIG_SHOTS: readonly (Shot | null)[] = [null, null, bolt('shadow'), ARROW]
+
 interface Unit {
     side: 0 | 1
     x: number
@@ -84,7 +135,21 @@ interface Unit {
     frames: Baked[] // indexed by U
     clips: (Clip | null)[] // phase source for Attack / Cast
     impact: number[] // seconds into Attack / Cast when the effect fires
-    vfx: Baked | null // cast VFX
+    vfx: VfxDef | null // cast VFX, drawn live
+    /** Rim-light colour while winding up and striking. */
+    accent: number
+    /** What it looses at range, or null for a melee body. */
+    shot: Shot | null
+    /** Arrows or bolts per Basic Attack (the class's strikesPerAttack). */
+    shots: number
+    /** Enemy rig index into RIG_SHOTS; -1 for the party and the boss. */
+    rig: number
+    /** Ticks this body holds its pose: the local hit-stop. */
+    hold: number
+    /** Ticks left of the struck jolt, a 1 px shudder. */
+    jolt: number
+    /** When (in `t`) this body's strike began, for the afterimages' brief window. */
+    strikeAt: number
     state: U
     t: number
     wait: number
@@ -98,7 +163,15 @@ interface Unit {
 /** A Hero skill being presented: banner up, scene tinted, hits landing on its own clock. */
 interface Cine { def: CinematicVfx, banner: string, lut: Uint8Array, t: number, next: number, first: Unit | null }
 
-interface Fx { live: boolean, baked: Baked | null, t: number }
+interface Fx { live: boolean, def: VfxDef | null, t: number }
+interface Proj {
+    live: boolean, kind: 'arrow' | 'bolt', ramp: RampName, color: number
+    x: number, y: number, vx: number, vy: number, grav: number
+    /** Seconds before it leaves the bow (a volley's later arrows), then its flight time left. */
+    delay: number, left: number
+    from: Unit | null, to: Unit | null
+}
+interface Ring { live: boolean, x: number, y: number, t: number, big: boolean }
 interface Num { live: boolean, x: number, y: number, t: number, style: NumberStyle, text: string, hold: boolean }
 
 /** How long a stacked (held) number stays up, against 0.9 s for a rising one. */
@@ -119,7 +192,14 @@ function frameAt(b: Baked, t: number): Surface {
     return b.frames[f]!
 }
 
-function blitAt(dst: Surface, b: Baked, t: number, x: number, y: number, fade = 0, halo: number = CLEAR): void {
+/**
+ * Blit a baked body. `rim` paints the edge facing `dir` (+1 right, −1 left) in that colour —
+ * Pixel Crusade's rim light: a sprite pixel is lit when the pixel toward the light is empty,
+ * or is the outline with empty space beyond it (so interior ink, an eye, never lights). The
+ * pixel behind it must be solid too, so a one-pixel line (an aura flame, a spark baked into
+ * the frame) is never relit into a stripe.
+ */
+function blitAt(dst: Surface, b: Baked, t: number, x: number, y: number, fade = 0, halo: number = CLEAR, rim: number = CLEAR, dir = 1): void {
     const src = frameAt(b, t)
     const ox = Math.round(x) - b.ax
     const oy = Math.round(y) - b.ay
@@ -142,17 +222,75 @@ function blitAt(dst: Surface, b: Baked, t: number, x: number, y: number, fade = 
             if (c === CLEAR) continue
             if (fade > 0 && bayer(sx, sy, fade)) continue
             const xx = ox + sx
-            if (xx >= 0 && xx < dst.w) dst.data[yy * dst.w + xx] = c
+            if (xx < 0 || xx >= dst.w) continue
+            let out = c
+            if (rim !== CLEAR && c !== C.ink && src.get(sx - dir, sy) !== CLEAR) {
+                const n = src.get(sx + dir, sy)
+                if (n === CLEAR || (n === C.ink && src.get(sx + dir * 2, sy) === CLEAR)) out = rim
+            }
+            dst.data[yy * dst.w + xx] = out
         }
     }
 }
 
+/** A checker-dithered silhouette of a body in one colour: an afterimage trailing a cast. */
+function ghostAt(dst: Surface, b: Baked, t: number, x: number, y: number, color: number): void {
+    const src = frameAt(b, t)
+    const ox = Math.round(x) - b.ax
+    const oy = Math.round(y) - b.ay
+    for (let sy = 0; sy < src.h; sy++) {
+        for (let sx = 0; sx < src.w; sx++) {
+            if (src.data[sy * src.w + sx] === CLEAR || ((ox + sx + oy + sy) & 1)) continue
+            dst.set(ox + sx, oy + sy, color)
+        }
+    }
+}
+
+function frameIndex(b: Baked, t: number): number {
+    return Math.min(b.frames.length - 1, Math.floor(t * b.fps + 1e-6))
+}
+
+/**
+ * The first frame of a death strip where the body starts dissolving: where the pixel count
+ * drops by more than a sixth from one frame to the next. The stage shatters the body there
+ * instead of letting it fade. Worked out once per strip.
+ */
+const FADE_START = new Map<Baked, number>()
+function fadeStart(b: Baked): number {
+    let f = FADE_START.get(b)
+    if (f !== undefined) return f
+    const count = b.frames.map(s => { let n = 0; for (let i = 0; i < s.data.length; i++) if (s.data[i] !== CLEAR) n++; return n })
+    f = b.frames.length - 1
+    for (let i = 1; i < count.length; i++) if (count[i]! < count[i - 1]! * 0.83) { f = i; break }
+    FADE_START.set(b, f)
+    return f
+}
+
+function rnd(a: number, b: number): number { return a + Math.random() * (b - a) }
+
 export class BattleDemo {
     readonly frame = new Surface(DEMO_W, DEMO_H, 0, 0)
-    private particles = new Particles(900)
+    private particles = new Particles(2400)
     private scene: WorldScene | null = null
     private units: Unit[] = []
-    private fx: Fx[] = Array.from({ length: 8 }, () => ({ live: false, baked: null, t: 0 }))
+    private fx: Fx[] = Array.from({ length: 8 }, () => ({ live: false, def: null, t: 0 }))
+    /** Scratch the live VFX draw into, then blit onto the frame at the VL origin. */
+    private vfxLayer = new Surface(VL.W, VL.H, 0, 0)
+    /** Scratch for the shake: the frame copied out so it can be written back shifted. */
+    private shakeLayer = new Surface(DEMO_W, DEMO_H, 0, 0)
+    private projs: Proj[] = Array.from({ length: 32 }, () => ({
+        live: false, kind: 'arrow' as const, ramp: 'spark' as RampName, color: CLEAR, x: 0, y: 0, vx: 0, vy: 0, grav: 0, delay: 0, left: 0, from: null, to: null
+    }))
+
+    private rings: Ring[] = Array.from({ length: 8 }, () => ({ live: false, x: 0, y: 0, t: 0, big: false }))
+    // the scene-wide hit feel (JUICE)
+    private freeze = 0
+    private freezeGap = 0
+    private shakeT = 0
+    private shakeAmp = 0
+    private flash = 0
+    private flashColor: number = C.white
+    private slowmo = 0
     private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, t: 0, style: NUMBER_STYLES[0]!, text: '', hold: false }))
     private heroCine: CinematicVfx | null = null
     private cine: Cine | null = null
@@ -185,7 +323,10 @@ export class BattleDemo {
         const hero = HERO_ART[classId]!
         const heroFrames = ['idle', 'attack', 'cast', 'hit', 'death', 'idle', 'move'].map(st => bake(artById(`hero/${classId}/${st}`)!))
         const skill = CLASS_BY_ID[classId as keyof typeof CLASS_BY_ID]!.skill.id
-        const heroUnit = this.unit(0, VL.allies[2], heroFrames, [hero.clips.attack, hero.clips.cast], bake(artById(`vfx/${skill}`)!))
+        const heroUnit = this.unit(0, VL.allies[2], heroFrames, [hero.clips.attack, hero.clips.cast], VFX_BY_ID[skill] ?? null)
+        heroUnit.accent = hero.look.accent
+        heroUnit.shot = HERO_SHOTS[classId] ?? null
+        heroUnit.shots = CLASS_BY_ID[classId as keyof typeof CLASS_BY_ID]!.strikesPerAttack
         this.heroCine = CINEMATIC_BY_ID[skill] ?? null
         this.cine = null
         const scene = WORLD_SCENES[world - 1]!
@@ -199,7 +340,10 @@ export class BattleDemo {
             const def = CHAMPION_BY_ID[id]!
             const frames = ['idle', 'attack', 'cast', 'hit', 'death', 'idle', 'move'].map(st => bake(artById(`champion/${id}/${st}`)!))
             const ability = def.abilities[0]!.id
-            return this.unit(0, VL.allies[CHAMP_MARKS[i]!]!, frames, [CHASSIS[def.archetype].attack, CHASSIS[def.archetype].cast], bake(artById(`vfx/${ability}`)!))
+            const u = this.unit(0, VL.allies[CHAMP_MARKS[i]!]!, frames, [CHASSIS[def.archetype].attack, CHASSIS[def.archetype].cast], VFX_BY_ID[ability] ?? null)
+            u.accent = championLook(id).accent
+            u.shot = CHAMPION_SHOTS[def.archetype] ?? null
+            return u
         })
         // the world's trash on three rigs, the middle one elite
         const rigs: EnemyWeapon[] = ['sword', 'axe', 'staff', 'bow']
@@ -222,16 +366,20 @@ export class BattleDemo {
         this.particles.clear()
         for (const f of this.fx) f.live = false
         for (const n of this.nums) n.live = false
+        for (const p of this.projs) p.live = false
+        for (const r of this.rings) r.live = false
+        this.freeze = 0; this.freezeGap = 0; this.shakeT = 0; this.flash = 0; this.slowmo = 0
     }
 
-    private unit(side: 0 | 1, mark: Mark, frames: Baked[], clips: (Clip | null)[], vfx: Baked | null, dx = 0): Unit {
+    private unit(side: 0 | 1, mark: Mark, frames: Baked[], clips: (Clip | null)[], vfx: VfxDef | null, dx = 0): Unit {
         const [idle, attack, cast, hit, death, entry, move] = frames
         return {
             side, x: OX + mark.x + dx, y: OY + mark.g, ox: 0, elite: false, boss: false,
             frames: [idle!, attack!, cast ?? attack!, hit!, death!, entry ?? idle!, idle!, move ?? idle!],
             clips: [null, clips[0] ?? null, clips[1] ?? null],
             impact: [0, clips[0]?.impact ?? 0.45 * attack!.frames.length / ANIM_FPS, clips[1]?.impact ?? 0.45 * (cast ?? attack!).frames.length / ANIM_FPS],
-            vfx, state: U.Idle, t: 0, wait: 0.5 + Math.random() * 1.2, fired: false, hp: 4, phase: Phase.Idle, stack: 0
+            vfx, accent: C.red3, shot: null, shots: 1, rig: -1, hold: 0, jolt: 0, strikeAt: -1,
+            state: U.Idle, t: 0, wait: 0.5 + Math.random() * 1.2, fired: false, hp: 4, phase: Phase.Idle, stack: 0
         }
     }
 
@@ -243,10 +391,14 @@ export class BattleDemo {
             u.state = active ? U.Entry : U.Gone
             u.t = 0
             u.fired = false
+            u.hold = 0
+            u.jolt = 0
             u.wait = 0.5 + Math.random() * 1.2
             if (!u.boss && active) {
                 const slot = i - PARTY
-                u.frames = this.rigFrames[(slot + this.wave) % 4]!
+                u.rig = (slot + this.wave) % 4
+                u.frames = this.rigFrames[u.rig]!
+                u.shot = RIG_SHOTS[u.rig]!
                 u.elite = slot === 1
                 u.hp = u.elite ? 6 : 3
             }
@@ -327,26 +479,158 @@ export class BattleDemo {
         tgt.stack++
         this.particles.burst(tgt.x, tgt.y - 14, 16, 80, 0.6, 'ember', 140, tgt.y)
         tgt.hp -= 2
-        tgt.state = tgt.hp <= 0 ? U.Death : U.Hit
-        tgt.t = 0
+        this.stopFor(JUICE.skill.freeze, true)
+        this.shake(JUICE.skill.shake, JUICE.skill.shakeFor)
+        if (i === 0) this.flashFor(JUICE.skill.flash, C.white)
+        if (tgt.hp <= 0) this.kill(tgt)
+        else this.struck(tgt, JUICE.hit.hold)
         if (i === c.def.cinematic.hits.length - 1) {
             const f = c.first
             this.number(f.x + 6, f.y - (f.boss ? 52 : 40) - f.stack * 7 - 4, 'total', true)
         }
     }
 
-    private playFx(b: Baked | null): void {
-        if (!b) return
+    private playFx(def: VfxDef | null): void {
+        if (!def) return
         for (let i = 0; i < this.fx.length; i++) {
             const f = this.fx[i]!
-            if (!f.live) { f.live = true; f.baked = b; f.t = 0; return }
+            if (!f.live) { f.live = true; f.def = def; f.t = 0; return }
         }
     }
+
+    // ── the hit feel ───────────────────────────────────────────────────────────────
+
+    /** Freeze the whole stage for `ticks`. An ordinary kill respects FREEZE_GAP; `force` doesn't. */
+    private stopFor(ticks: number, force = false): void {
+        if (!force && this.freezeGap > 0) return
+        this.freeze = Math.max(this.freeze, ticks)
+        this.freezeGap = FREEZE_GAP
+    }
+
+    private shake(amp: number, t: number): void {
+        if (amp >= this.shakeAmp || this.shakeT <= 0) { this.shakeAmp = amp; this.shakeT = t }
+    }
+
+    private flashFor(k: number, color: number): void {
+        if (k >= this.flash) { this.flash = k; this.flashColor = color }
+    }
+
+    /** A body takes a hit: straight onto its white flash frame, held and shuddering. */
+    private struck(tgt: Unit, hold: number): void {
+        tgt.state = U.Hit
+        tgt.t = HIT_FLASH_AT
+        tgt.hold = hold
+        tgt.jolt = hold + 4
+    }
+
+    /** A body goes down: the kill ring, then a freeze and shake sized to what it meant. */
+    private kill(tgt: Unit): void {
+        tgt.state = U.Death
+        tgt.t = 0
+        tgt.hold = 0
+        const y = tgt.y - (tgt.boss ? 30 : 14)
+        this.ringAt(tgt.x + tgt.ox, y, tgt.boss)
+        this.particles.burst(tgt.x, tgt.y - 10, 18, 40, 0.8, 'dust', 60, tgt.y)
+        let left = 0
+        for (let k = 0; k < this.units.length; k++) if (standing(this.units[k]!)) left++
+        const j = tgt.boss ? JUICE.bossDown : left === 0 ? JUICE.waveEnd : null
+        if (j) {
+            this.stopFor(j.freeze, true)
+            this.shake(j.shake, j.shakeFor)
+            this.slowmo = Math.max(this.slowmo, j.slowmo)
+            if ('flash' in j) this.flashFor(j.flash, C.white)
+        } else {
+            this.stopFor(JUICE.kill.freeze)
+            this.shake(JUICE.kill.shake, JUICE.kill.shakeFor)
+        }
+    }
+
+    private ringAt(x: number, y: number, big: boolean): void {
+        for (let i = 0; i < this.rings.length; i++) {
+            const r = this.rings[i]!
+            if (!r.live) { r.live = true; r.x = x; r.y = y; r.t = 0; r.big = big; return }
+        }
+    }
+
+    /**
+     * Break a dying body into chunks of its own pixels, thrown up and away from the party and
+     * bouncing on its own ground, then take it off the stage.
+     */
+    private shatter(u: Unit, b: Baked, src: Surface): void {
+        const ox = Math.round(u.x + u.ox) - b.ax
+        const oy = Math.round(u.y) - b.ay
+        const cx = u.x + u.ox
+        const cy = u.y - (u.boss ? 30 : 12)
+        const away = u.side ? 1 : -1
+        for (let sy = 0; sy < src.h; sy += 2) {
+            for (let sx = 0; sx < src.w; sx += 2) {
+                // each 2×2 chunk takes its first body colour: the baked frame carries its ink
+                // outline, and chunks of outline would fall as black grit
+                let c: number = CLEAR
+                for (let k = 0; k < 4 && c === CLEAR; k++) {
+                    const v = src.get(sx + (k & 1), sy + (k >> 1))
+                    if (v !== CLEAR && v !== C.ink) c = v
+                }
+                if (c === CLEAR) continue
+                const wx = ox + sx
+                const wy = oy + sy
+                const vx = (wx - cx) * rnd(2, 5) + away * rnd(20, 70)
+                const vy = (wy - cy) * rnd(1.5, 4) - rnd(60, 150)
+                this.particles.spawnShard(wx, wy, vx, vy, rnd(0.6, 1.1), c, 380, 0.4, u.y + rnd(1, 7))
+            }
+        }
+        this.particles.burst(cx, cy, 14, 160, 0.3, 'spark', 0, 0)
+        u.state = U.Gone
+    }
+
+    // ── attacks ────────────────────────────────────────────────────────────────────
 
     private strike(u: Unit, cast: boolean): void {
         const tgt = this.target(u.side)
         if (cast && u.vfx) this.playFx(u.vfx)
         if (!tgt) return
+        // a ranged Basic Attack looses its arrows or bolts; the hit lands when they arrive
+        if (u.shot && !cast) {
+            for (let k = 0; k < u.shots; k++) this.loose(u, tgt, k * VOLLEY_GAP)
+            return
+        }
+        this.land(u, tgt, cast, true)
+    }
+
+    private loose(u: Unit, tgt: Unit, delay: number): void {
+        let p: Proj | null = null
+        for (let i = 0; i < this.projs.length; i++) if (!this.projs[i]!.live) { p = this.projs[i]!; break }
+        if (!p) { this.land(u, tgt, false, false); return }
+        p.live = true; p.kind = u.shot!.kind; p.ramp = u.shot!.ramp; p.color = u.accent
+        p.delay = delay; p.from = u
+        this.aim(p, tgt)
+    }
+
+    /** Point a projectile from its owner's bow hand at `tgt`, timed to arrive on its chest. */
+    private aim(p: Proj, tgt: Unit): void {
+        const u = p.from!
+        const dir = u.side ? -1 : 1
+        const x0 = u.x + u.ox + dir * 9
+        const y0 = u.y - 15
+        const x1 = tgt.x + tgt.ox
+        const y1 = tgt.y - (tgt.boss ? 30 : 14)
+        const arrow = p.kind === 'arrow'
+        const dur = Math.max(0.12, Math.abs(x1 - x0) / (arrow ? 260 : 170))
+        p.x = x0; p.y = y0; p.left = dur; p.to = tgt
+        // an arrow flies a shallow arc; a bolt flies straight
+        p.grav = arrow ? 220 : 0
+        p.vx = (x1 - x0) / dur
+        p.vy = (y1 - y0) / dur - 0.5 * p.grav * dur
+    }
+
+    /** Resolve a hit on `tgt`: the number, the burst, the damage and the hit feel. */
+    private land(u: Unit, tgt: Unit, cast: boolean, melee: boolean): void {
+        if (!standingAny(tgt)) {
+            // the target fell before this arrived: take the next one, or fizzle
+            const next = this.target(u.side)
+            if (!next) return
+            tgt = next
+        }
         const roll = Math.random()
         const y = tgt.y - (tgt.boss ? 30 : 14)
         if (roll < 0.08) { this.number(tgt.x, y - 8, 'miss'); return }
@@ -355,17 +639,33 @@ export class BattleDemo {
         this.particles.burst(tgt.x - (tgt.side ? 4 : -4), y, crit ? 14 : 8, crit ? 70 : 45, 0.5, tgt.side ? 'spark' : 'blood', 120, tgt.y)
         tgt.hp -= crit ? 2 : 1
         if (tgt.side === 0) tgt.hp = Math.max(1, tgt.hp) // the party doesn't die in the showcase
-        tgt.state = tgt.hp <= 0 ? U.Death : U.Hit
-        tgt.t = 0
-        if (tgt.state === U.Death) this.particles.burst(tgt.x, tgt.y - 10, 18, 40, 0.8, 'dust', 60, tgt.y)
+        const hold = crit ? JUICE.crit.hold : JUICE.hit.hold
+        if (melee) u.hold = hold // the swing connects: the striker stops on it too
+        // only the Hero's own crits shake the screen: with twelve bodies trading blows, everyone's would never stop
+        if (crit && u === this.units[0]) this.shake(JUICE.crit.shake, JUICE.crit.shakeFor)
+        if (tgt.boss) this.shake(JUICE.bossHit.shake, JUICE.bossHit.shakeFor)
+        if (tgt.hp <= 0) this.kill(tgt)
+        else this.struck(tgt, hold)
         if (u.side === 0 && Math.random() < 0.25) { const ally = this.units[0]!; this.number(ally.x - 16, ally.y - 30, 'heal') }
     }
 
     update(dt: number): void {
         if (this.paused) return
+        if (this.shakeT > 0) this.shakeT -= dt
+        if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 4)
+        if (this.freeze > 0) {
+            // the whole stage holds; only the sparks keep drifting, slowly
+            this.freeze--
+            this.particles.update(dt * 0.3)
+            return
+        }
+        if (this.freezeGap > 0) this.freezeGap -= dt
+        if (this.slowmo > 0) { this.slowmo -= dt; dt *= 0.35 }
         this.time += dt
         for (let i = 0; i < this.units.length; i++) {
             const u = this.units[i]!
+            if (u.jolt > 0) u.jolt--
+            if (u.hold > 0) { u.hold--; continue }
             u.t += dt
             const b = u.frames[u.state]!
             const dur = b.frames.length / b.fps
@@ -384,7 +684,9 @@ export class BattleDemo {
                 case U.Attack:
                 case U.Cast: {
                     const clip = u.clips[u.state]
+                    const was = u.phase
                     u.phase = clip ? phaseAt(clip, u.t) : (u.t < u.impact[u.state]! ? Phase.Charge : u.t < u.impact[u.state]! + 0.15 ? Phase.Cast : Phase.Recover)
+                    if (u.phase === Phase.Cast && was !== Phase.Cast) u.strikeAt = u.t
                     if (!u.fired && u.t >= u.impact[u.state]!) { u.fired = true; this.strike(u, u.state === U.Cast) }
                     if (u.t >= dur) { u.state = U.Idle; u.t = 0; u.wait = (u.side ? 1.0 : 0.6) + Math.random() * 1.4 }
                     break
@@ -392,9 +694,12 @@ export class BattleDemo {
                 case U.Hit:
                     if (u.t >= dur) { u.state = U.Idle; u.t = 0; u.wait = 0.3 + Math.random() }
                     break
-                case U.Death:
-                    if (u.t >= dur) u.state = U.Gone
+                case U.Death: {
+                    // it staggers and falls as authored, then shatters where it would dissolve
+                    const fs = fadeStart(b)
+                    if (frameIndex(b, u.t) >= fs || u.t >= dur) this.shatter(u, b, b.frames[Math.max(0, fs - 1)]!)
                     break
+                }
                 case U.Entry:
                     if (u.t >= (u.boss ? dur : 0.6)) { u.state = U.Idle; u.t = 0 }
                     break
@@ -431,8 +736,29 @@ export class BattleDemo {
             const f = this.fx[i]!
             if (!f.live) continue
             f.t += dt
-            if (f.t >= f.baked!.frames.length / f.baked!.fps) f.live = false
+            if (f.t >= f.def!.dur) f.live = false
         }
+        for (let i = 0; i < this.projs.length; i++) {
+            const p = this.projs[i]!
+            if (!p.live) continue
+            if (p.delay > 0) {
+                p.delay -= dt
+                // a later arrow in a volley aims at whoever is standing when it leaves
+                if (p.delay <= 0 && p.to && !standingAny(p.to)) { const next = this.target(p.from!.side); if (next) this.aim(p, next) }
+                continue
+            }
+            p.vy += p.grav * dt
+            p.x += p.vx * dt
+            p.y += p.vy * dt
+            p.left -= dt
+            if (p.kind === 'bolt' && (this.time * 60 & 1)) this.particles.spawn(p.x, p.y, rnd(-8, 8), rnd(-8, 8), 0.25, p.ramp)
+            if (p.left <= 0) {
+                p.live = false
+                if (p.kind === 'bolt') this.particles.burst(p.x, p.y, 8, 50, 0.35, p.ramp)
+                if (p.from && p.to) this.land(p.from, p.to, false, false)
+            }
+        }
+        for (let i = 0; i < this.rings.length; i++) { const r = this.rings[i]!; if (r.live && (r.t += dt) > 0.35) r.live = false }
         for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (!n.live) continue; n.t += dt; if (n.t > (n.hold ? HOLD_LIFE : 0.9)) n.live = false }
         this.particles.update(dt)
         // ambient: embers, dust — cosmetic
@@ -442,6 +768,8 @@ export class BattleDemo {
     render(): Surface {
         const s = this.frame
         if (!this.scene) return s
+        // Everything drawn from here to the shake samples time smoothly, at the loop's 60 Hz.
+        clock.smooth = true
         // Drawn live rather than blitted from a baked strip: a bake is fixed at scroll 0, and the
         // march needs every layer to parallax against `scroll`. Measured at ~1 ms, 6% of a frame.
         this.scene.draw(s, this.scroll, this.time)
@@ -460,15 +788,57 @@ export class BattleDemo {
                 if (u.state === U.Gone || u.y !== gy) continue
                 const b = u.frames[u.state]!
                 const fade = u.state === U.Entry && !u.boss ? Math.max(0, 16 - Math.floor(u.t * 30)) : 0
-                blitAt(s, b, u.t, u.x + u.ox, u.y, fade, u.elite && u.state !== U.Death && fade === 0 ? ELITE_MARK : CLEAR)
+                const dir = u.side ? -1 : 1
+                const x = u.x + u.ox + (u.jolt > 0 ? ((u.jolt >> 1) & 1 ? dir : -dir) : 0)
+                const acting = u.state === U.Attack || u.state === U.Cast
+                // rim-lit while winding up and striking, and the Hero for as long as he casts his skill
+                const lit = acting && (u.phase === Phase.Charge || u.phase === Phase.Cast || (i === 0 && this.cine !== null))
+                // a caster's strike leaves two afterimages behind it, for a moment
+                if (u.state === U.Cast && u.phase === Phase.Cast && u.t - u.strikeAt < AFTERIMAGE_FOR) {
+                    ghostAt(s, b, u.t, x - dir * 6, u.y, C.night3)
+                    ghostAt(s, b, u.t, x - dir * 3, u.y, u.accent)
+                }
+                blitAt(s, b, u.t, x, u.y, fade, u.elite && u.state !== U.Death && fade === 0 ? ELITE_MARK : CLEAR, lit ? u.accent : CLEAR, dir)
                 if (u.elite && u.state !== U.Death) drawEliteMark(s, u.x + u.ox, u.y - 36, this.time)
             }
         }
-        for (let i = 0; i < this.fx.length; i++) { const f = this.fx[i]!; if (f.live) blitAt(s, f.baked!, f.t, OX, OY) }
+        for (let i = 0; i < this.fx.length; i++) {
+            const f = this.fx[i]!
+            if (!f.live) continue
+            const v = this.vfxLayer
+            v.clear()
+            f.def!.draw(v, f.t)
+            for (let y = 0; y < v.h; y++) {
+                for (let x = 0; x < v.w; x++) {
+                    const c = v.data[y * v.w + x]!
+                    if (c !== CLEAR) s.set(OX + x, OY + y, c)
+                }
+            }
+        }
+        for (let i = 0; i < this.projs.length; i++) { const p = this.projs[i]!; if (p.live && p.delay <= 0) drawProj(s, p) }
+        for (let i = 0; i < this.rings.length; i++) {
+            const r = this.rings[i]!
+            if (!r.live) continue
+            const u = r.t / 0.35
+            ring(s, r.x, r.y, 3 + u * (r.big ? 40 : 16), u < 0.5 ? C.white : C.gold2)
+            if (r.big) ring(s, r.x, r.y, 2 + u * 28, C.gold3)
+        }
         this.particles.draw(s)
         // standing water mirrors the fight, not just the scenery
         if (this.water >= 0) reflectWater(s, this.water, this.time, this.glitter)
         for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (n.live) drawNumber(s, n) }
+        clock.smooth = false
+        if (this.shakeT > 0) {
+            // quantised shake: a new offset every other tick, never a smooth wobble
+            const a = this.shakeAmp
+            const k = Math.floor(this.time * 30)
+            shift(s, this.shakeLayer, ((k * 7919) % 3 - 1) * a, ((k * 104729) % 3 - 1) * Math.max(1, a - 1))
+        }
+        if (this.flash > 0) {
+            // at most 6/16 of the pixels: a boss kill at half coverage washed the whole scene out
+            const level = Math.ceil(this.flash * 2) * 3
+            for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (bayer(x, y, level)) s.data[y * s.w + x] = this.flashColor
+        }
         textOut(s, this.label, 6, 5, C.bone1, 'small', 1, 0, 1, C.ink, -1)
         if (c && c.t < c.def.dur) drawSkillBanner(s, c.banner, DEMO_W / 2, 14, c.t)
         return s
@@ -477,7 +847,53 @@ export class BattleDemo {
 
 /** An enemy that can still be hit. */
 function standing(u: Unit): boolean {
-    return u.side === 1 && u.state !== U.Death && u.state !== U.Gone && u.state !== U.Entry
+    return u.side === 1 && standingAny(u)
+}
+
+/** Any body, either side, that can still be hit. */
+function standingAny(u: Unit): boolean {
+    return u.state !== U.Death && u.state !== U.Gone && u.state !== U.Entry
+}
+
+/** Copy the frame out and write it back offset by (dx, dy), clamping at the edges. */
+function shift(s: Surface, tmp: Surface, dx: number, dy: number): void {
+    if (!dx && !dy) return
+    tmp.data.set(s.data)
+    for (let y = 0; y < s.h; y++) {
+        const sy = Math.min(s.h - 1, Math.max(0, y - dy))
+        for (let x = 0; x < s.w; x++) {
+            const sx = Math.min(s.w - 1, Math.max(0, x - dx))
+            s.data[y * s.w + x] = tmp.data[sy * s.w + sx]!
+        }
+    }
+}
+
+/**
+ * A projectile in flight. An arrow: a white head, a bone shaft and fletching in its owner's
+ * accent, pointed along its velocity. A bolt: a white-hot core in its ramp (its particle trail
+ * is spawned by `update`).
+ */
+function drawProj(s: Surface, p: Proj): void {
+    const x = Math.round(p.x)
+    const y = Math.round(p.y)
+    if (p.kind === 'arrow') {
+        const sp = Math.hypot(p.vx, p.vy) || 1
+        const ux = p.vx / sp
+        const uy = p.vy / sp
+        for (let i = 0; i < 7; i++) {
+            const c = i < 2 ? (i === 0 ? C.white : C.steel3) : i < 5 ? C.bone1 : p.color
+            s.set(Math.round(x - ux * i), Math.round(y - uy * i), c)
+        }
+        s.set(Math.round(x - ux * 6 - uy), Math.round(y - uy * 6 + ux), p.color)
+        return
+    }
+    const r = RAMP[p.ramp]
+    for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+            const d = dx * dx + dy * dy
+            if (d <= 5) s.set(x + dx, y + dy, d <= 1 ? (d === 0 ? C.white : r[1]!) : d <= 2 ? r[2]! : r[3]!)
+        }
+    }
 }
 
 function drawNumber(s: Surface, n: Num): void {

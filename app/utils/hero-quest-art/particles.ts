@@ -1,6 +1,7 @@
 // Pooled particle system: preallocated structure-of-arrays, reused round-robin, nothing
 // allocated after construction. Each particle walks a palette ramp over its life (its colour
-// is a palette *index* stepping along RAMP), and is snapped to the grid when drawn.
+// is a palette *index* stepping along RAMP), and is snapped to the grid when drawn. A shard
+// (`spawnShard`) keeps one fixed colour instead: a pixel knocked out of a sprite.
 //
 // Cosmetic only — spread comes from Math.random, which is fine for sparks (CLAUDE.md
 // "Randomness": acceptable for cosmetics with no bearing on state).
@@ -10,6 +11,8 @@ import type { Surface } from './surface'
 
 const RAMPS: readonly Uint8Array[] = RAMP_NAMES.map(n => RAMP[n])
 const RAMP_ID = Object.fromEntries(RAMP_NAMES.map((n, i) => [n, i])) as Record<RampName, number>
+/** The `ramp` slot of a shard: it draws its own `color` for its whole life. */
+const FIXED = 255
 
 export class Particles {
     readonly max: number
@@ -24,6 +27,7 @@ export class Particles {
     private floor: Float32Array
     private ramp: Uint8Array
     private size: Uint8Array
+    private color: Uint8Array
     private live: Uint8Array
     private cursor = 0
 
@@ -40,10 +44,23 @@ export class Particles {
         this.floor = new Float32Array(max)
         this.ramp = new Uint8Array(max)
         this.size = new Uint8Array(max)
+        this.color = new Uint8Array(max)
         this.live = new Uint8Array(max)
     }
 
     spawn(x: number, y: number, vx: number, vy: number, life: number, ramp: RampName, grav = 0, drag = 0, floor = 0, size = 1): void {
+        const i = this.take(x, y, vx, vy, life, grav, drag, floor, size)
+        this.ramp[i] = RAMP_ID[ramp]
+    }
+
+    /** A chunk of a sprite in one fixed palette colour — what a shattering body breaks into. */
+    spawnShard(x: number, y: number, vx: number, vy: number, life: number, color: number, grav = 0, drag = 0, floor = 0, size = 2): void {
+        const i = this.take(x, y, vx, vy, life, grav, drag, floor, size)
+        this.ramp[i] = FIXED
+        this.color[i] = color
+    }
+
+    private take(x: number, y: number, vx: number, vy: number, life: number, grav: number, drag: number, floor: number, size: number): number {
         let i = this.cursor
         for (let n = 0; n < this.max; n++) {
             if (!this.live[i]) break
@@ -52,8 +69,9 @@ export class Particles {
         this.cursor = (i + 1) % this.max
         this.x[i] = x; this.y[i] = y; this.vx[i] = vx; this.vy[i] = vy
         this.life[i] = life; this.span[i] = life; this.grav[i] = grav; this.drag[i] = drag
-        this.floor[i] = floor; this.ramp[i] = RAMP_ID[ramp]; this.size[i] = size
+        this.floor[i] = floor; this.size[i] = size
         this.live[i] = 1
+        return i
     }
 
     /** A radial burst of `n` particles. */
@@ -89,9 +107,18 @@ export class Particles {
         for (let i = 0; i < this.max; i++) {
             if (!this.live[i]) continue
             const age = 1 - this.life[i]! / this.span[i]!
-            const r = RAMPS[this.ramp[i]!]!
-            const c = r[Math.min(r.length - 1, Math.floor(age * r.length))]!
-            const s = age < 0.5 ? this.size[i]! : 1
+            const k = this.ramp[i]!
+            let c: number
+            let s: number
+            if (k === FIXED) {
+                // a shard keeps its colour and its size until it has nearly settled
+                c = this.color[i]!
+                s = age < 0.8 ? this.size[i]! : 1
+            } else {
+                const r = RAMPS[k]!
+                c = r[Math.min(r.length - 1, Math.floor(age * r.length))]!
+                s = age < 0.5 ? this.size[i]! : 1
+            }
             const px = Math.round(this.x[i]!) - (s >> 1)
             const py = Math.round(this.y[i]!) - (s >> 1)
             for (let yy = 0; yy < s; yy++) for (let xx = 0; xx < s; xx++) dst.set(px + xx, py + yy, c)

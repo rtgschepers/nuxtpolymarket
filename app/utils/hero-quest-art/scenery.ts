@@ -9,7 +9,7 @@
 import { C, shadeLut } from './palette'
 import type { Surface} from './surface';
 import { rect, px, line, disc, ellipse, tri, quad, dither, ditherDisc, ditherEllipse, hash2, bayer, poly } from './surface'
-import { qt } from './vfx-kit'
+import { clock, qt } from './vfx-kit'
 import { ANIM_FPS } from './anim'
 
 export const SW = 320
@@ -286,6 +286,26 @@ function fireflies(s: Surface, ph: number, n: number, seed: number, y0: number, 
     }
 }
 
+/**
+ * A small flock crossing the sky every BIRD_EVERY seconds, live stage only: dark V's in a
+ * loose line, each flapping on its own beat. They ride a little of the scroll so a march
+ * overtakes them.
+ */
+const BIRD_EVERY = 14
+function birds(s: Surface, t: number, sc: number): void {
+    const n = Math.floor(t / BIRD_EVERY)
+    const u = (t % BIRD_EVERY) / BIRD_EVERY
+    const y0 = 26 + R(hash2(n, 61) * 30)
+    for (let i = 0; i < 3 + (n & 1); i++) {
+        const x = R(SW + 20 + i * 9 - u * (SW + 90) - sc * 0.08)
+        const y = y0 + i * 3 + R(Math.sin(t * 1.3 + i) * 1.5)
+        const up = Math.floor(t * 6 + i * 1.7) & 1
+        s.set(x, y, C.sky0); s.set(x + 1, y, C.sky0)
+        s.set(x - 1, y + (up ? -1 : 1), C.sky0); s.set(x + 2, y + (up ? -1 : 1), C.sky0)
+        if (up) { s.set(x - 2, y - 1, C.sky0); s.set(x + 3, y - 1, C.sky0) }
+    }
+}
+
 // ── The ten worlds ─────────────────────────────────────────────────────────────────
 
 const SUN = { x: 236, y: 74 }
@@ -328,15 +348,18 @@ const thornwick: WorldScene = {
         ditherDisc(s, SUN.x, SUN.y, 17, C.gold3, 6)
         disc(s, SUN.x, SUN.y, 13, C.gold3)
         disc(s, SUN.x, SUN.y, 10, C.white)
-        // streak clouds, still (drift can't close in a 1.6 s loop), lit from below
+        // streak clouds, lit from below. Still in the baked loop (a drift can't close in 1.6 s);
+        // on the live stage they drift, the nearer (lower) ones a little faster.
         for (let i = 0; i < 6; i++) {
             const len = 30 + R(hash2(i, 21) * 50)
-            const x = mod(hash2(i, 22) * (SW + 80) - sc * 0.05, SW + 80) - 60
+            const wind = clock.smooth ? t * (1 + i * 0.35) : 0
+            const x = mod(hash2(i, 22) * (SW + 80) - sc * 0.05 - wind, SW + 80) - 60
             const y = 18 + i * 12 + R(hash2(i, 23) * 5)
             const body = y < 50 ? C.white : y < 76 ? C.bone1 : C.dusk3
             const lit = y < 50 ? C.sky2 : C.gold3
             streakCloud(s, R(x), y, len, body, lit, y < 50 ? C.sky2 : C.dusk3)
         }
+        if (clock.smooth) birds(s, t, sc)
         // far ridge in blue haze, nearer hills in soft green — both lifted with the horizon
         ridge(s, sc * 0.1, 90, 22, 96, 1, C.sky1, C.sky2)
         ridge(s, sc * 0.2, 102, 14, 70, 2, C.moss1, C.moss2)
@@ -408,6 +431,8 @@ const thornwick: WorldScene = {
         // the millpond
         reflectWater(s, TW_WATER, t, SUN.x)
         fireflies(s, ph, 14, 7, 116, FLOOR_Y - 6)
+        // pollen riding the breeze across the field — live only, since it never comes back round
+        if (clock.smooth) drift(s, t, 12, 51, [C.sand3, C.ice3], -1.5, -7, TW_GROUND - 20, FLOOR_Y - 2)
     }
 }
 

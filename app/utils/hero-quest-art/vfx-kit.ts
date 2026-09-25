@@ -56,7 +56,16 @@ export const VL = {
     ] as const
 }
 
-export function qt(t: number): number { return frameTime(t) }
+/**
+ * The motion clock. Exported strips and the gallery sample effects and scenery on the 10 fps
+ * frame grid, so a baked loop closes and matches the sprites' held frames. The live stage turns
+ * `smooth` on while it draws them, so they move at its 60 Hz instead, against the stepped
+ * bodies. Only the live stage sets it, and only around its own draw calls.
+ */
+export const clock = { smooth: false }
+
+/** Time as effects and scenery see it: on the frame grid, unless the live stage asks for smooth. */
+export function qt(t: number): number { return clock.smooth ? t : frameTime(t) }
 
 /** 0..1 progress of t through [a, b], clamped, on the frame grid. */
 export function pr(t: number, a: number, b: number): number {
