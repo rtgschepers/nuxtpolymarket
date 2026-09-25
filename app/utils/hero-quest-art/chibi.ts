@@ -53,7 +53,13 @@ export const HEAD_KEY: Readonly<Record<string, number>> = {
     d: C.skin0, s: C.skin1, S: C.skin2,
     i: C.steel0, I: C.steel1, j: C.steel2, J: C.steel3,
     x: C.red0, y: C.red1, z: C.red2, g: C.gold1, G: C.gold2, Y: C.gold3,
-    q: C.lava0, O: C.orange, v: C.void
+    q: C.lava0, O: C.orange, v: C.void,
+    a: C.blue0, A: C.blue1, e: C.blue2, c: C.cyan, f: C.frost,
+    n: C.green1, N: C.green2, m: C.green3, M: C.green4,
+    t: C.teal1, T: C.teal2, u: C.teal3,
+    p: C.purple0, P: C.purple1, V: C.purple2,
+    '4': C.stone0, '5': C.stone1, '6': C.stone2, '7': C.stone3,
+    '8': C.olive1, '9': C.olive2
 }
 
 /**

@@ -102,6 +102,15 @@ export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly
         n: 3,
         label: 'Round 3 · scenery tier',
         prefixes: ['ui/palette/', 'bg/world/world_thornwick_vale']
+    },
+    {
+        n: 5,
+        label: 'Round 5 · chibi classes',
+        prefixes: [
+            'hero/class_barbarian/', 'hero/class_berserker/', 'hero/class_knight/', 'hero/class_paladin/',
+            'hero/class_mage/', 'hero/class_wizard/', 'hero/class_sorcerer/', 'hero/class_shaman/', 'hero/class_witch_doctor/',
+            'hero/class_archer/', 'hero/class_bowman/', 'hero/class_marksman/', 'hero/class_beast_master/'
+        ]
     }
 ]
 
