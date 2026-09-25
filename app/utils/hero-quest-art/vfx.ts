@@ -13,7 +13,7 @@ import {
     VL, pr, inWin, eo, qt, burst, motes, shock, bolt, travel, lob, VP, orbFx, star, impact, arrows, healRise,
     stunStars, column, bubble, rune, RUNES, runeCircle, rain, chainFx, slash, R
 } from './vfx-kit'
-import { arrow } from './weapons'
+import { antlers, arrow } from './weapons'
 import { Actor, HP } from './rig'
 import { sample } from './anim'
 import { drawCreature } from './creature'
@@ -200,9 +200,9 @@ const CLASS_VFX: VfxDef[] = [
             const up = R(eo(pr(t, 0, 0.25)) * 18)
             rect(d, tx - 2, FLOOR - up, 5, up, C.brown2)
             if (up > 12) {
-                rect(d, tx - 3, FLOOR - up, 7, 5, C.brown1)
-                d.set(tx - 1, FLOOR - up + 2, C.teal3); d.set(tx + 1, FLOOR - up + 2, C.teal3)
-                line(d, tx - 3, FLOOR - up, tx - 6, FLOOR - up - 4, C.red2); line(d, tx + 3, FLOOR - up, tx + 6, FLOOR - up - 4, C.teal2)
+                rect(d, tx - 2, FLOOR - up + 2, 5, 1, C.brown0)
+                d.set(tx, FLOOR - up + 3, C.teal3)
+                antlers(d, tx, FLOOR - up, -Math.PI / 2)
             }
             // gusts spiralling out to every foe
             for (let i = 0; i < 3; i++) {

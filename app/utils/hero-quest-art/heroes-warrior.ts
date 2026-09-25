@@ -10,7 +10,7 @@ import { C } from './palette'
 import { disc, line, px, rect } from './surface'
 import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest } from './rig'
 import { chibiHead, crescent, face, head, ROOKIE_HEAD } from './chibi'
-import { M, tip, sword, axe, hammer, shield, ShieldStyle } from './weapons'
+import { M, tip, sword, axe, flangedMace, shield, ShieldStyle, type Mat } from './weapons'
 import { CH, CA, RE, is, chibiLook, chibiCape, aura, pop, shout, slam, lightColumn, BLOOD_FIRE, FIRE, FROST, HOLY } from './hero-kit'
 import type { HeroArt } from './heroes'
 
@@ -281,7 +281,7 @@ const BERSERKER_HEAD = head([
     ...face(2).slice(2)
 ], 7, 11)
 
-const BERSERKER_REST = rest({ hx: 4, hy: 4, wa: 0.6, bhx: 2, bhy: 4, ba: 0.8, ffx: 4, bfx: -4, crouch: 1, tilt: 1 })
+const BERSERKER_REST = rest({ hx: 4, hy: 3, wa: -0.7, bhx: 2, bhy: 3, ba: -0.5, ffx: 4, bfx: -4, crouch: 1, tilt: 1 })
 
 const berserker: HeroArt = {
     look: chibiLook({
@@ -307,8 +307,9 @@ const berserker: HeroArt = {
             px(s, x + 5, y - 1, C.steel3); px(s, x + 6, y + 1, C.steel2)
         },
         head: (s, x, y, p) => chibiHead(s, BERSERKER_HEAD, x, y, p, p[HP.glow]! > 0.5 ? C.red3 : C.ink),
-        weapon: (s, x, y, p) => axe(s, x, y, p[HP.wa]!, 9, M.iron, M.darkwood),
-        offhand: (s, x, y, p) => axe(s, x, y, p[HP.ba]!, 9, M.iron, M.darkwood),
+        // blade on the leading side: edge forward at the ready, edge first down the chop
+        weapon: (s, x, y, p) => axe(s, x, y, p[HP.wa]!, 9, M.iron, M.darkwood, false, true),
+        offhand: (s, x, y, p) => axe(s, x, y, p[HP.ba]!, 9, M.iron, M.darkwood, false, true),
         fx: (dst, p, t) => {
             if (is(p, FXK.Slash)) crescent(dst, J.fsx, J.fsy, 13, p[HP.fxa]!, p[HP.wa]!, 5, C.red2, C.white, C.red1)
             if (is(p, FXK.BackSlash)) crescent(dst, J.bsx, J.bsy, 14, p[HP.fxa]!, p[HP.ba]!, 5, C.red2, C.white, C.red1)
@@ -322,7 +323,7 @@ const berserker: HeroArt = {
     clips: {
         // a restless, snorting idle: quicker than anyone else's
         idle: hclip('idle', 0.8, true, [
-            [0, {}], [0.4, { crouch: 2, hy: 5, bhy: 5, headY: 1 }], [0.8, {}]
+            [0, {}], [0.4, { crouch: 2, hy: 4, bhy: 4, wa: -0.6, ba: -0.4, headY: 1 }], [0.8, {}]
         ], BERSERKER_REST),
         attack: hclip('attack', 0.9, false, [
             [0, {}],
@@ -332,7 +333,7 @@ const berserker: HeroArt = {
             [0.4, { ba: 0.7, bhx: 13, bhy: 3, lean: 3, wa: 1.0, hx: 3, hy: 5, ffx: 6, fxk: FXK.BackSlash, fxa: -2.2 }, Ease.Out, CA],
             [0.5, { fxk: FXK.SlashFade, fxa: -0.6 }, Ease.Hold, RE],
             [0.6, { fxk: 0 }, Ease.Hold, RE],
-            [0.9, { wa: 0.6, hx: 4, hy: 4, ba: 0.8, bhx: 2, bhy: 4, lean: 0, tilt: 1, ffx: 4 }]
+            [0.9, { wa: -0.7, hx: 4, hy: 3, ba: -0.5, bhx: 2, bhy: 3, lean: 0, tilt: 1, ffx: 4 }]
         ], BERSERKER_REST),
         // Enrage: hunch low, then rear up screaming with both axes high as the blood-fire takes him
         cast: hclip('cast', 1.8, false, [
@@ -342,7 +343,7 @@ const berserker: HeroArt = {
             [0.6, { crouch: -1, tilt: -2, headY: -1, mouth: 1, hx: 5, hy: -6, wa: -1.2, bhx: -1, bhy: -7, ba: -1.9, ffx: 5, bfx: -5, glow: 1, fxk: FXK.Rage }, Ease.Back, CA],
             [1.3, { crouch: 0 }, Ease.Linear, CA],
             [1.4, { fxk: 0, mouth: 0 }, Ease.Hold, RE],
-            [1.8, { crouch: 1, tilt: 1, headY: 0, hx: 4, hy: 4, wa: 0.6, bhx: 2, bhy: 4, ba: 0.8, ffx: 4, bfx: -4, glow: 0 }]
+            [1.8, { crouch: 1, tilt: 1, headY: 0, hx: 4, hy: 3, wa: -0.7, bhx: 2, bhy: 3, ba: -0.5, ffx: 4, bfx: -4, glow: 0 }]
         ], BERSERKER_REST),
         hit: hitClip(BERSERKER_REST, 0.8),
         death: deathClip(BERSERKER_REST, { ba: 0.4 })
@@ -351,7 +352,8 @@ const berserker: HeroArt = {
 
 // ═══════════════════════════════════════════════════════════════ Knight (elite)
 // Steel plate over a blue tabard, a rounded bascinet with cheek guards and a blue plume, a
-// longsword and a kite shield. Shockwave is a leap and a blade driven into the ground.
+// longsword and a heater shield carried in front. Shockwave is a leap and a blade driven into
+// the ground.
 
 const KNIGHT_HEAD = head([
     '.aAe........',
@@ -370,7 +372,7 @@ const KNIGHT_HEAD = head([
     '.....ddd....'
 ], 5, 9)
 
-const KNIGHT_REST = rest({ hx: 3, hy: 4, wa: -1.3, bhx: 1, bhy: 4, ffx: 3, bfx: -3 })
+const KNIGHT_REST = rest({ hx: 3, hy: 4, wa: -1.3, bhx: 3, bhy: 4, ffx: 3, bfx: -3 })
 
 const knight: HeroArt = {
     look: chibiLook({
@@ -391,13 +393,16 @@ const knight: HeroArt = {
             px(s, x - 4, y + 7, C.steel3); px(s, x - 2, y + 7, C.steel3)
         },
         over: (s, x, y) => {
-            rect(s, x + 1, y, 5, 3, C.steel2)
-            rect(s, x + 2, y, 3, 1, C.steel3)
-            rect(s, x + 1, y + 2, 5, 1, C.steel1)
+            // a rounded plate on the sword shoulder; the chin sits on row y + 1, so it starts below
+            rect(s, x + 2, y + 2, 4, 1, C.steel3)
+            rect(s, x + 1, y + 3, 6, 1, C.steel2)
+            rect(s, x + 1, y + 4, 6, 1, C.steel1)
+            px(s, x + 3, y + 3, C.gold2)
+            // the shield is carried in front, so it goes on last, over the plate
+            shield(s, J.bhx + 1, J.bhy + 1, ShieldStyle.Heater, M.steel, [C.blue0, C.blue1, C.blue2], C.gold2)
         },
         head: (s, x, y, p) => chibiHead(s, KNIGHT_HEAD, x, y, p),
         weapon: (s, x, y, p) => sword(s, x, y, p[HP.wa]!, 15, M.steel, M.gold, C.brown0),
-        offhand: (s, x, y) => shield(s, x - 1, y + 1, ShieldStyle.Kite, M.steel, [C.blue0, C.blue1, C.blue2], C.gold2),
         fx: (dst, p, t) => {
             if (is(p, FXK.Slash)) crescent(dst, J.fsx, J.fsy, 16, p[HP.fxa]!, p[HP.wa]!, 6, C.blue2, C.white, C.blue1)
             if (is(p, FXK.SlashFade)) crescent(dst, J.fsx, J.fsy, 16, p[HP.fxa]!, p[HP.wa]!, 3, C.blue1, C.cyan, C.blue0)
@@ -429,7 +434,7 @@ const knight: HeroArt = {
             [0.7, { jump: 0, crouch: 3, kneel: 1, ffy: 0, bfy: 0, hx: 7, hy: 6, wa: 1.45, bhx: 5, bhy: 3, glow: 1, mouth: 1, fxk: FXK.Slam }, Ease.In, CA],
             [1.2, {}, Ease.Linear, CA],
             [1.3, { fxk: 0, mouth: 0, glow: 0.3 }, Ease.Hold, RE],
-            [1.6, { crouch: 0, kneel: 0, hx: 3, hy: 4, wa: -1.3, bhx: 1, bhy: 4, glow: 0 }]
+            [1.6, { crouch: 0, kneel: 0, hx: 3, hy: 4, wa: -1.3, bhx: 3, bhy: 4, glow: 0 }]
         ], KNIGHT_REST),
         hit: hitClip(KNIGHT_REST, 0.6),
         death: deathClip(KNIGHT_REST)
@@ -437,28 +442,36 @@ const knight: HeroArt = {
 }
 
 // ═══════════════════════════════════════════════════════════════ Paladin (master)
-// Gleaming white-and-gold plate, a winged golden helm, a blue cape, a holy warhammer and a
-// sun shield. Disciple: he kneels to pray, then raises the hammer into a column of light.
+// A holy knight, not a Norseman: a steel helm with a gold cross on the brow, white-and-gold
+// plate, a crimson cape, a flanged gold mace and a white heater shield with a gold cross,
+// carried in front. Disciple: he kneels to pray, then raises the mace into a column of light.
 
 const PALADIN_HEAD = head([
-    'w...........',
-    'ww...GGG....',
-    'wwb.GYYYGg..',
-    '.wbGGYGGGGg.',
-    '.bbGGGGGGGg.',
-    '..gGGGGcGGg.',
-    'hHHHHHHHHsH.',
-    ...face()
+    '.....GYG....',
+    '...IjjjjJI..',
+    '..IjjjjjGJI.',
+    '.IjjjjjGYGJI',
+    '.IjjjjjjGJJI',
+    'iIgGGGGGGGgI',
+    'IjjIHHHHHsH.',
+    'IjjjHsSSSkS.',
+    'IjjjdsSSSkSs',
+    '.IjjssSbbSS.',
+    '.iIjssSSSSS.',
+    '..ohsssSSs..',
+    '.....ddd....'
 ], 5, 9)
 
-const PALADIN_REST = rest({ hx: 5, hy: 4, wa: 1.0, bhx: 1, bhy: 4, ffx: 3, bfx: -3 })
+const WHITE: Mat = [C.bone0, C.bone1, C.white]
+
+const PALADIN_REST = rest({ hx: 4, hy: 4, wa: -1.2, bhx: 3, bhy: 4, ffx: 3, bfx: -3 })
 
 const paladin: HeroArt = {
     look: chibiLook({
         accent: C.gold3,
         pants: C.steel2, pantsDk: C.steel1, boot: C.gold1, bootHi: C.gold2,
         arm: C.steel3, armLow: C.steel2, armBack: C.steel2, armBackLow: C.steel1, hand: C.gold1,
-        back: (s, x, y, _p, t) => chibiCape(s, x, y - 1, 13, t, C.blue1, C.blue0, C.blue2),
+        back: (s, x, y, _p, t) => chibiCape(s, x, y - 1, 13, t, C.red1, C.red0, C.red2),
         torso: (s, x, y) => {
             rect(s, x - 5, y, 10, 8, C.steel3)
             rect(s, x - 5, y, 2, 8, C.steel2)
@@ -473,14 +486,15 @@ const paladin: HeroArt = {
             rect(s, x - 1, y + 7, 3, 1, C.gold2)
         },
         over: (s, x, y) => {
-            // a big gold pauldron, winged at the rim
-            rect(s, x + 1, y, 5, 3, C.gold1)
-            rect(s, x + 2, y, 3, 1, C.gold3)
-            rect(s, x + 1, y + 2, 5, 1, C.gold0)
+            // a big layered pauldron, white plate on a gold rim, clear of the chin
+            rect(s, x + 2, y + 2, 4, 1, C.white)
+            rect(s, x + 1, y + 3, 6, 1, C.steel3)
+            rect(s, x + 1, y + 4, 6, 1, C.gold2)
+            px(s, x + 3, y + 3, C.gold3)
+            shield(s, J.bhx + 1, J.bhy + 1, ShieldStyle.Heater, M.gold, WHITE, C.gold2)
         },
         head: (s, x, y, p) => chibiHead(s, PALADIN_HEAD, x, y, p, p[HP.glow]! > 0.5 ? C.gold2 : C.ink),
-        weapon: (s, x, y, p) => hammer(s, x, y, p[HP.wa]!, 11, M.gold, M.wood),
-        offhand: (s, x, y) => shield(s, x - 1, y + 1, ShieldStyle.Round, M.gold, M.steel, C.gold2),
+        weapon: (s, x, y, p) => flangedMace(s, x, y, p[HP.wa]!, 8, M.gold, M.darkwood),
         fx: (dst, p, t) => {
             if (is(p, FXK.Slash)) crescent(dst, J.fsx, J.fsy, 17, p[HP.fxa]!, p[HP.wa]!, 6, C.gold2, C.white, C.gold1)
             if (is(p, FXK.SlashFade)) crescent(dst, J.fsx, J.fsy, 17, p[HP.fxa]!, p[HP.wa]!, 3, C.gold1, C.gold3, C.gold0)
@@ -504,7 +518,7 @@ const paladin: HeroArt = {
         }
     }),
     clips: {
-        idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 5, bhy: 5, wa: 1.05 }], [1.4, {}]], PALADIN_REST),
+        idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 5, bhy: 5, wa: -1.15 }], [1.4, {}]], PALADIN_REST),
         attack: hclip('attack', 1.0, false, [
             [0, {}],
             [0.1, { wa: -2.3, hx: 0, hy: -3, lean: -1, crouch: 1 }, Ease.Out, CH],
@@ -513,9 +527,9 @@ const paladin: HeroArt = {
             [0.5, { wa: 0.9, hx: 6, hy: 5, crouch: 2, fxk: FXK.Slam }, Ease.Out, CA],
             [0.6, { fxk: FXK.SlashFade, fxa: -0.8 }, Ease.Hold, RE],
             [0.7, { fxk: 0 }, Ease.Hold, RE],
-            [1.0, { wa: 1.0, hx: 5, hy: 4, lean: 0, crouch: 0, ffx: 3, glow: 0 }]
+            [1.0, { wa: -1.2, hx: 4, hy: 4, lean: 0, crouch: 0, ffx: 3, glow: 0 }]
         ], PALADIN_REST),
-        // Disciple: kneel in prayer, then stand and raise the hammer into a column of light
+        // Disciple: kneel in prayer, then stand and raise the mace into a column of light
         cast: hclip('cast', 2.0, false, [
             [0, {}],
             [0.2, { kneel: 1, crouch: 3, hx: 5, hy: 3, wa: 1.57, bhx: 7, bhy: 2, headY: 1, glow: 0.3, fxk: FXK.Pray }, Ease.Out, CH],
@@ -523,7 +537,7 @@ const paladin: HeroArt = {
             [0.8, { kneel: 0, crouch: 0, jump: -1, hx: 5, hy: -6, wa: -1.57, bhx: -2, bhy: 1, headY: -1, mouth: 1, glow: 1, fxk: FXK.Holy }, Ease.Out, CA],
             [1.5, { jump: 0 }, Ease.Linear, CA],
             [1.6, { fxk: 0, mouth: 0, glow: 0.4 }, Ease.Hold, RE],
-            [2.0, { hx: 5, hy: 4, wa: 1.0, bhx: 1, bhy: 4, headY: 0, glow: 0 }]
+            [2.0, { hx: 4, hy: 4, wa: -1.2, bhx: 3, bhy: 4, headY: 0, glow: 0 }]
         ], PALADIN_REST),
         hit: hitClip(PALADIN_REST, 0.6),
         death: deathClip(PALADIN_REST)

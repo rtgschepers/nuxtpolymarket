@@ -352,7 +352,7 @@ const sorcerer: HeroArt = {
 
 // ═══════════════════════════════════════════════════════════════ Shaman (elite)
 // Leather and a pale fur mantle, a red headband with feathers standing at the back, teal
-// paint under the eye, bone beads, and a carved spirit-totem staff taller than he is.
+// paint under the eye, bone beads, and an antlered staff taller than he is.
 
 const SHAMAN_HEAD = head([
     'w.u.........',

@@ -464,7 +464,7 @@ export const WORLD_SKINS: readonly WorldSkin[] = [
 function weaponPainter(w: WorldSkin, kind: EnemyWeapon): Painter {
     switch (kind) {
         case 'sword': return (s, x, y, p) => sword(s, x, y, p[HP.wa]!, w.legLen < 8 ? 9 : 11, w.blade, w.blade, w.haft[0])
-        case 'axe': return (s, x, y, p) => axe(s, x, y, p[HP.wa]!, w.legLen < 8 ? 9 : 11, w.blade, w.haft)
+        case 'axe': return (s, x, y, p) => axe(s, x, y, p[HP.wa]!, w.legLen < 8 ? 9 : 11, w.blade, w.haft, false, true)
         case 'bow': return (s, x, y, p) => { const pull = p[HP.aux]!; bow(s, x, y, p[HP.wa]!, pull, pull > 0.05, w.haft, w.legLen < 8 ? 7 : 8, w.blade[2]) }
         case 'staff': return (s, x, y, p, t) => staff(s, x, y, p[HP.wa]!, w.legLen < 8 ? 10 : 12, w.haft, w.gem, w.gemStyle, p[HP.glow]!, t)
     }

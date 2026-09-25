@@ -124,12 +124,17 @@ const AFTERIMAGE_FOR = 0.25
 /** The seconds between the arrows of one multi-strike volley — the bow clip's release cadence. */
 const VOLLEY_GAP = 0.3
 
-/** What a ranged unit looses: an arrow (fletched in its accent) or a bolt burning through a ramp. */
-interface Shot { kind: 'arrow' | 'bolt', ramp: RampName }
+/**
+ * What a ranged unit looses: an arrow (fletched in its accent), a crossbow quarrel (shorter,
+ * flying flat and fast) or a bolt burning through a ramp.
+ */
+type ShotKind = 'arrow' | 'quarrel' | 'bolt'
+interface Shot { kind: ShotKind, ramp: RampName }
 const ARROW: Shot = { kind: 'arrow', ramp: 'spark' }
+const QUARREL: Shot = { kind: 'quarrel', ramp: 'spark' }
 const bolt = (ramp: RampName): Shot => ({ kind: 'bolt', ramp })
 const HERO_SHOTS: Readonly<Record<string, Shot>> = {
-    class_archer: ARROW, class_bowman: ARROW, class_marksman: ARROW, class_hunter: ARROW, class_beast_master: ARROW,
+    class_archer: ARROW, class_bowman: ARROW, class_marksman: ARROW, class_hunter: QUARREL, class_beast_master: QUARREL,
     class_mage: bolt('arcane'), class_wizard: bolt('frost'), class_sorcerer: bolt('fire'),
     class_shaman: bolt('water'), class_witch_doctor: bolt('poison')
 }
@@ -180,7 +185,7 @@ interface Cine { def: CinematicVfx, banner: string, lut: Uint8Array, t: number, 
 
 interface Fx { live: boolean, def: VfxDef | null, t: number }
 interface Proj {
-    live: boolean, kind: 'arrow' | 'bolt', ramp: RampName, color: number
+    live: boolean, kind: ShotKind, ramp: RampName, color: number
     x: number, y: number, vx: number, vy: number, grav: number
     /** Seconds before it leaves the bow (a volley's later arrows), then its flight time left. */
     delay: number, left: number
@@ -635,9 +640,10 @@ export class BattleDemo {
         const x1 = tgt.x + tgt.ox
         const y1 = tgt.y - (tgt.boss ? 30 : 14)
         const arrow = p.kind === 'arrow'
-        const dur = Math.max(0.12, Math.abs(x1 - x0) / (arrow ? 260 : 170))
+        const speed = arrow ? 260 : p.kind === 'quarrel' ? 360 : 170
+        const dur = Math.max(0.12, Math.abs(x1 - x0) / speed)
         p.x = x0; p.y = y0; p.left = dur; p.to = tgt
-        // an arrow flies a shallow arc; a bolt flies straight
+        // an arrow flies a shallow arc; a quarrel and a bolt fly straight
         p.grav = arrow ? 220 : 0
         p.vx = (x1 - x0) / dur
         p.vy = (y1 - y0) / dur - 0.5 * p.grav * dur
@@ -903,15 +909,16 @@ function shift(s: Surface, tmp: Surface, dx: number, dy: number): void {
 function drawProj(s: Surface, p: Proj): void {
     const x = Math.round(p.x)
     const y = Math.round(p.y)
-    if (p.kind === 'arrow') {
+    if (p.kind !== 'bolt') {
         const sp = Math.hypot(p.vx, p.vy) || 1
         const ux = p.vx / sp
         const uy = p.vy / sp
-        for (let i = 0; i < 7; i++) {
-            const c = i < 2 ? (i === 0 ? C.white : C.steel3) : i < 5 ? C.bone1 : p.color
+        const len = p.kind === 'arrow' ? 7 : 5
+        for (let i = 0; i < len; i++) {
+            const c = i < 2 ? (i === 0 ? C.white : C.steel3) : i < len - 2 ? (p.kind === 'arrow' ? C.bone1 : C.brown3) : p.color
             s.set(Math.round(x - ux * i), Math.round(y - uy * i), c)
         }
-        s.set(Math.round(x - ux * 6 - uy), Math.round(y - uy * 6 + ux), p.color)
+        s.set(Math.round(x - ux * (len - 1) - uy), Math.round(y - uy * (len - 1) + ux), p.color)
         return
     }
     const r = RAMP[p.ramp]

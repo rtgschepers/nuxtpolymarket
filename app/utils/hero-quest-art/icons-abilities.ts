@@ -3,7 +3,7 @@
 
 import { C } from './palette'
 import type { Surface } from './surface'
-import { M, sword, axe, hammer, shield, arrow, dagger, ShieldStyle, type Mat } from './weapons'
+import { M, sword, axe, hammer, shield, arrow, dagger, antlers, ShieldStyle, type Mat } from './weapons'
 import { type Glyph, rect, px, line, disc, ring, tri, ellipse, poly, arc } from './icon-kit'
 
 const R = Math.round
@@ -150,9 +150,10 @@ export const CLASS_SKILL_ICONS: Readonly<Record<string, Glyph>> = {
         }
     },
     skill_totem_storm: (g, x, y) => {
-        rect(g, x - 3, y - 6, 6, 13, C.brown2); rect(g, x - 3, y - 6, 6, 1, C.brown3)
-        px(g, x - 2, y - 4, C.teal3); px(g, x + 1, y - 4, C.teal3); rect(g, x - 1, y - 1, 3, 1, C.red1)
-        line(g, x - 3, y - 6, x - 6, y - 9, C.red2); line(g, x + 3, y - 6, x + 6, y - 9, C.teal2)
+        // a wooden post crowned with antlers
+        rect(g, x - 2, y - 3, 4, 10, C.brown2); rect(g, x - 2, y - 3, 1, 10, C.brown1)
+        rect(g, x - 2, y - 1, 4, 1, C.brown0); px(g, x - 1, y, C.teal3)
+        antlers(g, x, y - 3, -Math.PI / 2)
         swirl(g, x, y + 2, 10, C.teal3, C.white)
     },
     skill_raise_dead: (g, x, y) => {

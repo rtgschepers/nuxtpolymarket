@@ -10,7 +10,7 @@ import { line, px, rect, type Surface } from './surface'
 import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest } from './rig'
 import { chibiHead, face, head, ROOKIE_HEAD } from './chibi'
 import { M } from './weapons'
-import { CH, CA, RE, is, chibiLook, chibiCape, aura, loose, bowAttack, bowPainter, shout, GILT, MOON, POISON } from './hero-kit'
+import { CH, CA, RE, is, chibiLook, chibiCape, aura, loose, bowAttack, bowPainter, crossbowPainter, shout, GILT, MOON, POISON } from './hero-kit'
 import type { HeroArt } from './heroes'
 
 /** Scene effects a keyframe can call for, through the `fxk` pose parameter. */
@@ -64,7 +64,7 @@ const archer: HeroArt = {
             rect(s, x - 5, y + 7, 10, 1, C.bone0)
         },
         head: (s, x, y, p) => chibiHead(s, ROOKIE_HEAD, x, y, p),
-        weapon: bowPainter(M.wood, 9),
+        weapon: bowPainter(M.wood, 7),
         fx: (dst, p, t) => {
             if (is(p, FXK.Release)) loose(dst, p[HP.wa]!, C.bone1, false)
             if (is(p, FXK.Aim)) {
@@ -94,7 +94,7 @@ const archer: HeroArt = {
 
 // ═══════════════════════════════════════════════════════════════ Bowman (elite)
 // A peaked green cap with a long red feather, a green jerkin under a scalloped capelet, and
-// a longbow nearly as tall as he is.
+// a middle-sized bow, a step up from the short bow.
 
 const BOWMAN_HEAD = head([
     '..z.........',
@@ -128,7 +128,7 @@ const bowman: HeroArt = {
             px(s, x + 1, y + 5, C.gold2)
         },
         head: (s, x, y, p) => chibiHead(s, BOWMAN_HEAD, x, y, p),
-        weapon: bowPainter(M.wood, 13),
+        weapon: bowPainter(M.wood, 11),
         fx: (dst, p, t) => {
             if (is(p, FXK.Release)) loose(dst, p[HP.wa]!, C.bone1, false)
             if (is(p, FXK.Aim)) {
@@ -161,7 +161,7 @@ const bowman: HeroArt = {
 
 // ═══════════════════════════════════════════════════════════════ Marksman (master)
 // A charcoal wide-brimmed hat with a white plume, a long teal duster whose tails reach his
-// boots, a red scarf, and a gilded war bow. He takes every shot from one knee.
+// boots, a red scarf, and a gilded longbow taller than he is. He takes every shot from one knee.
 
 const MARKSMAN_HEAD = head([
     'w.............',
@@ -174,7 +174,8 @@ const MARKSMAN_HEAD = head([
     ...face(1, 1)
 ], 6, 10)
 
-const MARKSMAN_REST = rest({ hx: 5, hy: 3, wa: 0.35, bhx: 1, bhy: 5, ffx: 3, bfx: -3 })
+// the longbow is carried slanted, so its lower tip stays clear of the ground
+const MARKSMAN_REST = rest({ hx: 5, hy: 2, wa: 0.75, bhx: 1, bhy: 5, ffx: 3, bfx: -3 })
 const GILDED = [C.gold0, C.gold1, C.gold2] as const
 
 const marksman: HeroArt = {
@@ -205,7 +206,7 @@ const marksman: HeroArt = {
             px(s, x + 4, y + 8, C.teal2)
         },
         head: (s, x, y, p) => chibiHead(s, MARKSMAN_HEAD, x, y, p, p[HP.glow]! > 0.5 ? C.gold2 : C.ink),
-        weapon: bowPainter(GILDED, 12, C.gold3),
+        weapon: bowPainter(GILDED, 15, C.gold3),
         fx: (dst, p, t) => {
             if (is(p, FXK.Release)) loose(dst, p[HP.wa]!, C.gold3, false)
             if (is(p, FXK.Aim)) {
@@ -220,16 +221,16 @@ const marksman: HeroArt = {
         }
     }),
     clips: {
-        idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 4, bhy: 6 }], [1.4, {}]], MARKSMAN_REST),
+        idle: hclip('idle', 1.4, true, [[0, {}], [0.7, { crouch: 1, hy: 3, bhy: 6 }], [1.4, {}]], MARKSMAN_REST),
         // the kneeling precision shot
         attack: hclip('attack', 1.0, false, [
             [0, {}],
-            [0.1, { kneel: 1, crouch: 3, wa: 0, hx: 8, hy: 0, bhx: 9, bhy: 0, aux: 0.1, ffx: 5 }, Ease.Out, CH],
+            [0.1, { kneel: 1, crouch: 3, wa: -0.25, hx: 8, hy: -3, bhx: 9, bhy: -3, aux: 0.1, ffx: 5 }, Ease.Out, CH],
             [0.3, { aux: 1, bhx: 3 }, Ease.InOut, CH],
-            [0.4, { aux: 0, bhx: -1, bhy: -1, fxk: FXK.Release, lean: -1 }, Ease.Hold, CA],
+            [0.4, { aux: 0, bhx: -1, bhy: -4, fxk: FXK.Release, lean: -1 }, Ease.Hold, CA],
             [0.5, { fxk: 0 }, Ease.Hold, RE],
             [0.7, {}, Ease.Linear],
-            [1.0, { kneel: 0, crouch: 0, wa: 0.35, hx: 5, hy: 3, bhx: 1, bhy: 5, ffx: 3, lean: 0, aux: 0 }]
+            [1.0, { kneel: 0, crouch: 0, wa: 0.75, hx: 5, hy: 2, bhx: 1, bhy: 5, ffx: 3, lean: 0, aux: 0 }]
         ], MARKSMAN_REST),
         // Arrow Rain: aim steeply skyward and empty the quiver in two sheaves
         cast: hclip('cast', 1.8, false, [
@@ -241,7 +242,7 @@ const marksman: HeroArt = {
             [1.0, { aux: 0.8, bhx: 2, bhy: -2, fxk: 0 }, Ease.Out, CA],
             [1.1, { aux: 0, bhx: -2, bhy: 0, fxk: FXK.Volley }, Ease.Hold, CA],
             [1.2, { fxk: 0 }, Ease.Hold, RE],
-            [1.8, { wa: 0.35, hx: 5, hy: 3, bhx: 1, bhy: 5, lean: 0, tilt: 0, glow: 0, aux: 0 }]
+            [1.8, { wa: 0.75, hx: 5, hy: 2, bhx: 1, bhy: 5, lean: 0, tilt: 0, glow: 0, aux: 0 }]
         ], MARKSMAN_REST),
         hit: hitClip(MARKSMAN_REST),
         death: deathClip(MARKSMAN_REST)
@@ -249,8 +250,9 @@ const marksman: HeroArt = {
 }
 
 // ═══════════════════════════════════════════════════════════════ Hunter (elite)
-// A fox-eared hood up over his hair, fur-trimmed leathers, a quiver and a recurve bow.
-// Basic Attack looses three (strikesPerAttack 3).
+// A fox-eared hood up over his hair, fur-trimmed leathers, a bolt case and a steel-prodded
+// crossbow, the Hunter branch's mark against the Bowman branch's bows. Basic Attack looses three
+// (strikesPerAttack 3).
 
 const HUNTER_HEAD = head([
     '.bO....bO...',
@@ -275,7 +277,7 @@ const hunter: HeroArt = {
         pants: C.brown1, pantsDk: C.brown0, boot: C.brown0, bootHi: C.bone0,
         arm: C.brown2, armLow: C.brown3, armBack: C.brown1, armBackLow: C.brown2, hand: C.skin1,
         back: (s, x, y) => {
-            line(s, x - 6, y, x - 3, y + 8, C.brown1, 3) // quiver
+            line(s, x - 6, y, x - 3, y + 8, C.brown1, 3) // bolt case
             px(s, x - 7, y - 2, C.red2); px(s, x - 6, y - 3, C.red2); px(s, x - 5, y - 2, C.bone1)
         },
         torso: (s, x, y) => {
@@ -289,7 +291,7 @@ const hunter: HeroArt = {
             px(s, x + 1, y + 5, C.gold2)
         },
         head: (s, x, y, p) => chibiHead(s, HUNTER_HEAD, x, y, p),
-        weapon: bowPainter(M.darkwood, 11),
+        weapon: crossbowPainter(M.darkwood, M.steel),
         fx: (dst, p, t) => {
             if (is(p, FXK.Release)) loose(dst, p[HP.wa]!, C.orange, false)
             if (is(p, FXK.BigRelease)) loose(dst, p[HP.wa]!, C.red2, true)
@@ -316,8 +318,8 @@ const hunter: HeroArt = {
 
 // ═══════════════════════════════════════════════════════════════ Beast Master (master)
 // A wolf's pelt worn as a cloak with its head for a hood — ears up, snout and teeth over his
-// brow, a gold glass eye — a claw charm and a horn at the belt. The Wolf itself is a summon
-// (summons.ts). Basic Attack looses four (strikesPerAttack 4).
+// brow, a gold glass eye — a claw charm, a horn at the belt, and a crossbow with a prod of
+// bone. The Wolf itself is a summon (summons.ts). Basic Attack looses four (strikesPerAttack 4).
 
 const WOLF_HOOD = face(0, 4).map((row, i) => i < 3 ? '5' + row.slice(1) : row)
 
@@ -332,6 +334,8 @@ const BEAST_HEAD = head([
     '5hHHHHHHHHsH....',
     ...WOLF_HOOD
 ], 5, 9)
+
+const BONE = [C.bone0, C.bone1, C.white] as const
 
 const BEAST_REST = rest({ hx: 5, hy: 3, wa: 0.35, bhx: 1, bhy: 5, ffx: 3, bfx: -3 })
 
@@ -359,7 +363,7 @@ const beastMaster: HeroArt = {
             px(s, x - 5, y + 5, C.bone0); px(s, x, y + 6, C.gold2)
         },
         head: (s, x, y, p) => chibiHead(s, BEAST_HEAD, x, y, p, p[HP.glow]! > 0.5 ? C.steel3 : C.ink),
-        weapon: bowPainter(M.wood, 11, C.bone1),
+        weapon: crossbowPainter(M.wood, BONE, C.bone1),
         fx: (dst, p, t) => {
             if (is(p, FXK.Release)) loose(dst, p[HP.wa]!, C.steel3, false)
             if (is(p, FXK.Whistle)) shout(dst, J.headX + 6, J.headY - 3, t, C.steel3, 0.6)
