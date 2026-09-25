@@ -40,7 +40,7 @@ import { artById, bake, type Baked } from './catalog'
 import { HERO_ART } from './heroes'
 import { CHASSIS, championLook } from './champions'
 import { ENEMY_RIGS, ELITE_MARK, drawEliteMark, type EnemyWeapon } from './enemies'
-import { NUMBER_STYLES, type NumberStyle } from './feedback'
+import { NUMBER_STYLES, drawNumberAt, type NumberStyle } from './feedback'
 import { VL, clock } from './vfx-kit'
 import { VFX_BY_ID, type VfxDef } from './vfx'
 import { SW, SH, FLOOR_Y, SCROLL_PERIOD, WORLD_SCENES, reflectWater, type WorldScene } from './scenery'
@@ -187,7 +187,7 @@ interface Proj {
     from: Unit | null, to: Unit | null
 }
 interface Ring { live: boolean, x: number, y: number, t: number, big: boolean }
-interface Num { live: boolean, x: number, y: number, t: number, style: NumberStyle, text: string, hold: boolean }
+interface Num { live: boolean, x: number, y: number, dx: number, t: number, style: NumberStyle, text: string, hold: boolean }
 
 /** How long a stacked (held) number stays up, against 0.9 s for a rising one. */
 const HOLD_LIFE = 1.8
@@ -306,7 +306,7 @@ export class BattleDemo {
     private flash = 0
     private flashColor: number = C.white
     private slowmo = 0
-    private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, t: 0, style: NUMBER_STYLES[0]!, text: '', hold: false }))
+    private nums: Num[] = Array.from({ length: 24 }, () => ({ live: false, x: 0, y: 0, dx: 0, t: 0, style: NUMBER_STYLES[0]!, text: '', hold: false }))
     private heroCine: CinematicVfx | null = null
     private cine: Cine | null = null
     private water = -1
@@ -468,6 +468,8 @@ export class BattleDemo {
         this.numCursor = (this.numCursor + 1) % this.nums.length
         const list = NUM_TEXT[kind]!
         n.live = true; n.x = x; n.y = y; n.t = 0; n.hold = hold
+        // loose numbers scatter a few px so a burst of hits doesn't print on one spot; stacks stay aligned
+        n.dx = hold ? 0 : Math.round((Math.random() - 0.5) * 8)
         n.style = kind === 'normal' ? NUMBER_STYLES[0]! : kind === 'crit' || kind === 'total' ? NUMBER_STYLES[1]! : kind === 'heal' ? NUMBER_STYLES[2]! : NUMBER_STYLES[3]!
         n.text = list[Math.floor(Math.random() * list.length)]!
     }
@@ -504,7 +506,7 @@ export class BattleDemo {
         else this.struck(tgt, JUICE.hit.hold)
         if (i === c.def.cinematic.hits.length - 1) {
             const f = c.first
-            this.number(f.x + 6, f.y - (f.boss ? 52 : 40) - f.stack * 7 - 4, 'total', true)
+            this.number(f.x + 6, f.y - (f.boss ? 52 : 40) - f.stack * 7 - 8, 'total', true)
         }
     }
 
@@ -926,5 +928,5 @@ function drawNumber(s: Surface, n: Num): void {
     // a held number pops up 3px and stays put in its stack; a loose one floats away
     const rise = n.hold ? Math.min(3, Math.round(n.t * 30)) : Math.round((1 - (1 - u) * (1 - u)) * 14)
     if (u > 0.75 && (Math.floor(n.t * 10) & 1)) return
-    textOut(s, n.text, n.x, n.y - rise, n.style.color, n.style.font, 1, 1, 2, n.style.shadow, n.style.bevel ?? -1)
+    drawNumberAt(s, n.style, n.text, n.x + n.dx, n.y - rise, n.t)
 }

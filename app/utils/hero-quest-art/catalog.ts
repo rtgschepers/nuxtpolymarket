@@ -32,7 +32,7 @@ import { CHAMPION_ABILITY_POOL, CHAMPION_BY_ID, championDisplayName, abilityId  
 import { SKILLS } from '../../../shared/utils/hero-quest/content/skills'
 import { ARTIFACTS } from '../../../shared/utils/hero-quest/content/artifacts'
 import { GEAR } from '../../../shared/utils/hero-quest/content/gear'
-import { NUMBER_STYLES, drawNumberPop, drawNumberAtlas, numberAtlasWidth, drawPartyFrame, drawCooldown, drawEnrageTimer, drawAddWaveSpawn, drawPhaseShift, drawRevealBase, REVEAL_LUT, REVEAL_SIZE } from './feedback'
+import { NUMBER_STYLES, drawNumberPop, drawNumberAtlas, numberAtlasWidth, numberHeight, drawPartyFrame, drawCooldown, drawEnrageTimer, drawAddWaveSpawn, drawPhaseShift, drawRevealBase, REVEAL_LUT, REVEAL_SIZE } from './feedback'
 import { Surface as Surf, blit, rect } from './surface'
 import { WORLD_SCENES, SW, SH, BG_FRAMES } from './scenery'
 import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawLogo, drawAppIcon, drawSplash } from './ui-art'
@@ -96,6 +96,11 @@ export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly
         n: 3,
         label: 'Round 3 · chibi summons',
         prefixes: ['summon/', 'vfx/skill_disciple', 'vfx/skill_raise_dead', 'vfx/skill_mans_best_friend']
+    },
+    {
+        n: 4,
+        label: 'Round 4 · damage numbers',
+        prefixes: ['feedback/number/']
     }
 ]
 
@@ -344,7 +349,7 @@ function feedbackAssets(): ArtAsset[] {
     for (const st of NUMBER_STYLES) {
         out.push(anim(`feedback/number/${st.id}`, 'feedback', 'Damage numbers', `${st.label} — pop`, 80, 32, 9, false, (d, t) => drawNumberPop(d, st, st.sample, 40, 26, t)))
         const w = numberAtlasWidth(st)
-        out.push(still(`feedback/number/${st.id}_atlas`, 'feedback', 'Damage numbers', `${st.label} — glyph atlas`, w, st.font === 'big' ? 14 : 12, d => drawNumberAtlas(d, st)))
+        out.push(still(`feedback/number/${st.id}_atlas`, 'feedback', 'Damage numbers', `${st.label} — glyph atlas`, w, numberHeight(st) + 7, d => drawNumberAtlas(d, st)))
     }
     out.push(anim('feedback/party_frame', 'feedback', 'HP bar + party frame', 'Portrait, HP (taking a hit), status pips', 72, 22, 10, false, (d, t) => drawPartyFrame(d, t)))
     const sample = CLASS_SKILL_ICONS.skill_whirlwind!

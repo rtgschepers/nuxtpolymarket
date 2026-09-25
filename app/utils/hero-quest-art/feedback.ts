@@ -8,39 +8,67 @@
 
 import { C, type ColorName } from './palette'
 import { Surface, rect, px, line, disc, ring, tri, ditherDisc, rampLut, hash2 } from './surface'
-import { drawText, textWidth, type FontName } from './font'
+import { drawText, fontHeight, textRamp, textWidth, type FontName } from './font'
 import { qt, pr, burst, shock, star, R } from './vfx-kit'
 import { classNodeIcon, STATUS_ICONS  } from './icons-misc'
 
 // ── Damage numbers ─────────────────────────────────────────────────────────────────
 
+/**
+ * One typeface for every number: the 3×5 font for hits, heals and misses, and its 5×7 cut
+ * (`mid`, the same letterforms at about 1.5×, two-pixel stems) for crits and skill totals. A
+ * straight 2× read far too big once the stage was scaled up, and a 1.5× stretch of the 3×5
+ * would give uneven strokes. Each fills with a gradient cooling from a white-hot top (`ramp`,
+ * top to bottom) inside an ink outline — the skill banner's treatment.
+ */
 export interface NumberStyle {
     id: 'normal' | 'crit' | 'heal' | 'miss'
     label: string
     sample: string
     font: FontName
-    color: number
+    scale: number
+    ramp: readonly number[]
+    /** Outline colour. */
     shadow: number
-    bevel?: number
 }
 
 export const NUMBER_STYLES: readonly NumberStyle[] = [
-    // round 2: the video's chunky numbers — hits in outlined gold, crits in outlined red
-    { id: 'normal', label: 'Normal hit', sample: '1.24K', font: 'small', color: C.gold2, shadow: C.ink, bevel: C.gold3 },
-    { id: 'crit', label: 'Crit hit', sample: '8.61K!', font: 'big', color: C.red2, shadow: C.ink, bevel: C.red3 },
-    { id: 'heal', label: 'Heal', sample: '+356', font: 'small', color: C.green4, shadow: C.green0 },
-    { id: 'miss', label: 'Miss / evasion', sample: 'MISS', font: 'small', color: C.steel2, shadow: C.stone0 }
+    { id: 'normal', label: 'Normal hit', sample: '1.24K', font: 'small', scale: 1, ramp: [C.white, C.gold3, C.gold2, C.gold2, C.gold1], shadow: C.ink },
+    { id: 'crit', label: 'Crit hit', sample: '8.61K!', font: 'mid', scale: 1, ramp: [C.white, C.red3, C.red3, C.red2, C.red2, C.red1], shadow: C.ink },
+    { id: 'heal', label: 'Heal', sample: '+356', font: 'small', scale: 1, ramp: [C.white, C.green4, C.green3, C.green3, C.green2], shadow: C.ink },
+    { id: 'miss', label: 'Miss / evasion', sample: 'MISS', font: 'small', scale: 1, ramp: [C.white, C.steel3, C.steel2, C.steel2, C.steel1], shadow: C.ink }
 ]
 
-/** The pop: rises, overshoots on scale for crits, then blinks out. (x, y) is the spawn point. */
+/** A number's first frames are solid white: the flash it lands with. */
+export const NUMBER_FLASH: readonly number[] = [C.white]
+/** Seconds a new number shows white, and a crit hops before it settles. */
+export const NUMBER_FLASH_FOR = 0.05
+export const CRIT_HOP_FOR = 0.1
+/** How far a crit hops as it lands, in px. */
+const CRIT_HOP = 2
+
+/**
+ * Draw one number `t` seconds after it spawned, centred on x with its top at y: white for its
+ * first frames, and a crit landing with a hop before it settles.
+ */
+export function drawNumberAt(s: Surface, style: NumberStyle, text: string, x: number, y: number, t: number): void {
+    const hop = style.id === 'crit' && t < CRIT_HOP_FOR ? CRIT_HOP : 0
+    textRamp(s, text, x, y - hop, t < NUMBER_FLASH_FOR ? NUMBER_FLASH : style.ramp, style.font, style.scale, 1, style.shadow)
+}
+
+/** A number style's glyph height in px. */
+export function numberHeight(style: NumberStyle): number {
+    return fontHeight(style.font) * style.scale
+}
+
+/** The pop: lands, rises, then blinks out. (x, y) is the spawn point. */
 export function drawNumberPop(s: Surface, style: NumberStyle, text: string, x: number, y: number, t: number): void {
     const u = qt(t) / 0.9
     if (u >= 1) return
     const rise = R((1 - (1 - u) * (1 - u)) * 14)
     if (u > 0.75 && (Math.floor(qt(t) * 10) & 1)) return
-    const scale = style.id === 'crit' && u < 0.15 ? 2 : 1
     const wobble = style.id === 'miss' ? R(Math.sin(u * 12) * 1) : 0
-    drawText(s, text, x + wobble, y - rise - (scale - 1) * 4, style.color, { font: style.font, scale, align: 1, shadow: 2, shadowColor: style.shadow, bevel: style.bevel })
+    drawNumberAt(s, style, text, x + wobble, y - rise - (numberHeight(style) - 5), qt(t))
 }
 
 /** Glyph atlas for a style: every character the battle prints, in one row. */
@@ -48,14 +76,15 @@ export const NUMBER_ATLAS_CHARS = '0123456789.KMBT+-!MISS'
 export function drawNumberAtlas(s: Surface, style: NumberStyle): void {
     let x = 2
     for (const ch of '0123456789.KMBT+-!') {
-        x += drawText(s, ch, x, 3, style.color, { font: style.font, align: 0, shadow: 2, shadowColor: style.shadow, bevel: style.bevel }) + 3
+        x += textRamp(s, ch, x, 3, style.ramp, style.font, style.scale, 0, style.shadow) + 3
     }
-    drawText(s, 'MISS', x, 3, style.color, { font: style.font, shadow: 2, shadowColor: style.shadow })
+    // a miss only ever prints in the small cut
+    if (style.font === 'small') textRamp(s, 'MISS', x, 3, style.ramp, style.font, style.scale, 0, style.shadow)
 }
 export function numberAtlasWidth(style: NumberStyle): number {
     let w = 4
-    for (const ch of '0123456789.KMBT+-!') w += textWidth(ch, style.font) + 3
-    return w + textWidth('MISS', style.font) + 4
+    for (const ch of '0123456789.KMBT+-!') w += textWidth(ch, style.font, style.scale) + 3
+    return w + (style.font === 'small' ? textWidth('MISS', style.font, style.scale) : 0) + 4
 }
 
 // ── Party frame + HP bar ───────────────────────────────────────────────────────────
