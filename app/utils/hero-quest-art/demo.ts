@@ -1,8 +1,8 @@
 // A live battle vignette built from the finished assets — the proof that they play together.
 //
 // Party on the left (the Hero in any class plus five Champions), a wave of six of the chosen
-// world's trash on the right with an elite among them, and every fourth wave that world's boss
-// making its entrance. Both sides stand on the 3 front / 3 back formation grid, which the
+// world's trash on the right with an elite among them, and every other wave one of that world's
+// two bosses making its entrance: the boss, then the super boss, in turn. Both sides stand on the 3 front / 3 back formation grid, which the
 // side-on camera shows as three ranks of two. Each unit runs the state machine the art is
 // authored for:
 //
@@ -326,7 +326,8 @@ export class BattleDemo {
     private numCursor = 0
     private world = 1
     private classId = 'class_beginner'
-    private bossBaked: Baked[] = []
+    /** Frame tables for the world's boss and super boss, swapped onto the one boss body. */
+    private bossFrames: Baked[][] = []
     private trash: Baked[][] = []
     private rigFrames: Baked[][] = []
     paused = false
@@ -371,19 +372,21 @@ export class BattleDemo {
         // the world's trash on three rigs, the middle one elite
         const rigs: EnemyWeapon[] = ['sword', 'axe', 'staff', 'bow']
         this.trash = rigs.map(r => ['idle', 'attack', 'hit', 'death'].map(st => bake(artById(`enemy/${w.id}/${r}/${st}`)!)))
-        this.bossBaked = ['idle', 'attack', 'hit', 'death', 'entry'].map(st => bake(artById(`boss/${w.id}/${st}`)!))
+        this.bossFrames = [`boss/${w.id}`, `superboss/${w.id}`].map(kind => {
+            const b = ['idle', 'attack', 'hit', 'death', 'entry'].map(st => bake(artById(`${kind}/${st}`)!))
+            return [b[0]!, b[1]!, b[1]!, b[2]!, b[3]!, b[4]!, b[0]!]
+        })
         // frame tables per rig, built once so a wave only swaps references
         this.rigFrames = this.trash.map(rig => [rig[0]!, rig[1]!, rig[1]!, rig[2]!, rig[3]!, rig[0]!, rig[0]!])
-        const b = this.bossBaked
-        const bossFrames = [b[0]!, b[1]!, b[1]!, b[2]!, b[3]!, b[4]!, b[0]!]
         // a fixed pool: a wave of six trash bodies and one boss, reset in place each wave
         const foes = [0, 1, 2, 3, 4, 5].map(i => this.unit(1, VL.foes[i]!, this.rigFrames[i % 4]!, [ENEMY_RIGS.sword.attack], null))
-        const boss = this.unit(1, VL.foes[1], bossFrames, [], null, 6)
+        const boss = this.unit(1, VL.foes[1], this.bossFrames[0]!, [], null, 6)
         boss.boss = true
         this.units = [heroUnit, ...champs, ...foes, boss]
         for (const u of [...foes, boss]) u.state = U.Gone
         const name = w.name.toUpperCase()
-        this.labels = Array.from({ length: 99 }, (_, i) => `${name}  WAVE ${i + 1}`)
+        const bossLabels = ['BOSS', 'SUPER BOSS']
+        this.labels = Array.from({ length: 99 }, (_, i) => `${name}  WAVE ${i + 1}${i % 2 ? '  ' + bossLabels[(i >> 1) % bossLabels.length] : ''}`)
         this.wave = 0
         this.spawnWave()
         this.particles.clear()
@@ -407,7 +410,9 @@ export class BattleDemo {
     }
 
     private spawnWave(): void {
-        const bossWave = this.wave % 4 === 3
+        // boss waves alternate with trash, so both bosses come round quickly for review
+        const bossWave = this.wave % 2 === 1
+        const which = (this.wave >> 1) % this.bossFrames.length
         for (let i = PARTY; i < this.units.length; i++) {
             const u = this.units[i]!
             const active = u.boss ? bossWave : !bossWave
@@ -425,7 +430,10 @@ export class BattleDemo {
                 u.elite = slot === 1
                 u.hp = u.elite ? 6 : 3
             }
-            if (u.boss) u.hp = 10
+            if (u.boss && active) {
+                u.frames = this.bossFrames[which]!
+                u.hp = which & 1 ? 14 : 10
+            }
         }
         this.wave++
         this.label = this.labels[(this.wave - 1) % this.labels.length]!
