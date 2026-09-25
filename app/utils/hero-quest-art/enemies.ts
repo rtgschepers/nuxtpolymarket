@@ -123,7 +123,8 @@ function eyes(s: Surface, x: number, y: number, c: number, p: Float32Array): voi
     px(s, x, y, c)
 }
 
-// 1 · Thornwick Vale — Bramble Goblin: green, big-eared, wrapped in feral hedgerow.
+// 1 · Thornwick Vale — Bramble Goblin: green, big-eared, in a leather jerkin bound in thorny
+// vine and berries, barefoot.
 const brambleGoblin: WorldSkin = {
     legLen: 6, torsoLen: 7,
     skin: [C.green1, C.green2, C.green3],
@@ -142,12 +143,15 @@ const brambleGoblin: WorldSkin = {
     torso: (s, x, y) => {
         rect(s, x - 3, y, 7, 7, C.brown2)
         rect(s, x - 3, y, 1, 7, C.brown1)
+        rect(s, x + 1, y + 1, 2, 2, C.brown3)
         line(s, x - 3, y + 1, x + 3, y + 5, C.green1) // bramble wrap
-        line(s, x - 3, y + 4, x + 3, y + 2, C.green1)
-        px(s, x - 1, y + 3, C.red2); px(s, x + 2, y + 4, C.red3)
-        rect(s, x - 3, y + 6, 7, 1, C.brown0)
+        line(s, x - 3, y + 4, x + 3, y + 2, C.green0)
+        px(s, x - 1, y + 3, C.red2); px(s, x + 2, y + 4, C.red3); px(s, x - 2, y + 2, C.red2) // berries
+        rect(s, x - 3, y + 6, 7, 1, C.brown0) // ragged hem
+        px(s, x - 2, y + 7, C.brown1); px(s, x + 1, y + 7, C.brown1)
     },
-    pants: C.green2, pantsDk: C.green1, boot: C.brown0, bootHi: C.brown2,
+    // brown trousers and bare green feet
+    pants: C.brown1, pantsDk: C.brown0, boot: C.green1, bootHi: C.green3,
     arm: C.green2, armLow: C.green2, armBack: C.green1, armBackLow: C.green1, hand: C.green3,
     blade: M.iron, haft: M.wood, gem: M.nature, gemStyle: Gem.Totem, accent: C.green4
 }
