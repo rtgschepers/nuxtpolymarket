@@ -90,7 +90,14 @@ export interface ArtAsset {
  * The count restarted on 2026-09-25, once the chibi style was adopted and every Hero class
  * was on it; the next round is 1. The earlier rounds are recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
+    // Rounds 1 and 2 changed the live stage, not any asset, so they have no chip here
+    {
+        n: 3,
+        label: 'Round 3 · chibi summons',
+        prefixes: ['summon/', 'vfx/skill_disciple', 'vfx/skill_raise_dead', 'vfx/skill_mans_best_friend']
+    }
+]
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }

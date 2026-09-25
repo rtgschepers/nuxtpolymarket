@@ -10,32 +10,11 @@ import { disc, hash2, line, px, rect, type Surface } from './surface'
 import { HP, J, fxX, fxY, hclip, hitClip, deathClip, rest } from './rig'
 import { chibiHead, face, head, ROOKIE_HEAD } from './chibi'
 import { M, tip, staff, tome, Gem, type Mat } from './weapons'
-import { CH, CA, RE, is, chibiLook, chibiCape, aura, thickArc, ARCANE, FIRE, FROST, POISON, SPIRIT } from './hero-kit'
+import { CH, CA, RE, is, chibiLook, chibiCape, robe, aura, thickArc, ARCANE, FIRE, FROST, POISON, SPIRIT } from './hero-kit'
 import type { HeroArt } from './heroes'
 
 /** Scene effects a keyframe can call for, through the `fxk` pose parameter. */
 const enum FXK { None, Bolt, Embers, Gather, BigBolt, Storm, Gust, Rise, Wail }
-
-/**
- * A robe to the floor, flaring as it falls, the hem swinging a pixel on the beat: shadow
- * side, lit edge and a trim band along the hem. Replaces the legs. The hem rides `jump`, so a
- * caster who rises leaves the ground rather than stretching his robe down to it.
- */
-function robe(cloth: Mat, trim: number, flare = 2) {
-    return (s: Surface, x: number, hipY: number, p: Float32Array, t: number) => {
-        const sway = step(t, 3, 2)
-        const floor = J.oy + Math.round(p[HP.jump]!)
-        for (let y = hipY; y < floor; y++) {
-            const u = (y - hipY) / Math.max(1, floor - hipY - 1)
-            const half = Math.round(5 + u * flare)
-            const off = y === floor - 1 ? sway : 0
-            rect(s, x - half + off, y, half * 2, 1, cloth[1])
-            rect(s, x - half + off, y, 2, 1, cloth[0])
-            px(s, x + half - 2 + off, y, cloth[2])
-        }
-        rect(s, x - 5 - flare + sway, floor - 1, (5 + flare) * 2, 1, trim)
-    }
-}
 
 /**
  * A spell bolt leaving the staff head: a round core cooling through `ramp` with a stepped

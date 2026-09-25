@@ -220,3 +220,24 @@ export function chibiCape(s: Surface, x: number, y: number, len: number, t: numb
     }
     rect(s, x - 6 - 3 - flick, y + len - 1, 5, 1, dk)
 }
+
+/**
+ * A robe to the floor, flaring as it falls, the hem swinging a pixel on the beat: shadow
+ * side, lit edge and a trim band along the hem. Replaces the legs. The hem rides `jump`, so a
+ * caster who rises leaves the ground rather than stretching his robe down to it.
+ */
+export function robe(cloth: Mat, trim: number, flare = 2) {
+    return (s: Surface, x: number, hipY: number, p: Float32Array, t: number) => {
+        const sway = step(t, 3, 2)
+        const floor = J.oy + Math.round(p[HP.jump]!)
+        for (let y = hipY; y < floor; y++) {
+            const u = (y - hipY) / Math.max(1, floor - hipY - 1)
+            const half = Math.round(5 + u * flare)
+            const off = y === floor - 1 ? sway : 0
+            rect(s, x - half + off, y, half * 2, 1, cloth[1])
+            rect(s, x - half + off, y, 2, 1, cloth[0])
+            px(s, x + half - 2 + off, y, cloth[2])
+        }
+        rect(s, x - 5 - flare + sway, floor - 1, (5 + flare) * 2, 1, trim)
+    }
+}
