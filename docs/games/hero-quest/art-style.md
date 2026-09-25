@@ -47,16 +47,20 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 
 ### Done so far
 
+**The round count restarted on 2026-09-25**, once the chibi style was adopted and every Hero class was on it. `ART_ROUNDS` is empty, so the gallery opens on the first group. **The next round is Round 1.** The table below is the history before the restart. Those round numbers are no longer in the gallery.
+
 | Round | Scope |
 |---|---|
 | 2 · video style | **Heroes** Beginner, Warrior, Sorcerer, Hunter on the chibi body (5 states each) · their **skills** Haste, Whirlwind, Meteor Shower, Kill Shot as cinematics · **skill banners** · **damage numbers** (hit/crit) · **training dummy** as the video's scarecrow · **World 1 Thornwick Vale** background · live-stage presentation (tint, banner, stacked numbers, water reflection) |
 | 3 · scenery tier | Palette split into a character tier and a scenery tier · World 1 moved onto it · specs enforcing the split · palette swatch sheets in the gallery |
 | 4 · formation & march | Both sides on the 3 front / 3 back grid, shown as three ranks of two · World 1's field deepened to hold them · a sixth `move` state on every Hero and chassis (`walkClip` / `floatClip` in `rig.ts`, generated from each unit's own rest pose) · the party marches between waves while the scenery parallax-scrolls and the next wave closes in |
+| 5 · chibi classes | **The chibi style was adopted** (2026-09-25, after outside opinions: it beat the taller full-body restyle tried on the Sorcerer, which is gone). The other 11 classes rebuilt on the chibi body, and the Sorcerer back on the chibi body, then made more imposing than the Wizard (as the master, he must outclass the elite): he hovers over flame, with the biggest hat in the roster, a dark cape and high collar, and a fire orb circling him. The robe hem now rides `jump`, so floating casters leave the ground. The rest: Barbarian, Berserker, Knight, Paladin, Mage, Wizard, Shaman, Witch Doctor, Archer, Bowman, Marksman, Beast Master. The classic Hero definitions are deleted; the classes now live one file per line |
 
 ### Open
 
-- **Everything else is still round-1 art:** the other 12 classes, all Champions, enemies, bosses and summons, the other 58 VFX, and the other 9 worlds. On the stage the old enemies and Champions look undersized next to the chibi heroes.
-- **The classic versions still exist.** The four rebuilt classes and skills still have their old definitions in `heroes.ts` and `vfx.ts`. The chibi versions override them by ID (`...CHIBI_HEROES`, `CINEMATIC_BY_ID`). Delete the classic definitions once the style is adopted.
+- **Everything else is still round-1 art:** all Champions, enemies, bosses and summons, the other 58 VFX, and the other 9 worlds. On the stage the old enemies and Champions look undersized next to the chibi heroes.
+- **Only four skills are cinematics.** The other 12 classes cast with a sprite-level effect (aura, bolt, shout, slam, light column), not a `CinematicVfx`. Their skill VFX are still round-1 in `vfx.ts`.
+- **The classic skill VFX still exist.** The four cinematic skills override their old `vfx.ts` definitions by ID (`CINEMATIC_BY_ID`). Delete those once every skill is a cinematic.
 - **Later worlds blend with their enemies.** The measure in §7, taken 2026-09-24, flags Shattered Sky (93% of the fight band near its enemy colours), The Void (96%), Rimeholt (60%), Sunken Amarath (47%) and Duskspire (20%). Each gets fixed when that world moves onto the scenery tier.
 - **Exports are stale** (see §1).
 
@@ -64,7 +68,7 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 
 ## 4. Characters: the chibi body
 
-`chibi.ts` holds the body, `heroes-chibi.ts` the classes. A Look opts in with `body: drawChibi`. It rides the same `HP` pose parameters and resolves the same joints (`J`) as the classic rig, so clips, `Look.fx` painters and the VFX layer work unchanged.
+`chibi.ts` holds the body, `hero-kit.ts` the shared kit (`chibiLook`, `aura` and its colour ramps, `bowAttack`/`loose`, `shout`, `slam`, `lightColumn`, `chibiCape`), and `heroes-warrior.ts`, `heroes-mage.ts` and `heroes-archer.ts` the classes, one file per class line. `heroes.ts` merges them into `HERO_ART` and derives the Move state. A Look opts in with `body: drawChibi`. It rides the same `HP` pose parameters and resolves the same joints (`J`) as the classic rig, so clips, `Look.fx` painters and the VFX layer work unchanged.
 
 **Proportions,** in a 64×64 frame with the feet at y = 58, about 24 px tall:
 - Legs 5 px (`CHIBI_LEG`): 3 px columns, 4–5 px boots.
@@ -76,7 +80,9 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 **Heads are pixel maps** (`head(rows, neckCol, eyeCol)`, keys in `HEAD_KEY`):
 - Build a class head as its headgear rows followed by `...face(padL, padR)`. The six face rows are the rookie's face: fringe, eye, nose, plaster.
 - Heads are **bottom-aligned**: the eye sits 6 rows and the mouth 3 rows from the bottom in every head, so `chibiHead` can animate them by coordinate (squint on hurt, mouth open, glowing eyes on cast).
-- Current heads: bare mop (Beginner), kettle cap (Warrior), red hat with the tip folded back (Sorcerer, the video's fire witch), fox-eared hood (Hunter).
+- Headgear by class: bare mop (Beginner, Mage, Archer), kettle cap (Warrior), horned iron cap (Barbarian), wild hair under a red bandana (Berserker), plumed bascinet with cheek guards (Knight), winged gold helm (Paladin), tall starred blue hat (Wizard), red hat with the tip folded back (Sorcerer, the video's fire witch), feathered headband (Shaman), horned bone mask pushed up (Witch Doctor), peaked cap with a red feather (Bowman), charcoal wide brim with a white plume (Marksman), fox-eared hood (Hunter), wolf-head hood (Beast Master).
+- Wider headgear pads the face with `face(l, r)`, which shifts the neck and eye columns by `l`. Cheek guards and pelts replace the face rows' hair columns by hand (Knight, Beast Master).
+- **Keep the face clear.** Weapons draw after the head, so a shouldered great axe or an upright hammer covers the face. Rest them upright in front of the face (Barbarian) or head-down (Paladin). Pauldrons sit at the shoulder row, never above it, or they land on the chin.
 
 **Animation beats:**
 - **Idle:** a 1 px bob over 1.2–1.6 s.
@@ -171,7 +177,9 @@ Why that shape of rule: "background darker than the enemies" is wrong for near-b
 | File | What |
 |---|---|
 | `chibi.ts` | Chibi body, head pixel maps, `crescent()` |
-| `heroes-chibi.ts` | The four chibi classes; merged into `HERO_ART` in `heroes.ts` |
+| `hero-kit.ts` | Shared Hero kit: Look defaults, cast aura and ramps, bow clip, shout, slam, light column, cape |
+| `heroes-warrior.ts` · `heroes-mage.ts` · `heroes-archer.ts` | The 16 classes, one file per class line |
+| `heroes.ts` | `HERO_ART` registry, `HERO_STATES`, the derived `HERO_GAIT` |
 | `vfx-cinematic.ts` | The four cinematic skills, the impact kit, `cinematicStage()` |
 | `presentation.ts` | Skill banner, tint LUT |
 | `demo.ts` | Live stage: cinematics, held and stacked numbers, reflection pass |
