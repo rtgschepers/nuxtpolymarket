@@ -53,6 +53,21 @@ import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
 export const DEMO_W = SW
 export const DEMO_H = SH
 
+/**
+ * What the player sees of the scene. The stage always composes the full SW×SH scene; a closer
+ * camera crops a 16:9 window around the fight and hands that on, and because the display blits
+ * at the largest integer scale that fits, a smaller window is bigger pixels — Pixel Crusade's
+ * close-up (it runs at 256×144). No art changes size. The windows are placed on the formation:
+ * both sides span x 79–250 and stand on y 122–154, with the millpond below to y 180.
+ */
+export const CAMERAS = {
+    zoom1: { label: 'Zoom 1 · wide', x: 0, y: 0, w: SW, h: SH },
+    zoom2: { label: 'Zoom 2 · close', x: 53, y: 54, w: 224, h: 126 },
+    // between the two: one integer step of pixel size either side (6×, 7×, 8× on a 1080p screen)
+    zoom3: { label: 'Zoom 3 · between', x: 29, y: 27, w: 272, h: 153 },
+    tight: { label: 'Tight', x: 69, y: 72, w: 192, h: 108 }
+} as const
+export type CameraId = keyof typeof CAMERAS
 
 /** VL (the VFX stage) is placed inside the scene so effects line up with bodies. */
 const OX = 64
@@ -310,6 +325,9 @@ export class BattleDemo {
     private trash: Baked[][] = []
     private rigFrames: Baked[][] = []
     paused = false
+    camera: CameraId = 'zoom3'
+    /** One reusable window per camera, so switching allocates nothing in the loop. */
+    private views = Object.fromEntries(Object.entries(CAMERAS).map(([id, c]) => [id, new Surface(c.w, c.h, 0, 0)])) as Record<CameraId, Surface>
     /** HUD label, rebuilt only when the wave changes — never inside the loop. */
     private label = ''
     private labels: string[] = []
@@ -839,9 +857,16 @@ export class BattleDemo {
             const level = Math.ceil(this.flash * 2) * 3
             for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (bayer(x, y, level)) s.data[y * s.w + x] = this.flashColor
         }
-        textOut(s, this.label, 6, 5, C.bone1, 'small', 1, 0, 1, C.ink, -1)
-        if (c && c.t < c.def.dur) drawSkillBanner(s, c.banner, DEMO_W / 2, 14, c.t)
-        return s
+        // the camera: crop the window, then draw the HUD on what the player actually sees
+        const cam = CAMERAS[this.camera]
+        let out = s
+        if (cam.w !== SW) {
+            out = this.views[this.camera]
+            for (let y = 0; y < cam.h; y++) out.data.set(s.data.subarray((cam.y + y) * s.w + cam.x, (cam.y + y) * s.w + cam.x + cam.w), y * cam.w)
+        }
+        textOut(out, this.label, 6, 5, C.bone1, 'small', 1, 0, 1, C.ink, -1)
+        if (c && c.t < c.def.dur) drawSkillBanner(out, c.banner, cam.w / 2, 14, c.t)
+        return out
     }
 }
 
