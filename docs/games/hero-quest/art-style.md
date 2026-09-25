@@ -8,6 +8,7 @@ How Hero Quest's art is made and what it must look like. `asset-list.md` and `as
 
 - **All art is procedural code.** Drawers in `app/utils/hero-quest-art/`, registered in `catalog.ts`. No PixelLab, no image generation, no hand-painted PNGs. The PixelLab class portraits in `public/hero-quest/classes/` are inspiration only.
 - **One hero.** Every class is the same Beginner rookie, re-outfitted: messy brown hair, young face, a plaster on his cheek. Headgear, outfit, weapon and pose change per class; the face never does. Tier shows in the gear: base classes are novices in hand-me-downs, elites are specialised, masters are unmistakable.
+- **The Hero designs are locked** (2026-09-25). All 16 classes' looks, kits, weapons and clips are approved as they stand. Don't redesign a class or change its silhouette, colours or weapon without asking; a fix that keeps the design (a stray pixel, a clip running off the frame) is fine, but say what changed.
 - **Indexed pixels only.** A `Surface` stores palette indices, never colours. There is no alpha: fades are Bayer dither (`dither`, `ditherDisc`, `StampStyle.dissolve`) and dims or tints are palette remaps (`shadeLut`).
 - **10 fps stepped animation** (`ANIM_FPS`). Clips are keyframes over the `HP` pose parameters, sampled on the frame grid.
 - **Deterministic.** Layout and particle spread come from `hash2`, never `Math.random`, so an exported strip is identical from run to run. `Math.random` is allowed only in the live stage (`demo.ts`) for cosmetics.
@@ -47,7 +48,9 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 
 ### Done so far
 
-**The round count restarted on 2026-09-25**, once the chibi style was adopted and every Hero class was on it. `ART_ROUNDS` is empty, so the gallery opens on the first group. **The next round is Round 1.** The table below is the history before the restart. Those round numbers are no longer in the gallery.
+**The round count has restarted twice, both on 2026-09-25**: first once the chibi style was adopted, then again once the Hero designs were locked. `ART_ROUNDS` is empty, so the gallery opens on the first group. **The next round is Round 1.** The tables below are the history; none of those round numbers are in the gallery any more.
+
+#### First pass
 
 | Round | Scope |
 |---|---|
@@ -56,7 +59,7 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 | 4 · formation & march | Both sides on the 3 front / 3 back grid, shown as three ranks of two · World 1's field deepened to hold them · a sixth `move` state on every Hero and chassis (`walkClip` / `floatClip` in `rig.ts`, generated from each unit's own rest pose) · the party marches between waves while the scenery parallax-scrolls and the next wave closes in |
 | 5 · chibi classes | **The chibi style was adopted** (2026-09-25, after outside opinions: it beat the taller full-body restyle tried on the Sorcerer, which is gone). The other 11 classes rebuilt on the chibi body, and the Sorcerer back on the chibi body, then made more imposing than the Wizard (as the master, he must outclass the elite): he hovers over flame, with the biggest hat in the roster, a dark cape and high collar, and a fire orb circling him. The robe hem now rides `jump`, so floating casters leave the ground. The rest: Barbarian, Berserker, Knight, Paladin, Mage, Wizard, Shaman, Witch Doctor, Archer, Bowman, Marksman, Beast Master. The classic Hero definitions are deleted; the classes now live one file per line |
 
-### After the restart
+#### Second pass, after the first restart
 
 | Round | Scope |
 |---|---|
@@ -64,12 +67,15 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 | 2 · close-up camera | Pixel Crusade's item 5, camera half: `CAMERAS` in `demo.ts` crops a 16:9 window of the composed 320×180 scene, and the integer-scale fit shows a smaller window with bigger pixels. **Zoom 1** 320×180, the original (6× on a 1080p screen); **Zoom 2** 224×126 (8×); **Zoom 3** 272×153, between them (7×, **chosen and the default**: closer than the original, with room for a large boss); **Tight** 192×108 (10×, about Pixel Crusade's proportions). The HUD is drawn on the window. No art changed. Switch cameras on the Live stage with the select or live with keys 1–4, fullscreen included |
 | 3 · chibi summons | The three summons rebuilt in the chibi style, so they sit with chibi Heroes and, later, chibi Champions: the **Disciple** a hovering hooded acolyte with a bobbing halo, a sun-mace and a lantern; the **Raised Dead** a big-skulled skeleton with grave-green eyes, a ribcage, rags and a rusted sword; the **Wolf** a chibi creature with a head as big as its body, stubby legs and a bushy plume of a tail. They stay a little smaller than the Hero. Also shown in the Disciple, Raise Dead and Man's Best Friend skill effects. `robe()` moved into `hero-kit.ts` |
 | 4 · damage numbers | One typeface for every number (the 3×5, and its hand-drawn 1.5× mid cut for crits and totals) instead of two unrelated fonts, a banner-style gradient fill, and a white landing flash with a crit hop. See §5 |
+| 5 · chibi Champions | All 48 Champions and the four chassis on the chibi body, so they stand at the Heroes' scale. Each is still a row in `SKINS`; `championHead()` assembles a head on the Hero grid (12 wide, neck at column 5, eye at 9, face in the bottom six rows) by stamping pixel maps for the row's hair style, beard, elf ears and headgear, so each Champion has their own face, not the rookie's. Torsos are 10×8, robes use `robe()`, capes `chibiCape()`, the melee smear is a `crescent()`, and the rarity ladder is kept (trim; pauldron and cape; collar and chest gem; gold, back pauldron, wings and halo; mythic aura and spark). Rest poses raise the hands two rows for the shorter torso, and the tank's cast raise moved off the face. `chibiHead` gained `lid` and `mouth` options for visors and masks |
+| 6 · antler staves and bows | The totem staff head (`Gem.Totem`) with its carved face is now a pair of antlers lashed to the wood with a bead charm (`antlers()` in `weapons.ts`): the Shaman, Ordo, Vaelora and the Bramble Goblin's staff, plus the Totem Storm icon and effect, whose planted post wears the same antlers. The Hunter and Beast Master carry crossbows (`crossbow()`, `crossbowPainter`; steel prod for the Hunter, bone for the Beast Master) and the stage flies their shots as flat, fast quarrels. The bow line steps up in length: Archer short bow (7), Bowman middle bow (11), Marksman longbow (15), which he carries slanted and draws aiming a little upward from his knee so the lower limb stays inside the frame. The Berserker's hand axes had their blades on the upper side of the haft (`axe()` always put it there), so they pointed up and trailed every chop; `axe(…, under)` moves the blade to the leading side, and he now holds both axes forward at the ready instead of low by his boots. Every other single-bladed axe (Sorrek, Bastyn, each world's axe enemy) takes `under` too, so no swing trails its edge; double axes and the static icons are unchanged. The Knight now carries his shield in front: a smaller `ShieldStyle.Heater` (a kite cut to chibi size, so it no longer dips below the feet) painted in `over` after his pauldron, since a shield drawn as the `offhand` sits behind the body and always read as tucked under the shoulder. His pauldron, which started on the chin row, is a rounded plate on the shoulder (the chin sits on torso row 1). The Paladin read as Norse (winged helm, round gold shield, a hammer) and was redesigned as a holy knight: a steel helm with a gold brow cross and rim, the face open (a halo over it and a closed great helm were both tried and dropped), white-and-gold plate, a crimson cape, a white heater shield with a gold cross carried in front like the Knight's, and a `flangedMace` held raised at the ready |
 
 ### Open
 
 - **Zoom 3 is the chosen camera** (2026-09-25): closer than the original while a large boss still fits. The other cameras stay on the Live stage for comparison. Pixel Crusade's other half of item 5, darker scenes behind the fighters, hasn't been tried: World 1's bright afternoon was the user's choice.
 
-- **Everything else is still round-1 art:** all Champions, enemies, bosses and summons, the other 58 VFX, and the other 9 worlds. On the stage the old enemies and Champions look undersized next to the chibi heroes.
+- **Everything else is still round-1 art:** enemies and bosses, the other 58 VFX, and the other 9 worlds. On the stage the old enemies look undersized next to the chibi Heroes and Champions.
+- **Champion casts are still chassis-level.** Round 5 restyled the bodies, not the 7 ability effects; the chassis clips are shared per archetype, so two Champions of one archetype still swing identically.
 - **Only four skills are cinematics.** The other 12 classes cast with a sprite-level effect (aura, bolt, shout, slam, light column), not a `CinematicVfx`. Their skill VFX are still round-1 in `vfx.ts`.
 - **The classic skill VFX still exist.** The four cinematic skills override their old `vfx.ts` definitions by ID (`CINEMATIC_BY_ID`). Delete those once every skill is a cinematic.
 - **Later worlds blend with their enemies.** The measure in §7, taken 2026-09-24, flags Shattered Sky (93% of the fight band near its enemy colours), The Void (96%), Rimeholt (60%), Sunken Amarath (47%) and Duskspire (20%). Each gets fixed when that world moves onto the scenery tier.
@@ -91,7 +97,7 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 **Heads are pixel maps** (`head(rows, neckCol, eyeCol)`, keys in `HEAD_KEY`):
 - Build a class head as its headgear rows followed by `...face(padL, padR)`. The six face rows are the rookie's face: fringe, eye, nose, plaster.
 - Heads are **bottom-aligned**: the eye sits 6 rows and the mouth 3 rows from the bottom in every head, so `chibiHead` can animate them by coordinate (squint on hurt, mouth open, glowing eyes on cast).
-- Headgear by class: bare mop (Beginner, Mage, Archer), kettle cap (Warrior), horned iron cap (Barbarian), wild hair under a red bandana (Berserker), plumed bascinet with cheek guards (Knight), winged gold helm (Paladin), tall starred blue hat (Wizard), red hat with the tip folded back (Sorcerer, the video's fire witch), feathered headband (Shaman), horned bone mask pushed up (Witch Doctor), peaked cap with a red feather (Bowman), charcoal wide brim with a white plume (Marksman), fox-eared hood (Hunter), wolf-head hood (Beast Master).
+- Headgear by class: bare mop (Beginner, Mage, Archer), kettle cap (Warrior), horned iron cap (Barbarian), wild hair under a red bandana (Berserker), plumed bascinet with cheek guards (Knight), steel helm with a gold brow cross (Paladin), tall starred blue hat (Wizard), red hat with the tip folded back (Sorcerer, the video's fire witch), feathered headband (Shaman), horned bone mask pushed up (Witch Doctor), peaked cap with a red feather (Bowman), charcoal wide brim with a white plume (Marksman), fox-eared hood (Hunter), wolf-head hood (Beast Master).
 - Wider headgear pads the face with `face(l, r)`, which shifts the neck and eye columns by `l`. Cheek guards and pelts replace the face rows' hair columns by hand (Knight, Beast Master).
 - **Keep the face clear.** Weapons draw after the head, so a shouldered great axe or an upright hammer covers the face. Rest them upright in front of the face (Barbarian) or head-down (Paladin). Pauldrons sit at the shoulder row, never above it, or they land on the chin.
 
@@ -202,6 +208,7 @@ Why that shape of rule: "background darker than the enemies" is wrong for near-b
 | `hero-kit.ts` | Shared Hero kit: Look defaults, cast aura and ramps, bow clip, shout, slam, light column, cape |
 | `heroes-warrior.ts` · `heroes-mage.ts` · `heroes-archer.ts` | The 16 classes, one file per class line |
 | `heroes.ts` | `HERO_ART` registry, `HERO_STATES`, the derived `HERO_GAIT` |
+| `champions.ts` | The 48 Champion skins, `championHead()`, the four chassis |
 | `vfx-cinematic.ts` | The four cinematic skills, the impact kit, `cinematicStage()` |
 | `presentation.ts` | Skill banner, tint LUT |
 | `demo.ts` | Live stage: cinematics, held and stacked numbers, reflection pass |
