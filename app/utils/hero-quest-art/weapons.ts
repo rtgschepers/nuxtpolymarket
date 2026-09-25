@@ -84,16 +84,21 @@ export function dagger(s: Surface, hx: number, hy: number, a: number, blade: Mat
 }
 
 /** Axe: haft plus a bearded head. `double` gives a second bit (great axes). */
-export function axe(s: Surface, hx: number, hy: number, a: number, haft: number, head: Mat, wood: Mat, double = false): void {
+/**
+ * An axe from the hand along `a`. The blade sits on the side the haft rotates away from as `a`
+ * falls; `under` puts it on the other side, so an axe carried pointing down shows its edge
+ * downward and a chop that swings `a` upward leads with the edge.
+ */
+export function axe(s: Surface, hx: number, hy: number, a: number, haft: number, head: Mat, wood: Mat, double = false, under = false): void {
     const dx = Math.cos(a)
     const dy = Math.sin(a)
-    const nx = -dy
-    const ny = dx
+    const nx = under ? dy : -dy
+    const ny = under ? -dx : dx
     line(s, R(hx - dx * 3), R(hy - dy * 3), R(hx + dx * haft), R(hy + dy * haft), wood[1], 2)
     line(s, R(hx - dx * 3), R(hy - dy * 3), R(hx + dx * haft), R(hy + dy * haft), wood[2])
     const cx = hx + dx * (haft - 2)
     const cy = hy + dy * (haft - 2)
-    // blade on the "up" side of the haft (−normal), with a curved edge
+    // blade on the −normal side of the haft, with a curved edge
     for (let k = -3; k <= 3; k++) {
         const w = 5 - Math.abs(k) * 0.6
         const bx0 = cx + dx * k
@@ -140,6 +145,31 @@ export function mace(s: Surface, hx: number, hy: number, a: number, haft: number
     tip.x = ex; tip.y = ey
 }
 
+/** A flanged mace: a gripped haft and a head of four flanges around a spiked cap. */
+export function flangedMace(s: Surface, hx: number, hy: number, a: number, haft: number, head: Mat, grip: Mat): void {
+    const dx = Math.cos(a)
+    const dy = Math.sin(a)
+    const at2 = (u: number, v: number) => [R(hx + dx * u - dy * v), R(hy + dy * u + dx * v)] as const
+    const seg = (u0: number, v0: number, u1: number, v1: number, c: number, w = 1) => {
+        const [x0, y0] = at2(u0, v0)
+        const [x1, y1] = at2(u1, v1)
+        line(s, x0, y0, x1, y1, c, w)
+    }
+    seg(-2, 0, haft, 0, grip[1], 2)
+    seg(-2, 0, 1, 0, grip[0], 2)
+    for (let k = 0; k < 5; k++) {
+        const w = k === 0 || k === 4 ? 2 : 3
+        seg(haft + k, -w, haft + k, w, k === 1 ? head[2] : head[1])
+        const [ex, ey] = at2(haft + k, -w)
+        px(s, ex, ey, head[2])
+        const [fx, fy] = at2(haft + k, w)
+        px(s, fx, fy, head[0])
+    }
+    const [tx, ty] = at2(haft + 5, 0)
+    px(s, tx, ty, C.white)
+    tip.x = tx; tip.y = ty
+}
+
 export function spear(s: Surface, hx: number, hy: number, a: number, len: number, head: Mat, wood: Mat): void {
     const dx = Math.cos(a)
     const dy = Math.sin(a)
@@ -174,6 +204,36 @@ export function scythe(s: Surface, hx: number, hy: number, a: number, len: numbe
 }
 
 export const enum Gem { Orb, Crystal, Claw, Skull, Totem, Moon, Flame }
+
+/**
+ * A pair of antlers rising from (x, y) along angle `a`: a 2 px beam curving out to each side,
+ * a brow tine and an outer tine off it, white at the points. The far antler sits in shadow.
+ * Returns the point between them, where a spirit glint or a spell leaves from.
+ */
+export function antlers(s: Surface, x: number, y: number, a: number): { x: number, y: number } {
+    const dx = Math.cos(a)
+    const dy = Math.sin(a)
+    const at = (u: number, v: number) => [R(x + dx * u - dy * v), R(y + dy * u + dx * v)] as const
+    const seg = (u0: number, v0: number, u1: number, v1: number, c: number, w = 1) => {
+        const [x0, y0] = at(u0, v0)
+        const [x1, y1] = at(u1, v1)
+        line(s, x0, y0, x1, y1, c, w)
+    }
+    for (const side of [-1, 1]) {
+        const c = side < 0 ? C.bone0 : C.bone1
+        seg(0, 0, 3, 3 * side, c, 2)
+        seg(3, 3 * side, 7, 4 * side, c)
+        seg(7, 4 * side, 8, 3 * side, c)
+        seg(3, 3 * side, 5, 1 * side, c)
+        seg(5, 4 * side, 6, 6 * side, c)
+        for (const [u, v] of [[8, 3], [5, 1], [6, 6]] as const) {
+            const [px0, py0] = at(u, v * side)
+            px(s, px0, py0, side < 0 ? C.bone1 : C.white)
+        }
+    }
+    const [cx, cy] = at(5, 0)
+    return { x: cx, y: cy }
+}
 
 /** A caster's staff with a head ornament. `glow` 0..1 brightens it. */
 export function staff(s: Surface, hx: number, hy: number, a: number, len: number, wood: Mat, gem: Mat, style: Gem, glow: number, t: number): void {
@@ -216,15 +276,15 @@ export function staff(s: Surface, hx: number, hy: number, a: number, len: number
             px(s, gx, gy - 5 - (Math.floor(t * 8) & 1), gem[1])
             px(s, gx - 1, gy - 4, gem[1]); px(s, gx + 1, gy - 4, gem[0])
             break
-        case Gem.Totem:
-            rect(s, gx - 2, gy - 4, 5, 6, wood[1])
-            rect(s, gx - 1, gy - 3, 1, 1, lit ? gem[2] : C.ink); rect(s, gx + 1, gy - 3, 1, 1, lit ? gem[2] : C.ink)
-            rect(s, gx - 1, gy - 1, 3, 1, C.red1)
-            px(s, gx - 3, gy - 2, C.red2); px(s, gx + 3, gy - 2, C.teal2)
-            line(s, gx - 3, gy - 2, gx - 5, gy - 6, C.red2)
-            line(s, gx + 3, gy - 2, gx + 5, gy - 6, C.teal2)
-            px(s, gx - 5, gy - 7, C.white); px(s, gx + 5, gy - 7, C.white)
-            break
+        case Gem.Totem: {
+            // antlers lashed to the staff head, a bead charm hanging from the binding
+            const c = antlers(s, tx, ty, a)
+            px(s, tx, ty, C.brown0); px(s, R(tx - dx), R(ty - dy), C.brown3)
+            px(s, tx - 2, ty + 1, gem[1]); px(s, tx - 2, ty + 2, gem[2]); px(s, tx - 2, ty + 3, C.red2)
+            if (lit) { px(s, c.x, c.y, C.white); px(s, c.x - 1, c.y, gem[2]); px(s, c.x + 1, c.y, gem[2]) }
+            tip.x = c.x; tip.y = c.y
+            return
+        }
         case Gem.Moon:
             arc(s, gx, gy - 1, 3, Math.PI * 0.6, Math.PI * 2.1, gem[1])
             arc(s, gx, gy - 1, 2, Math.PI * 0.7, Math.PI * 1.9, gem[2])
@@ -278,7 +338,49 @@ export function bow(s: Surface, hx: number, hy: number, a: number, pull: number,
     tip.x = R(hx + dx * 4); tip.y = R(hy + dy * 4)
 }
 
-export const enum ShieldStyle { Round, Kite, Tower, Buckler }
+/**
+ * A crossbow held at (hx, hy) aimed along `a`: a stock running forward from the hand, a short
+ * prod across its nose, and the string drawn back to the latch while `spanned`, when a bolt
+ * lies in the groove. Loosed, the string snaps forward to the prod.
+ */
+export function crossbow(s: Surface, hx: number, hy: number, a: number, spanned: boolean, stock: Mat, prod: Mat, boltTip: number = C.steel3): void {
+    const dx = Math.cos(a)
+    const dy = Math.sin(a)
+    const at = (u: number, v: number) => [R(hx + dx * u - dy * v), R(hy + dy * u + dx * v)] as const
+    const seg = (u0: number, v0: number, u1: number, v1: number, c: number, w = 1) => {
+        const [x0, y0] = at(u0, v0)
+        const [x1, y1] = at(u1, v1)
+        line(s, x0, y0, x1, y1, c, w)
+    }
+    const nose = 9
+    seg(-4, 1, 0, 1, stock[0], 2) // the butt, dropped below the line of the stock
+    seg(-1, 0, nose, 0, stock[1], 2)
+    seg(0, -1, nose - 1, -1, stock[2])
+    // the prod: a stiff bow standing across the nose, its limbs only just curling back
+    for (const side of [-1, 1]) {
+        seg(nose, 0, nose, 2 * side, prod[1], 2)
+        seg(nose, 2 * side, nose - 1, 4 * side, prod[side < 0 ? 0 : 1])
+        seg(nose - 1, 4 * side, nose - 2, 5 * side, prod[side < 0 ? 0 : 1])
+        const [ex, ey] = at(nose - 2, 5 * side)
+        px(s, ex, ey, prod[2])
+    }
+    const latch = spanned ? 3 : nose - 1
+    seg(nose - 2, -5, latch, -1, C.bone0)
+    seg(latch, 1, nose - 2, 5, C.bone0)
+    const [lx, ly] = at(2, 1)
+    px(s, lx, ly, C.ink) // trigger
+    if (spanned) {
+        seg(2, -1, nose + 2, -1, C.brown3)
+        const [bx, by] = at(nose + 2, -1)
+        px(s, bx, by, boltTip)
+        const [fx, fy] = at(2, -2)
+        px(s, fx, fy, C.red2)
+    }
+    const [tx, ty] = at(nose + 2, -1)
+    tip.x = tx; tip.y = ty
+}
+
+export const enum ShieldStyle { Round, Kite, Tower, Buckler, Heater }
 
 /** Shield seen from the side-front, centred on (x, y). */
 export function shield(s: Surface, x: number, y: number, style: ShieldStyle, rimM: Mat, face: Mat, emblem: number): void {
@@ -318,6 +420,17 @@ export function shield(s: Surface, x: number, y: number, style: ShieldStyle, rim
             disc(s, x, y, 2, face[1])
             px(s, x, y, emblem)
             px(s, x - 1, y - 2, face[2])
+            break
+        case ShieldStyle.Heater:
+            // a kite cut down to chibi size, for a shield carried in front of the body
+            rect(s, x - 3, y - 5, 7, 6, rimM[1])
+            tri(s, x - 3, y + 1, x + 3, y + 1, x, y + 5, rimM[1])
+            rect(s, x - 2, y - 4, 5, 5, face[1])
+            tri(s, x - 2, y + 1, x + 2, y + 1, x, y + 4, face[1])
+            rect(s, x - 2, y - 4, 1, 5, face[2])
+            rect(s, x - 3, y - 5, 7, 1, rimM[2])
+            rect(s, x, y - 3, 1, 6, emblem)
+            rect(s, x - 2, y - 1, 5, 1, emblem)
             break
     }
 }

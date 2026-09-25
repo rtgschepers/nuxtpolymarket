@@ -8,7 +8,7 @@ import { hash2, px, rect, type Surface } from './surface'
 import { HP, J, fxX, fxY, hclip, type Look, type HKey } from './rig'
 import { HERO_SKIN } from './hero-parts'
 import { drawChibi } from './chibi'
-import { bow, type Mat } from './weapons'
+import { bow, crossbow, type Mat } from './weapons'
 
 export const CH = Phase.Charge
 export const CA = Phase.Cast
@@ -166,6 +166,16 @@ export function bowPainter(wood: Mat, size: number, arrowTip: number = C.steel3)
     return (s: Surface, x: number, y: number, p: Float32Array) => {
         const pull = p[HP.aux]!
         bow(s, x, y, p[HP.wa]!, pull, pull > 0.05, wood, size, arrowTip)
+    }
+}
+
+/**
+ * Crossbow painter on the bow clip: `aux` is the span, so drawing the string back to the latch
+ * loads a bolt and the release snaps it forward.
+ */
+export function crossbowPainter(stock: Mat, prod: Mat, boltTip: number = C.steel3) {
+    return (s: Surface, x: number, y: number, p: Float32Array) => {
+        crossbow(s, x, y, p[HP.wa]!, p[HP.aux]! > 0.05, stock, prod, boltTip)
     }
 }
 
