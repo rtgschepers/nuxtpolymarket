@@ -14,10 +14,11 @@ const assets = allArt()
 /**
  * Review rounds, newest first. The page opens on the latest round's changes across every
  * group, so they can be judged together; an asset shows under the round that last changed it.
+ * With no round open it opens on the first group.
  */
 const rounds = [...ART_ROUNDS].reverse().map(r => ({ ...r, count: assets.filter(a => a.round === r.n).length }))
 const GROUP_LABEL = Object.fromEntries(ART_GROUPS.map(g => [g.id, g.label])) as Record<ArtGroup, string>
-const group = ref<ArtGroup | number>(rounds[0]!.n)
+const group = ref<ArtGroup | number>(rounds[0]?.n ?? ART_GROUPS[0]!.id)
 const query = ref('')
 
 const counts = computed(() => Object.fromEntries(ART_GROUPS.map(g => [g.id, assets.filter(a => a.group === g.id).length])))

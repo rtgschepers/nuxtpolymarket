@@ -86,33 +86,11 @@ export interface ArtAsset {
 /**
  * Review rounds: each restyle pass lists the asset IDs it touched (by prefix), so the
  * gallery can show one round's changes on their own. Newest last.
+ *
+ * The count restarted on 2026-09-25, once the chibi style was adopted and every Hero class
+ * was on it; the next round is 1. The earlier rounds are recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
-    {
-        n: 2,
-        label: 'Round 2 · video style',
-        prefixes: [
-            'hero/class_beginner/', 'hero/class_warrior/', 'hero/class_sorcerer/', 'hero/class_hunter/',
-            'vfx/skill_haste', 'vfx/skill_whirlwind', 'vfx/skill_meteor_shower', 'vfx/skill_kill_shot',
-            'feedback/skill_banner/', 'feedback/number/normal', 'feedback/number/crit',
-            'arena/training_dummy/', 'bg/world/world_thornwick_vale'
-        ]
-    },
-    {
-        n: 3,
-        label: 'Round 3 · scenery tier',
-        prefixes: ['ui/palette/', 'bg/world/world_thornwick_vale']
-    },
-    {
-        n: 5,
-        label: 'Round 5 · chibi classes',
-        prefixes: [
-            'hero/class_barbarian/', 'hero/class_berserker/', 'hero/class_knight/', 'hero/class_paladin/',
-            'hero/class_mage/', 'hero/class_wizard/', 'hero/class_sorcerer/', 'hero/class_shaman/', 'hero/class_witch_doctor/',
-            'hero/class_archer/', 'hero/class_bowman/', 'hero/class_marksman/', 'hero/class_beast_master/'
-        ]
-    }
-]
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
