@@ -105,8 +105,12 @@ export const ROOKIE_HEAD = head([
     ...face()
 ], 5, 9)
 
-/** Draw a head at the neck (x, y), then animate the face from the pose. */
-export function chibiHead(s: Surface, hd: Head, x: number, y: number, p: Float32Array, eye: number = C.ink): void {
+/**
+ * Draw a head at the neck (x, y), then animate the face from the pose. `lid` is the skin the
+ * squint closes over; `mouth` is false for heads whose mouth is hidden (visors, masks).
+ */
+export function chibiHead(s: Surface, hd: Head, x: number, y: number, p: Float32Array, eye: number = C.ink,
+    lid: number = C.skin2, mouth = true): void {
     const ox = R(x) - hd.neck
     const oy = R(y) - hd.pix.h
     put(s, hd.pix, ox, oy)
@@ -115,14 +119,14 @@ export function chibiHead(s: Surface, hd: Head, x: number, y: number, p: Float32
     const ey = oy + hd.pix.h - EYE_FROM_BOTTOM
     if (hurt && p[HP.fade]! < 1) {
         // squeezed shut: a flat line where the eye was
-        s.set(ex, ey, C.skin2)
+        s.set(ex, ey, lid)
         s.set(ex, ey + 1, C.ink)
         s.set(ex - 1, ey + 1, C.ink)
     } else {
         s.set(ex, ey, eye)
         s.set(ex, ey + 1, eye)
     }
-    if (p[HP.mouth]! > 0.5) {
+    if (mouth && p[HP.mouth]! > 0.5) {
         const my = oy + hd.pix.h - MOUTH_FROM_BOTTOM
         s.set(ex, my, C.ink)
         s.set(ex, my + 1, C.red1)
