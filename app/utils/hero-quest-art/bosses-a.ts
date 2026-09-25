@@ -6,8 +6,9 @@ import { C } from './palette'
 import type { CreatureDef } from './creature'
 import { fr } from './creature'
 import type { Mat } from './weapons'
+import type { Surface } from './surface'
 import {
-    B, Entry, bossStates, drive, finish, bz, ball, foliage, chain, tentacle, glowEye, spikes, mouth, speckle,
+    B, Entry, bossStates, drive, finish, bz, ball, chain, tentacle, spikes, mouth, speckle,
     limbT, reach, P, rect, px, line, disc, ellipse, tri, quad, dither, ditherEllipse, arc, poly, q, wv
 } from './boss-kit'
 
@@ -15,8 +16,6 @@ const R = Math.round
 
 const HIDE: Mat = [C.brown0, C.brown1, C.brown2]
 const BARK: Mat = [C.brown0, C.brown1, C.brown2]
-const LEAF: Mat = [C.green0, C.green1, C.green2]
-const LEAF_LIT: Mat = [C.green1, C.green2, C.green3]
 const ROT: Mat = [C.olive0, C.olive1, C.olive2]
 const LEECH: Mat = [C.red0, C.brown1, C.olive1]
 const SCALE_RED: Mat = [C.red1, C.orange, C.gold2]
@@ -30,139 +29,323 @@ const KRAKEN: Mat = [C.purple0, C.purple1, C.night3]
 
 // ═══════════════════════════════════════════════════════════════ 1 · Thornwick Vale
 
-/** Old Gnarlhide — an ancient boar grown into the hedge, bramble on its back, tusks like roots. */
+// Stage 5: the goblins' warboss riding Old Gnarlhide into the gate, the leader of the goblins
+// the run has been fighting, on the beast. Stage 10: Gorsecrown, the Wicker King, a hollow
+// effigy woven from hedge-wood with a carved goat skull for a head, gorse-fire in his ribs and
+// gorse at the roots of his horns: the thing the hedgerows have become.
+
+const GOBLIN: Mat = [C.green1, C.green2, C.green3]
+const LEATHER: Mat = [C.brown0, C.brown1, C.brown2]
+const IRON: Mat = [C.steel0, C.steel1, C.steel2]
+const WICKER: Mat = [C.brown1, C.brown2, C.brown3]
+const SKULL: Mat = [C.brown2, C.brown3, C.bone0]
+const HORN: Mat = [C.brown1, C.brown2, C.bone0]
+const HORN_FAR: Mat = [C.brown0, C.brown1, C.brown2]
+
+/**
+ * The cleaver: a haft from the hand along `a`, then a broad blade on the side the chop leads
+ * with, its edge bright and a rust bloom near the spine.
+ */
+function cleaver(s: Surface, hx: number, hy: number, a: number): void {
+    const dx = Math.cos(a)
+    const dy = Math.sin(a)
+    const nx = -dy
+    const ny = dx
+    line(s, R(hx - dx * 2), R(hy - dy * 2), R(hx + dx * 4), R(hy + dy * 4), C.brown0, 2)
+    for (let k = 4; k <= 15; k++) {
+        const w = k < 6 ? 4 : 6
+        const bx = hx + dx * k
+        const by = hy + dy * k
+        line(s, R(bx), R(by), R(bx + nx * w), R(by + ny * w), k & 1 ? IRON[1] : IRON[0])
+        px(s, R(bx + nx * w), R(by + ny * w), C.steel3)
+        if (k % 4 === 1) px(s, R(bx + nx), R(by + ny), C.orange)
+    }
+    px(s, R(hx + dx * 15 + nx * 6), R(hy + dy * 15 + ny * 6), C.white)
+}
+
+/**
+ * Old Gnarlhide, saddled and harnessed, the goblins' chieftain on his back in a
+ * scrap-iron helm under a bramble crown, a bone mantle, a heavy cleaver, and a tattered war
+ * banner on a pole behind him. The boar charges; the rider chops as it lands.
+ */
 export const OLD_GNARLHIDE: CreatureDef = {
     name: 'Old Gnarlhide', size: 96, shadow: 24, accent: C.red2,
     states: bossStates(1.1, 1.4, 1.8),
     draw(s, st, t) {
         drive(this, st, t, 12, 1.4)
-        const x = s.ax - 6 + B.lunge - B.kb
+        const x = s.ax - 8 + B.lunge - B.kb
         const y = s.ay
         const charge = B.wind > 0 ? B.wind : B.strike ? 1 : B.rec
-        const head = R(charge * 3 + B.die * 6)
-        const by = y - 17 + B.breath + R(B.die * 4)
+        const by = y - 16 + B.breath + R(B.die * 4)
         const step = st === 'entry' ? fr(t, 8, 4) : B.strike ? 1 : 0
-        // legs (far pair, then near)
+        const flap = fr(t, 4, 2)
+
+        // the rider's seat, and the banner pole strapped behind it
+        const rx = x - 4
+        const ry = by - 11 + R(B.die * 6)
+        const lean = R(charge * 2)
+        line(s, rx - 8, ry + 2, rx - 11, ry - 36, C.brown1, 2)
+        px(s, rx - 11, ry - 37, C.bone1); px(s, rx - 12, ry - 38, C.bone1); px(s, rx - 10, ry - 38, C.bone1) // skull finial
+        px(s, rx - 11, ry - 38, C.ink)
+        for (let i = 0; i < 12; i++) {
+            const len = 10 - (i >> 2) + ((i + flap) % 3 === 0 ? -2 : 0)
+            const c = i < 2 ? C.red3 : i > 9 ? C.red1 : C.red2
+            line(s, rx - 12, ry - 35 + i, rx - 12 - len - (flap && i > 6 ? 1 : 0), ry - 35 + i + (i > 6 ? flap : 0), c)
+        }
+        rect(s, rx - 17, ry - 31, 3, 2, C.bone1) // a daubed claw mark on the rag
+
+        // boar legs, far pair then near
         const legH = R(10 - B.die * 6)
-        for (const [lx, far] of [[-14, true], [10, true], [-10, false], [14, false]] as const) {
+        for (const [lx, far] of [[-13, true], [9, true], [-9, false], [13, false]] as const) {
             const off = (step & 1) && !far ? 2 : 0
-            rect(s, x + lx + off, by + 6, 5, legH, far ? C.brown0 : C.brown1)
+            rect(s, x + lx + off, by + 5, 5, legH, far ? C.brown0 : C.brown1)
             rect(s, x + lx + off, y - 2, 5, 2, C.ink)
         }
-        // body
-        ball(s, x, by, 23, 12, HIDE)
-        dither(s, x - 20, by + 4, 34, 6, C.brown0, 6)
-        // hide texture: coarse bristle strokes
-        for (let i = 0; i < 9; i++) line(s, x - 18 + i * 4, by - 6 + (i & 1), x - 20 + i * 4, by - 2, C.brown0)
-        // the bramble growing out of its back
-        for (let i = 0; i < 7; i++) {
-            const bx = x - 18 + i * 5
-            const bh = 5 + ((i * 3) % 4)
-            line(s, bx, by - 9 - (i & 1), bx - 2, by - 9 - bh, C.green1, 2)
-            px(s, bx - 3, by - 10 - bh, C.green2)
-            px(s, bx + 1, by - 8 - bh, C.red2)
-        }
-        spikes(s, x - 20, by - 10, x + 12, by - 12, 8, 3, C.brown2, C.bone1)
-        ditherEllipse(s, x - 6, by - 9, 12, 2, C.green2, 7)
-        // tail
-        line(s, x - 23, by - 3, x - 27, by - 6 + wv(t, 0.6, 1), C.brown1)
-        // head
-        const hx = x + 22
-        const hy = by + 1 + head
+        // boar body and bristles
+        ball(s, x, by, 21, 11, HIDE)
+        dither(s, x - 18, by + 3, 32, 6, C.brown0, 6)
+        for (let i = 0; i < 8; i++) line(s, x - 17 + i * 4, by - 6 + (i & 1), x - 19 + i * 4, by - 2, C.brown0)
+        spikes(s, x - 19, by - 9, x - 9, by - 11, 3, 3, C.brown2, C.bone1)
+        line(s, x - 21, by - 3, x - 25, by - 6 + wv(t, 0.6, 1), C.brown1) // tail
+        // harness: a girth strap studded with iron, a red saddle blanket with a ragged fringe
+        rect(s, x - 1, by - 10, 3, 20, LEATHER[0])
+        for (let i = 0; i < 4; i++) px(s, x, by - 7 + i * 5, C.steel3)
+        rect(s, x - 11, by - 13, 16, 4, C.red1)
+        rect(s, x - 11, by - 13, 16, 1, C.red2)
+        for (let i = 0; i < 8; i++) px(s, x - 11 + i * 2, by - 9, C.red0)
+        line(s, x + 2, by - 4, x + 17, by + 1, LEATHER[0], 2) // breast strap to the head
+
+        // boar head: tusks like roots, an iron ring through the snout
+        const hx = x + 20
+        const hy = by + 1 + R(charge * 3 + B.die * 6)
         ball(s, hx, hy, 10, 8, HIDE)
-        tri(s, hx - 7, hy - 5, hx - 2, hy - 7, hx - 6, hy - 13, C.brown1) // ear
+        tri(s, hx - 7, hy - 5, hx - 2, hy - 7, hx - 6, hy - 13, C.brown1)
         px(s, hx - 6, hy - 12, C.brown2)
-        rect(s, hx + 6, hy - 1, 7, 6, C.brown2) // snout
+        rect(s, hx + 6, hy - 1, 7, 6, C.brown2)
         rect(s, hx + 12, hy, 2, 4, C.bone0)
         px(s, hx + 12, hy + 1, C.ink); px(s, hx + 12, hy + 3, C.ink)
-        // tusks curving up like roots
-        const tusk = C.bone1
-        line(s, hx + 7, hy + 5, hx + 11, hy + 3, tusk, 2)
-        line(s, hx + 11, hy + 3, hx + 13, hy - 3, tusk, 2)
+        disc(s, hx + 13, hy + 5, 1.5, C.steel2); px(s, hx + 13, hy + 5, C.brown2)
+        line(s, hx + 7, hy + 5, hx + 11, hy + 3, C.bone1, 2)
+        line(s, hx + 11, hy + 3, hx + 13, hy - 3, C.bone1, 2)
         px(s, hx + 13, hy - 4, C.white)
-        line(s, hx + 3, hy + 6, hx + 5, hy + 2, C.bone0, 2)
-        // eye: small, furious
-        const eye = B.hurt ? C.ink : (B.glow > 0.5 ? C.gold3 : C.red2)
+        const boarEye = B.hurt ? C.ink : (B.glow > 0.5 ? C.gold3 : C.red2)
         rect(s, hx + 1, hy - 4, 3, 1, C.brown0)
-        px(s, hx + 3, hy - 3, eye)
+        px(s, hx + 3, hy - 3, boarEye)
         if (B.roar || B.strike) mouth(s, hx + 6, hy + 5, 6, 2, C.red1, C.bone1)
+
+        // rider: back arm on the reins, leg down the boar's flank
+        line(s, rx + 2, ry - 10, hx - 2, hy - 2, C.brown0) // rein
+        limbT(s, rx - 1, ry - 11, rx + 4, ry - 6, 3, 2.5, [C.green0, C.green1, C.green2])
+        limbT(s, rx + 1, ry - 1, rx + 5, ry + 6, 4, 3, LEATHER)
+        rect(s, rx + 3, ry + 6, 4, 2, C.brown0) // boot in the stirrup
+        // torso: a leather jerkin under a bone mantle, a red war-paint slash
+        const tx = rx + lean
+        ball(s, tx, ry - 7, 6, 7, LEATHER)
+        ellipse(s, tx, ry - 12, 7, 3, C.bone0)
+        ellipse(s, tx - 1, ry - 13, 6, 2, C.bone1)
+        for (let i = -5; i <= 5; i += 2) px(s, tx + i, ry - 10, C.bone0)
+        line(s, tx - 2, ry - 7, tx + 3, ry - 3, C.red2)
+        // head: a goblin's, bigger than the trash, long ear swept back
+        const gx = tx + 2
+        const gy = ry - 21
+        tri(s, gx - 5, gy, gx - 4, gy + 3, gx - 14, gy - 4, C.green1) // ear
+        line(s, gx - 6, gy + 1, gx - 12, gy - 3, C.green2)
+        ball(s, gx, gy, 7, 6, GOBLIN)
+        rect(s, gx + 6, gy, 3, 3, C.green2); px(s, gx + 8, gy + 3, C.green1) // hooked nose
+        const eye = B.hurt ? C.ink : (B.glow > 0.5 ? C.gold3 : C.red2)
+        rect(s, gx + 2, gy - 2, 3, 2, C.ink)
+        px(s, gx + 3, gy - 2, eye); px(s, gx + 4, gy - 2, eye)
+        line(s, gx - 1, gy, gx + 4, gy, C.red1) // war paint under the eye
+        if (B.roar || B.strike) mouth(s, gx + 1, gy + 3, 6, 2, C.red0, C.white)
+        else { rect(s, gx + 1, gy + 3, 5, 1, C.ink); px(s, gx + 5, gy + 4, C.white); px(s, gx + 2, gy + 4, C.white) }
+        // scrap-iron helm sitting on top, dented and riveted, crowned in bramble
+        ellipse(s, gx - 1, gy - 6, 7, 3, IRON[1])
+        rect(s, gx - 8, gy - 5, 15, 1, IRON[0])
+        px(s, gx - 3, gy - 8, C.steel3); px(s, gx + 2, gy - 7, C.steel3); px(s, gx - 6, gy - 5, C.steel2)
+        for (let i = -3; i <= 3; i++) {
+            const cx = gx - 1 + i * 2
+            const ch = 3 + (i & 1) * 2
+            line(s, cx, gy - 9, cx - 1, gy - 9 - ch, C.brown1)
+            px(s, cx - 1, gy - 10 - ch, i & 1 ? C.red2 : C.green2)
+        }
+        // front arm and the cleaver: raised back on the wind-up, chopped down on the strike
+        const sx = tx + 4
+        const sy = ry - 11
+        const a = bz(-1.1, -2.6, 0.6)
+        reach(sx, sy, a, 8)
+        limbT(s, sx, sy, P.x, P.y, 3.5, 3, GOBLIN)
+        cleaver(s, P.x, P.y, a)
+        disc(s, P.x, P.y, 1.5, C.green3)
         finish(s, Entry.Walk)
     },
     fx(dst, st, t, x, y, dir) {
         if (B.roar || (st === 'attack' && B.wind > 0.6)) {
             const k = fr(t, 10, 4)
-            for (let i = 0; i < 4; i++) dst.set(x + dir * (34 + k * 2 + i), y - 15 - i - (k & 1), i & 1 ? C.bone1 : C.white)
+            for (let i = 0; i < 4; i++) dst.set(x + dir * (32 + k * 2 + i), y - 15 - i - (k & 1), i & 1 ? C.bone1 : C.white)
         }
         if (st === 'attack' && B.strike) for (let i = 0; i < 6; i++) dst.set(x + dir * (12 + i * 3), y - (i & 1), C.stone3)
     }
 }
 
-/** Gorsecrown, King of Hedges — a walking hedgerow crowned in yellow gorse. */
+/** Cross-weave every base-shade pixel in a box: the wicker's over-and-under strands. */
+function weave(s: Surface, x0: number, y0: number, w: number, h: number): void {
+    for (let y = y0; y < y0 + h; y++) {
+        for (let x = x0; x < x0 + w; x++) {
+            if (s.get(x, y) !== WICKER[1]) continue
+            if (((x + y) & 3) === 0) s.set(x, y, WICKER[0])
+            else if (((x - y) & 3) === 0) s.set(x, y, WICKER[2])
+        }
+    }
+}
+
+/**
+ * Gorsecrown, King of Hedges, the Wicker King: a hollow giant woven from hedge-wood on human lines, long in the leg, a
+ * broad woven trunk from a yoke of shoulders straight down to the hips, and jointed arms. His
+ * head is a goat skull carved from pale wood, ram's horns curling round it with gorse at their
+ * roots, fire in the eye socket and in the hollow of his ribs. Tan wicker and gold fire, so he
+ * stands out of the green field rather than melting into it.
+ */
 export const GORSECROWN: CreatureDef = {
-    name: 'Gorsecrown, King of Hedges', size: 128, shadow: 30, accent: C.gold2,
+    name: 'Gorsecrown, King of Hedges', size: 128, shadow: 24, accent: C.gold2,
     states: bossStates(1.4, 1.8, 2.2),
     draw(s, st, t) {
         drive(this, st, t, 6, 1.8)
-        const x = s.ax - 4 + B.lunge - B.kb
+        const x = s.ax - 6 + B.lunge - B.kb
         const y = s.ay
+        const sink = R(B.die * 12)
+        // as tall as Gorsecrown: the horns top out about 100px above the feet
+        const hipY = y - 46 + sink
+        const chestY = y - 64 + B.breath + sink
+        const shY = y - 78 + B.breath + sink
+        const flick = fr(t, 10, 4)
+        const burn = 0.5 + B.glow * 0.5
         const sway = wv(t, 1.8, 1)
-        const topY = y - 58 + B.breath + R(B.die * 10)
-        // back arm (bramble), drawn behind
-        chain(s, x - 16, topY + 4, x - 30, topY + 20, x - 26, y - 20, 5, 3, [C.green0, C.green1, C.green2], 12)
-        // trunk legs and roots
-        for (const lx of [-10, 8]) {
-            limbT(s, x + lx, topY + 24, x + lx + (lx > 0 ? 2 : -2), y - 2, 9, 7, BARK)
-            for (let r = -1; r <= 1; r++) line(s, x + lx, y - 3, x + lx + r * 5, y, C.brown0, 2)
+
+        // back arm, relaxed: upper arm, a knot of an elbow, forearm, an open woven hand
+        const bex = x - 21
+        const bey = shY + 15
+        limbT(s, x - 16, shY + 1, bex, bey, 5, 4, WICKER)
+        limbT(s, bex, bey, x - 18, shY + 29, 4, 3.5, WICKER)
+        ball(s, bex, bey, 3, 3, WICKER)
+        ball(s, x - 18, shY + 31, 3, 3, WICKER)
+        weave(s, x - 26, shY - 4, 14, 40)
+        // legs: thigh, a knot of a knee, shin, splayed a little
+        for (const side of [-1, 1]) {
+            const kx = x + side * 7
+            const ky = y - 23 + R(sink * 0.5)
+            const ax = x + side * 6
+            limbT(s, x + side * 6, hipY, kx, ky, 9, 7, WICKER)
+            limbT(s, kx, ky, ax, y - 3, 7, 6, WICKER)
+            rect(s, ax - 4, y - 3, 9, 3, WICKER[0])
+            ball(s, kx, ky, 4, 4, WICKER)
         }
-        // body of hedge
-        foliage(s, x, topY, 26, 26, LEAF, 11)
-        foliage(s, x + 6, topY - 12, 16, 12, LEAF_LIT, 12)
-        // gorse bloom across the body
-        for (let i = 0; i < 26; i++) {
-            const a = i * 2.4
-            const r = 6 + (i * 7) % 20
-            const fx = x + R(Math.cos(a) * r)
-            const fy = topY + R(Math.sin(a) * r * 0.9)
-            if (s.get(fx, fy)) { px(s, fx, fy, i & 1 ? C.gold2 : C.gold3); if (i % 3 === 0) px(s, fx + 1, fy, C.gold1) }
+        // the trunk: a broad woven block from the yoke of the shoulders straight to the hips
+        rect(s, x - 17, shY - 2, 34, 4, WICKER[1])
+        tri(s, x - 16, shY, x + 16, shY, x, chestY, WICKER[1])
+        rect(s, x - 12, chestY, 24, hipY - chestY, WICKER[1])
+        ball(s, x, hipY, 12, 5, WICKER)
+        weave(s, x - 22, shY - 4, 44, y - shY + 4)
+        rect(s, x - 17, shY - 2, 34, 1, WICKER[2])
+        // the ribcage: hollow, gorse-fire burning inside, woven bands across it
+        ellipse(s, x, chestY, 13, 13, WICKER[0])
+        ellipse(s, x, chestY + 1, 10, 10, C.brown0)
+        ditherEllipse(s, x, chestY + 3, 8, 8, C.lava1, burn > 0.7 ? 16 : 11)
+        ditherEllipse(s, x + 1, chestY + 4, 6, 6, C.orange, 12 + flick)
+        ditherEllipse(s, x + 1, chestY + 4, 3 + (flick & 1), 4, C.gold2, 14)
+        disc(s, x + 1, chestY + 4, 1.5, B.glow > 0.5 ? C.white : C.gold3)
+        for (let i = -2; i <= 2; i++) {
+            const ry = chestY + i * 5
+            const half = R(12 * Math.sqrt(Math.max(0, 1 - (i * 5 / 13) ** 2)))
+            rect(s, x - half, ry, half * 2, 2, WICKER[1])
+            rect(s, x - half, ry, half * 2, 1, WICKER[2])
         }
-        // bramble vines winding around
-        arc(s, x, topY, 20, 0.4, 2.4, C.brown1)
-        arc(s, x + 2, topY - 4, 14, 3.4, 5.2, C.brown1)
-        // head: a darker hollow in the leaves with two amber eyes
-        const hx = x + 12
-        const hy = topY - 30 + sway
-        foliage(s, hx, hy, 13, 11, LEAF, 13)
-        ellipse(s, hx + 4, hy + 1, 7, 4, C.green0)
-        const eye = B.hurt ? C.brown1 : (B.glow > 0.5 ? C.white : C.gold3)
-        glowEye(s, hx + 2, hy, eye, C.gold1, true)
-        glowEye(s, hx + 8, hy, eye, C.gold1, true)
-        if (B.roar || B.strike) mouth(s, hx + 1, hy + 4, 8, 3, C.ink, C.bone0)
-        else line(s, hx + 2, hy + 4, hx + 8, hy + 4, C.ink)
-        // the crown: a ring of gorse and thorn points
-        for (let i = -3; i <= 3; i++) {
-            const cx = hx + i * 3
-            const cy = hy - 11 - (i & 1 ? 2 : 0)
-            line(s, cx, hy - 8, cx, cy, C.brown1)
-            disc(s, cx, cy - 1, 1.2, i & 1 ? C.gold2 : C.gold3)
+        rect(s, x - 12, chestY - 10, 3, 22, WICKER[1]) // the spine along his back
+        ball(s, x - 16, shY, 5, 4, WICKER)
+        ball(s, x + 16, shY, 5, 4, WICKER)
+        weave(s, x - 22, shY - 5, 44, 30)
+        for (let i = 0; i < 4; i++) px(s, x - 7 + i * 5, chestY - 8 + ((i + flick) % 3) * 7, i & 1 ? C.gold3 : C.orange)
+        // neck
+        rect(s, x - 1, shY - 8, 4, 7, WICKER[1])
+        weave(s, x - 2, shY - 9, 6, 8)
+
+        // head: a goat skull carved from pale wood
+        const hx = x + 1
+        const hy = shY - 12 + sway
+        ramHorn(s, hx - 3, hy - 1, 7, 2, HORN_FAR) // far horn, peeking out behind
+        ball(s, hx, hy, 6, 6, SKULL)
+        limbT(s, hx + 3, hy + 1, hx + 11, hy + 5, 6, 4, SKULL) // a short, blunt snout
+        line(s, hx - 3, hy - 3, hx + 1, hy - 5, C.brown2) // grain
+        line(s, hx + 5, hy + 2, hx + 9, hy + 4, C.brown2)
+        px(s, hx + 11, hy + 4, C.brown0); px(s, hx + 10, hy + 3, C.ink) // nostril
+        rect(s, hx + 2, hy - 2, 4, 3, C.brown0) // the eye socket
+        const eye = B.hurt ? C.lava1 : (B.glow > 0.5 ? C.white : C.gold3)
+        px(s, hx + 3, hy - 1, eye); px(s, hx + 4, hy - 1, eye); px(s, hx + 4, hy, C.orange)
+        // the jaw, dropping open on a roar or a swing, fire behind the teeth
+        const gape = B.roar || B.strike ? 3 : 0
+        if (gape) rect(s, hx + 3, hy + 6, 6, gape, flick & 1 ? C.orange : C.lava1)
+        limbT(s, hx + 1, hy + 6 + gape, hx + 9, hy + 7 + gape, 4, 2, SKULL)
+        for (let i = 0; i < 4; i++) px(s, hx + 3 + i * 2, hy + 6 + (gape ? 1 : 0), C.bone1)
+        // near horn: a ram's, curling back and round beside the skull
+        ramHorn(s, hx - 5, hy + 1, 8, 2.4, HORN)
+        // gorse wound round the roots of the horns: the crown he is named for
+        for (const [dx, dy, c] of [[-1, -7, C.gold3], [-5, -9, C.gold2], [2, -6, C.gold2]] as const) {
+            px(s, hx + dx + 1, hy + dy + 1, C.green0)
+            disc(s, hx + dx, hy + dy, 1.3, c)
         }
-        // front arm: raise and slam
-        const sx = x + 20
-        const sy = topY - 4
-        const a = bz(0.9, -1.8, 1.25)
-        reach(sx, sy, a, 30)
-        chain(s, sx, sy, sx + 14, sy + (P.y - sy) * 0.3, P.x, P.y, 6, 4, [C.green0, C.green1, C.green2], 14)
-        spikes(s, sx + 2, sy - 2, P.x, P.y - 3, 6, 3, C.brown1, C.bone1)
-        ball(s, P.x, P.y, 5, 4, LEAF_LIT) // the fist of leaves
-        px(s, P.x + 2, P.y - 1, C.gold3)
-        finish(s, Entry.Rise, 10)
+
+        // front arm, jointed: raised back at shoulder and elbow, then chopped down, fist burning
+        const sx = x + 16
+        const sy = shY
+        const a1 = bz(1.35, -2.3, 0.85)
+        const a2 = bz(0.9, -1.5, 1.3)
+        reach(sx, sy, a1, 15)
+        const ex = P.x
+        const ey = P.y
+        reach(ex, ey, a2, 14)
+        limbT(s, sx, sy, ex, ey, 5, 4, WICKER)
+        limbT(s, ex, ey, P.x, P.y, 4, 3.5, WICKER)
+        weave(s, Math.min(sx, ex, P.x) - 6, Math.min(sy, ey, P.y) - 6, Math.max(sx, ex, P.x) - Math.min(sx, ex, P.x) + 12, Math.max(sy, ey, P.y) - Math.min(sy, ey, P.y) + 12)
+        ball(s, ex, ey, 3, 3, WICKER)
+        ball(s, P.x, P.y, 4, 4, WICKER)
+        const fire = B.glow > 0.3 || flick === 0
+        px(s, P.x + 1, P.y - 4, fire ? C.gold3 : C.orange)
+        px(s, P.x - 1, P.y - 5 - (flick & 1), C.orange)
+        px(s, P.x + 3, P.y - 3, C.lava1)
+        finish(s, Entry.Rise, 12)
     },
     fx(dst, st, t, x, y, dir) {
-        if (st === 'attack' && B.strike) for (let i = 0; i < 10; i++) dst.set(x + dir * (30 + i * 2), y - (i % 3), i & 1 ? C.green3 : C.brown2)
-        if (st === 'death' || st === 'hit') {
-            const k = fr(t, 10, 16)
-            for (let i = 0; i < 6; i++) dst.set(x + dir * (-14 + i * 6 + (k % 3)), y - 70 + i * 7 + k * 2, i & 1 ? C.gold3 : C.green2)
+        // embers drifting up out of the ribcage
+        const k = fr(t, 10, 12)
+        for (let i = 0; i < 4; i++) {
+            const u = ((k + i * 3) % 12) / 12
+            dst.set(x + dir * (-6 + ((i * 5) % 14)), y - 66 - R(u * 40), u < 0.5 ? C.gold3 : C.orange)
         }
-        if (st === 'entry' && B.ent < 1) for (let i = 0; i < 8; i++) dst.set(x + dir * (-20 + i * 6), y - 1 - (i & 1), C.brown2)
+        if (st === 'attack' && B.strike) {
+            for (let i = 0; i < 12; i++) dst.set(x + dir * (30 + i * 2), y - (i % 3) - 1, i & 1 ? C.orange : C.gold3)
+        }
+        if (st === 'death') {
+            const f = fr(t, 10, 16)
+            for (let i = 0; i < 8; i++) dst.set(x + dir * (-18 + i * 5 + (f % 3)), y - 80 + i * 6 + f * 2, i & 1 ? C.gold3 : C.lava1)
+        }
+    }
+}
+
+/**
+ * A ram's horn curling round (cx, cy): it rises from the crown, sweeps back and down and comes
+ * forward underneath, the spiral tightening and thinning as it goes, ridged along its length.
+ */
+function ramHorn(s: Surface, cx: number, cy: number, r: number, w: number, m: Mat): void {
+    const n = 22
+    for (let i = 0; i <= n; i++) {
+        const u = i / n
+        const a = -1.2 - u * Math.PI * 1.6
+        const rr = r * (1 - u * 0.4)
+        const hx = cx + Math.cos(a) * rr
+        const hy = cy + Math.sin(a) * rr
+        const ww = w * (1 - u * 0.55)
+        disc(s, hx, hy, ww, m[0])
+        disc(s, hx - 0.5, hy - 0.5, Math.max(0.6, ww - 1), m[1])
+        if (i % 3 === 0 && ww > 1.5) px(s, R(hx + Math.cos(a) * (ww - 1)), R(hy + Math.sin(a) * (ww - 1)), m[2])
     }
 }
 
