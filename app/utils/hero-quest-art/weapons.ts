@@ -380,7 +380,7 @@ export function crossbow(s: Surface, hx: number, hy: number, a: number, spanned:
     tip.x = tx; tip.y = ty
 }
 
-export const enum ShieldStyle { Round, Kite, Tower, Buckler, Heater }
+export const enum ShieldStyle { Round, Kite, Tower, Buckler, Heater, Targe, Pavise }
 
 /** Shield seen from the side-front, centred on (x, y). */
 export function shield(s: Surface, x: number, y: number, style: ShieldStyle, rimM: Mat, face: Mat, emblem: number): void {
@@ -420,6 +420,24 @@ export function shield(s: Surface, x: number, y: number, style: ShieldStyle, rim
             disc(s, x, y, 2, face[1])
             px(s, x, y, emblem)
             px(s, x - 1, y - 2, face[2])
+            break
+        case ShieldStyle.Targe:
+            // a round shield cut to chibi size, for a shield carried in front of the body
+            disc(s, x, y, 4.5, rimM[1])
+            disc(s, x, y, 3.5, face[1])
+            px(s, x - 2, y - 2, face[2]); px(s, x - 1, y - 3, face[2]); px(s, x - 3, y - 1, face[2])
+            rect(s, x - 1, y - 1, 3, 3, rimM[2])
+            px(s, x, y, emblem)
+            break
+        case ShieldStyle.Pavise:
+            // a tower shield cut to chibi size: as tall as a shield in front can be
+            rect(s, x - 4, y - 5, 8, 12, rimM[1])
+            rect(s, x - 3, y - 4, 6, 10, face[1])
+            rect(s, x - 3, y - 4, 1, 10, face[2])
+            rect(s, x + 2, y - 4, 1, 10, face[0])
+            rect(s, x - 1, y - 2, 2, 5, emblem)
+            rect(s, x - 2, y - 1, 4, 1, emblem)
+            rect(s, x - 4, y - 5, 8, 1, rimM[2])
             break
         case ShieldStyle.Heater:
             // a kite cut down to chibi size, for a shield carried in front of the body

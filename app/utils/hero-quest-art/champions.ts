@@ -380,7 +380,7 @@ function championHead(k: Skin, tier: number): Head {
 // ── Chassis rest poses and clips ───────────────────────────────────────────────────
 
 const DAMAGE_REST = rest({ hx: 3, hy: 4, wa: -1.0, bhx: -1, bhy: 4, ffx: 3, bfx: -3 })
-const TANK_REST = rest({ hx: 3, hy: 4, wa: -1.2, bhx: 5, bhy: 3, ffx: 3, bfx: -3 })
+const TANK_REST = rest({ hx: 3, hy: 4, wa: -1.2, bhx: 3, bhy: 3, ffx: 3, bfx: -3 })
 const SUPPORT_REST = rest({ hx: 4, hy: 4, wa: -1.4, bhx: 2, bhy: 4, ffx: 2, bfx: -2 })
 const CONTROL_REST = rest({ hx: 5, hy: 3, wa: -0.6, bhx: 4, bhy: 1, ffx: 2, bfx: -2, jump: -1 })
 
@@ -419,7 +419,7 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [0.3, { fxk: 0, bhx: 6, wa: -2.4, hx: -1, hy: -3, lean: 1 }, Ease.InOut, CH],
             [0.5, { wa: 0.3, hx: 7, hy: 4, lean: 2, crouch: 1, fxk: CFX.Smear, fxa: -2.4 }, Ease.Out, CA],
             [0.6, { fxk: 0 }, Ease.Hold, RE],
-            [1.0, { wa: -1.2, hx: 3, hy: 4, bhx: 5, bhy: 3, lean: 0, crouch: 0, ffx: 3 }]
+            [1.0, { wa: -1.2, hx: 3, hy: 4, bhx: 3, bhy: 3, lean: 0, crouch: 0, ffx: 3 }]
         ], TANK_REST),
         cast: hclip('cast', 1.3, false, [
             [0, {}],
@@ -428,7 +428,7 @@ export const CHASSIS: Readonly<Record<ChampionArchetype, ChassisClips>> = {
             [0.5, { bhx: 8, bhy: 4, hx: 5, hy: 7, wa: 1.1, jump: 0, crouch: 3, kneel: 1, glow: 1, fxk: CFX.Brace }, Ease.In, CA],
             [0.9, {}, Ease.Linear],
             [1.0, { fxk: 0 }, Ease.Hold, RE],
-            [1.3, { bhx: 5, bhy: 3, hx: 3, hy: 4, wa: -1.2, crouch: 0, kneel: 0, glow: 0 }]
+            [1.3, { bhx: 3, bhy: 3, hx: 3, hy: 4, wa: -1.2, crouch: 0, kneel: 0, glow: 0 }]
         ], TANK_REST),
         hit: hitClip(TANK_REST, 0.5),
         death: deathClip(TANK_REST),
@@ -654,6 +654,19 @@ function chassisFx(k: Skin, tier: number, headH: number) {
     }
 }
 
+/**
+ * The chibi-sized cut of a shield, for carrying it in front of the body: the full-size round,
+ * kite and tower shields are taller than the space between a Champion's chin and feet.
+ */
+function frontShield(style: ShieldStyle): ShieldStyle {
+    switch (style) {
+        case ShieldStyle.Round: return ShieldStyle.Targe
+        case ShieldStyle.Kite: return ShieldStyle.Heater
+        case ShieldStyle.Tower: return ShieldStyle.Pavise
+        default: return style
+    }
+}
+
 const LOOKS = new Map<string, Look>()
 
 /** The composed Look for a Champion ID (cached). */
@@ -699,12 +712,19 @@ export function championLook(id: string): Look {
                 over: tier >= 2 ? pauldron(tier >= 4) : undefined
             }
             break
-        case 'tank':
+        case 'tank': {
+            const plate = pauldron(tier >= 3)
+            const style = frontShield(k.shield ?? ShieldStyle.Round)
             look = {
-                ...base, torso: tankTorso(k, tier), weapon: tankWeapon(k), back: bodyBack(tier, k), over: pauldron(tier >= 3),
-                offhand: (s, x, y) => shield(s, x + 1, y, k.shield ?? ShieldStyle.Round, tier <= 0 ? M.iron : k.metal, tier <= 0 ? M.wood : k.cloth, tier >= 3 ? C.gold2 : k.trim[2])
+                ...base, torso: tankTorso(k, tier), weapon: tankWeapon(k), back: bodyBack(tier, k),
+                // the shield is carried in front, so it goes on last, over the pauldron
+                over: (s, x, y) => {
+                    plate(s, x, y)
+                    shield(s, J.bhx + 1, J.bhy + 2, style, tier <= 0 ? M.iron : k.metal, tier <= 0 ? M.wood : k.cloth, tier >= 3 ? C.gold2 : k.trim[2])
+                }
             }
             break
+        }
         case 'support':
             look = {
                 ...base, torso: robeTorso(k, tier), lower: robe(k.cloth, k.trim[1], 2), back: bodyBack(tier, k, true),
