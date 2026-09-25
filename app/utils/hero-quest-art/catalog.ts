@@ -87,17 +87,11 @@ export interface ArtAsset {
  * Review rounds: each restyle pass lists the asset IDs it touched (by prefix), so the
  * gallery can show one round's changes on their own. Newest last.
  *
- * The count has restarted twice, both on 2026-09-25: once the chibi style was adopted, and
- * again once the Hero designs were locked. The next round is 1; the earlier rounds are
- * recorded in art-style.md.
+ * The count has restarted three times, all on 2026-09-25/26: once the chibi style was
+ * adopted, again once the Hero designs were locked, and again once World 1 was locked. The
+ * next round is 1; the earlier rounds are recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
-    {
-        n: 1,
-        label: 'Round 1 · Champion shields in front',
-        prefixes: ['champion/chassis_tank/', ...Object.values(CHAMPION_BY_ID).filter(c => c.archetype === 'tank').map(c => `champion/${c.id}/`)]
-    }
-]
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
