@@ -56,7 +56,16 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 | 4 · formation & march | Both sides on the 3 front / 3 back grid, shown as three ranks of two · World 1's field deepened to hold them · a sixth `move` state on every Hero and chassis (`walkClip` / `floatClip` in `rig.ts`, generated from each unit's own rest pose) · the party marches between waves while the scenery parallax-scrolls and the next wave closes in |
 | 5 · chibi classes | **The chibi style was adopted** (2026-09-25, after outside opinions: it beat the taller full-body restyle tried on the Sorcerer, which is gone). The other 11 classes rebuilt on the chibi body, and the Sorcerer back on the chibi body, then made more imposing than the Wizard (as the master, he must outclass the elite): he hovers over flame, with the biggest hat in the roster, a dark cape and high collar, and a fire orb circling him. The robe hem now rides `jump`, so floating casters leave the ground. The rest: Barbarian, Berserker, Knight, Paladin, Mage, Wizard, Shaman, Witch Doctor, Archer, Bowman, Marksman, Beast Master. The classic Hero definitions are deleted; the classes now live one file per line |
 
+### After the restart
+
+| Round | Scope |
+|---|---|
+| 1 · live stage feel | Pixel Crusade's presentation ported to the live stage, scaled for a crowd (§5a): local hit holds, gated scene freezes, shake, flash and slow motion, kill rings, bodies shattering into their own pixels, rim light, afterimages, projectiles, and effects and scenery on a smooth 60 Hz clock. World 1's clouds drift and birds and pollen cross it on the stage only. No asset changed, so it has no gallery chip: review it on the Live stage |
+| 2 · close-up camera | Pixel Crusade's item 5, camera half: `CAMERAS` in `demo.ts` crops a 16:9 window of the composed 320×180 scene, and the integer-scale fit shows a smaller window with bigger pixels. **Zoom 1** 320×180, the original (6× on a 1080p screen); **Zoom 2** 224×126 (8×); **Zoom 3** 272×153, between them (7×, **chosen and the default**: closer than the original, with room for a large boss); **Tight** 192×108 (10×, about Pixel Crusade's proportions). The HUD is drawn on the window. No art changed. Switch cameras on the Live stage with the select or live with keys 1–4, fullscreen included |
+
 ### Open
+
+- **Zoom 3 is the chosen camera** (2026-09-25): closer than the original while a large boss still fits. The other cameras stay on the Live stage for comparison. Pixel Crusade's other half of item 5, darker scenes behind the fighters, hasn't been tried: World 1's bright afternoon was the user's choice.
 
 - **Everything else is still round-1 art:** all Champions, enemies, bosses and summons, the other 58 VFX, and the other 9 worlds. On the stage the old enemies and Champions look undersized next to the chibi heroes.
 - **Only four skills are cinematics.** The other 12 classes cast with a sprite-level effect (aura, bolt, shout, slam, light column), not a `CinematicVfx`. Their skill VFX are still round-1 in `vfx.ts`.
@@ -121,6 +130,17 @@ The restyle goes in **small rounds**. Convert a sub-selection, let the user revi
 - **Other units hold** while a hero skill has the stage.
 - **Numbers:** hit numbers are held (1.8 s, no float) and stack 7 px apart over each target. After the last hit, a big red total goes on top. Styles are in `NUMBER_STYLES`: hits are outlined gold, crits outlined red.
 - The gallery previews each cinematic on `cinematicStage()`: the caster idling and a scarecrow on each enemy mark.
+
+### 5a. The live stage's hit feel (Round 1)
+
+Taken from the pixel-crusade branch (`engine.ts`, `pixel.ts`), whose art isn't sharper (it is 256×144 on the same palette) but presents every hit. Tuned in `JUICE` at the top of `demo.ts`.
+
+- **Two clocks.** Bodies play their held 10 fps frames. Everything that flies (projectiles, particles, VFX, shake) and the scenery move at 60 Hz: the stage sets `clock.smooth` (`vfx-kit.ts`) around its own draw calls, which takes `qt()` off the frame grid. Exports and the gallery never set it, so baked strips still close their loops.
+- **Scaled for a crowd.** Twelve bodies trading blows would stutter the scene if every hit froze it. An ordinary hit only holds the striker (melee) and the target for 3 ticks (5 on a crit), and the target jumps straight to its white flash frame and shudders 1 px. The scene-wide freeze is kept for a kill (3 ticks, then no ordinary kill may freeze again for `FREEZE_GAP`), every impact of a Hero skill, the last kill of a wave (plus slow motion) and a boss kill (freeze, 4 px shake, flash, slow motion). Screen shake on a crit is the Hero's alone. Measured over 3 minutes: the stage is frozen about 4% of the time and shaking about 12%.
+- **Death shatters.** A body plays its authored stagger and fall, then breaks into 2×2 chunks of its own colours (never its ink outline) at the frame where it would start to dissolve, behind a white-and-gold kill ring.
+- **Rim light** in the unit's accent (red for enemies) on the edge facing the foe while winding up and striking. It only lights edges at least 2 px thick, so baked aura flames and sparks don't turn into stripes. **Afterimages**: two checker silhouettes behind a caster for the first 0.25 s of its strike.
+- **Projectiles.** Ranged units (the Archer and Mage lines, support and control Champions, staff and bow enemies) loose arrows that fly an arc and bolts that trail particles. The hit lands on arrival; a multi-strike volley looses one arrow per strike, 0.3 s apart.
+- **Flash** is a Bayer-dithered overlay, capped at 6/16 coverage: half coverage washed a boss kill out.
 
 ---
 
