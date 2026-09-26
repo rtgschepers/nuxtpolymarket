@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const route = useRoute()
 
+useHead({ title: 'Hero Quest' })
+
 /**
  * Six tabs, plus Dev in dev builds.
  *
