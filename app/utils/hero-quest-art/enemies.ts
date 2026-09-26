@@ -393,7 +393,7 @@ const skyshardWisp: WorldSkin = {
     }
 }
 
-// 9 · The Fraying — Unravelled Knight: armour with no one in it, coming apart thread by thread.
+// 9 · The Brink — Unravelled Knight: armour with no one in it, coming apart thread by thread.
 const unravelledKnight: WorldSkin = {
     legLen: 8, torsoLen: 9,
     skin: [C.stone2, C.stone3, C.steel3],

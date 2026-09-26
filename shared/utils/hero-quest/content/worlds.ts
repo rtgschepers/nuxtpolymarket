@@ -116,10 +116,10 @@ export const WORLDS: readonly WorldDefinition[] = [
         superBossName: 'Zephyrax, Breaker of Heavens'
     },
     {
-        id: 'world_the_fraying',
+        id: 'world_the_brink',
         index: 9,
-        name: 'The Fraying',
-        theme: 'The edge of the world, where colour, sound and memory come apart thread by thread.',
+        name: 'The Brink',
+        theme: 'The last ground at the edge of the world, where the storm has burned out, the sky has gone to stars and everything left is falling toward the Void.',
         enemyName: 'Unravelled Knight',
         bossName: 'Sister Vesper, the Forgotten',
         superBossName: 'Liminus, the Last Door'

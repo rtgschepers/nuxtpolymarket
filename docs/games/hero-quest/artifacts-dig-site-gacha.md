@@ -156,7 +156,7 @@ No rarity epithet in the name — the collection card shows rarity as colour and
 | Epic | Eye of Pyrrhax — *Precision Edge, Killing Blow* | Rotheart Barkshield — *Vital Bloom, Deflection* | Korr's Marching Drum — *Quickening, Flow State* | Duskspire Star Chart — *Scholar's Boon, Night Owl* |
 | Legendary | Stormcrown Talon — *Momentum, Shattering Blow* | Glacier Titan's Heart — *Steady Ground, Unbroken* | Skyshard Prism — *Alacrity Surge, Chain Reaction* | Grave Robber's Spade — *Lucky Dig, Windfall* |
 | Legendary | Banner of the Bonefields — *Opening Strike, Last Stand* | Maerith's Pearl — *Bulwark's Legacy, Guardian's Echo* | Zephyrax Wingbone — *Overdrive, Slipstream* | Tome of Unfinished Lessons — *Quick Study, Compound Interest* |
-| Mythic | Ithren's Burning Sigil — *Might Surge, Precision Edge, Killing Blow* | Ossuar's Bone Mantle — *Iron Ward, Vital Bloom, Deflection* | Fraying Thread — *Swift Current, Quickening, Flow State* | Hoard of the Shattered Sky — *Prospector's Fortune, Scholar's Boon, Night Owl* |
+| Mythic | Ithren's Burning Sigil — *Might Surge, Precision Edge, Killing Blow* | Ossuar's Bone Mantle — *Iron Ward, Vital Bloom, Deflection* | Lodestone of the Brink — *Swift Current, Quickening, Flow State* | Hoard of the Shattered Sky — *Prospector's Fortune, Scholar's Boon, Night Owl* |
 | Mythic | Key to the Last Door — *Momentum, Opening Strike, Last Stand* | Vesper's Forgotten Hymn — *Steady Ground, Bulwark's Legacy, Guardian's Echo* | Herald's Stopped Clock — *Alacrity Surge, Overdrive, Slipstream* | Last Coin of the Void — *Lucky Dig, Quick Study, Compound Interest* |
 
 ---

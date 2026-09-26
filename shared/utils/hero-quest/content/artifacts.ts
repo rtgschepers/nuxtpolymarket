@@ -363,7 +363,7 @@ const ARTIFACT_NAMES: Readonly<Record<ArtifactCategory, readonly string[]>> = {
         "Korr's Marching Drum", // Quickening + Flow State
         'Skyshard Prism', // Alacrity Surge + Chain Reaction
         'Zephyrax Wingbone', // Overdrive + Slipstream
-        'Fraying Thread', // Swift Current + Quickening + Flow State
+        'Lodestone of the Brink', // Swift Current + Quickening + Flow State
         "Herald's Stopped Clock" // Alacrity Surge + Overdrive + Slipstream
     ],
     fortune: [

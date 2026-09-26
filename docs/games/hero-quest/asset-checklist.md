@@ -356,7 +356,7 @@ weapon type *and* its world. Elites reuse these — see the mark below.
 - [ ] Skyshard Wisp — bow
 - [ ] Skyshard Wisp — mage-staff
 
-#### 9. The Fraying — Unravelled Knight
+#### 9. The Brink — Unravelled Knight
 
 *The edge of the world, where colour, sound and memory come apart thread by thread.*
 
@@ -446,7 +446,7 @@ the boss arriving. Drop to 4 if it does not earn its keep in playtest (`asset-li
 - [ ] Stormcrown Roc — Hit
 - [ ] Stormcrown Roc — Death
 
-#### Sister Vesper, the Forgotten — The Fraying
+#### Sister Vesper, the Forgotten — The Brink
 
 - [ ] Sister Vesper, the Forgotten — Entry
 - [ ] Sister Vesper, the Forgotten — Idle
@@ -528,7 +528,7 @@ the boss arriving. Drop to 4 if it does not earn its keep in playtest (`asset-li
 - [ ] Zephyrax, Breaker of Heavens — Hit
 - [ ] Zephyrax, Breaker of Heavens — Death
 
-#### Liminus, the Last Door — The Fraying
+#### Liminus, the Last Door — The Brink
 
 - [ ] Liminus, the Last Door — Entry
 - [ ] Liminus, the Last Door — Idle
@@ -840,7 +840,7 @@ selling 48 distinct relics (decided 2026-09-17).
 - [ ] Korr's Marching Drum — Epic  `artifact_tempo_7`
 - [ ] Skyshard Prism — Legendary  `artifact_tempo_8`
 - [ ] Zephyrax Wingbone — Legendary  `artifact_tempo_9`
-- [ ] Fraying Thread — Mythic  `artifact_tempo_10`
+- [ ] Lodestone of the Brink — Mythic  `artifact_tempo_10`
 - [ ] Herald's Stopped Clock — Mythic  `artifact_tempo_11`
 
 #### Fortune (12)
@@ -1003,7 +1003,7 @@ One per world, drawn from the same theme line as that world's roster. **Art dire
 - [ ] 6. Duskspire — *A city of mage-towers held at twilight since its archmage opened a door to the Void.*
 - [ ] 7. The Bonefields — *An ancient battlefield where the fallen of a forgotten war rise to fight it again.*
 - [ ] 8. The Shattered Sky — *Islands of torn-loose stone adrift in a storm the Void has unmoored.*
-- [ ] 9. The Fraying — *The edge of the world, where colour, sound and memory come apart thread by thread.*
+- [ ] 9. The Brink — *The last ground at the edge of the world, where the storm has burned out, the sky has gone to stars and everything left is falling toward the Void.*
 - [ ] 10. The Void — *Nothing, pressing in — where every crack leads, and where each run ends before it begins again.*
 
 ### 4.2 UI backgrounds — 11

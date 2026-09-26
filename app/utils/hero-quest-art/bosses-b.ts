@@ -429,7 +429,7 @@ export const ZEPHYRAX: CreatureDef = {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════ 9 · The Fraying
+// ═══════════════════════════════════════════════════════════════ 9 · The Brink
 
 /** Sister Vesper, the Forgotten — a veiled nun no one remembers, fraying at the hem. */
 export const SISTER_VESPER: CreatureDef = {

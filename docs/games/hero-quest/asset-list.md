@@ -50,7 +50,7 @@ Two of the 16 skill-cast animations are summon triggers rather than direct-effec
 **Locked: every enemy is styled to its world.** A world's theme line is the art brief for its
 background *and* its whole roster — trash, elite, boss and super boss are drawn as inhabitants of
 that place, not as a generic monster set recoloured ten times. Cinderpass fields ash-caked kobolds
-around a molten wyrm; The Fraying fields knights coming apart thread by thread. This is what makes
+around a molten wyrm; The Brink, the last ground before the Void, fields knights coming apart thread by thread. This is what makes
 a world read as somewhere the player has arrived, given that nothing else about it changes — the
 stat curve is continuous across worlds and the pool never re-themes between prestiges
 (`core-progression-and-prestige.md` §5), so **art is the only signal that the run has moved on.**
@@ -70,7 +70,7 @@ one super boss.
 | 6 | Duskspire | A city of mage-towers held at twilight since its archmage opened a door to the Void | Hollow Acolyte | Magister Halvane | Archmage Ithren, the Door-Opener |
 | 7 | The Bonefields | An ancient battlefield where the fallen of a forgotten war rise to fight it again | Restless Legionnaire | Grave Marshal Korr | Ossuar, the Thousand-Bone Host |
 | 8 | The Shattered Sky | Islands of torn-loose stone adrift in a storm the Void has unmoored | Skyshard Wisp | Stormcrown Roc | Zephyrax, Breaker of Heavens |
-| 9 | The Fraying | The edge of the world, where colour, sound and memory come apart thread by thread | Unravelled Knight | Sister Vesper, the Forgotten | Liminus, the Last Door |
+| 9 | The Brink | The last ground at the edge of the world, where the storm has burned out, the sky has gone to stars and everything left is falling toward the Void | Unravelled Knight | Sister Vesper, the Forgotten | Liminus, the Last Door |
 | 10 | The Void | Nothing, pressing in — where every crack leads, and where each run ends before it begins again | Void Thrall | Void Herald | Nihil, the Hunger at the End |
 
 **Decided 2026-09-17: 4 trash variants per world — sword, axe, bow, mage-staff.** Each wears an
