@@ -296,6 +296,8 @@ export class BattleDemo {
     private fx: Fx[] = Array.from({ length: 8 }, () => ({ live: false, def: null, t: 0 }))
     /** Scratch the live VFX draw into, then blit onto the frame at the VL origin. */
     private vfxLayer = new Surface(VL.W, VL.H, 0, 0)
+    /** The scene's foreground, drawn apart so it can go over the fighters and still take the tint. */
+    private frontLayer = new Surface(DEMO_W, DEMO_H, 0, 0)
     /** Scratch for the shake: the frame copied out so it can be written back shifted. */
     private shakeLayer = new Surface(DEMO_W, DEMO_H, 0, 0)
     private projs: Proj[] = Array.from({ length: 32 }, () => ({
@@ -461,6 +463,9 @@ export class BattleDemo {
 
     private endMarch(): void {
         this.march = 0
+        // The last tick of a march overshoots by up to a frame's worth of scroll, and over many
+        // waves that crept the framing off the edges and onto the fight. Land on the period.
+        this.scroll = Math.round(this.scroll / SCROLL_PERIOD) * SCROLL_PERIOD
         for (let i = 0; i < this.units.length; i++) {
             const u = this.units[i]!
             u.ox = 0
@@ -808,11 +813,9 @@ export class BattleDemo {
         // march needs every layer to parallax against `scroll`. Measured at ~1 ms, 6% of a frame.
         this.scene.draw(s, this.scroll, this.time)
         const c = this.cine
-        if (c) {
-            // the scene dims toward the skill's colour, stepping in and out through the dither
-            const out = c.def.dur + 0.3 - c.t
-            applyTint(s, c.lut, Math.min(16, Math.floor(Math.min(c.t / 0.2, out / 0.3) * 16)))
-        }
+        // the scene dims toward the skill's colour, stepping in and out through the dither
+        const tint = c ? Math.min(16, Math.floor(Math.min(c.t / 0.2, (c.def.dur + 0.3 - c.t) / 0.3) * 16)) : 0
+        if (c) applyTint(s, c.lut, tint)
         // Painter's order: furthest rank first, each nearer one drawn over it. Within a rank the
         // old right-to-left walk stands, so party and enemies overlap the way they always did.
         for (let r = 0; r < RANK_Y.length; r++) {
@@ -858,6 +861,14 @@ export class BattleDemo {
             if (r.big) ring(s, r.x, r.y, 2 + u * 28, C.gold3)
         }
         this.particles.draw(s)
+        // the foreground stands nearer the camera than the near rank, so it goes over the fight
+        if (this.scene.front) {
+            const f = this.frontLayer
+            f.clear()
+            this.scene.front(f, this.scroll, this.time)
+            if (c) applyTint(f, c.lut, tint)
+            for (let i = 0; i < f.data.length; i++) if (f.data[i] !== CLEAR) s.data[i] = f.data[i]!
+        }
         // standing water mirrors the fight, not just the scenery
         if (this.water >= 0) reflectWater(s, this.water, this.time, this.glitter)
         for (let i = 0; i < this.nums.length; i++) { const n = this.nums[i]!; if (n.live) drawNumber(s, n) }

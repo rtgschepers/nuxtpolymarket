@@ -34,7 +34,7 @@ import { ARTIFACTS } from '../../../shared/utils/hero-quest/content/artifacts'
 import { GEAR } from '../../../shared/utils/hero-quest/content/gear'
 import { NUMBER_STYLES, drawNumberPop, drawNumberAtlas, numberAtlasWidth, numberHeight, drawPartyFrame, drawCooldown, drawEnrageTimer, drawAddWaveSpawn, drawPhaseShift, drawRevealBase, REVEAL_LUT, REVEAL_SIZE } from './feedback'
 import { Surface as Surf, blit, rect } from './surface'
-import { WORLD_SCENES, SW, SH, BG_FRAMES } from './scenery'
+import { WORLD_SCENES, SW, SH, BG_FRAMES, composeScene } from './scenery'
 import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawLogo, drawAppIcon, drawSplash } from './ui-art'
 import { GILDED_WARLORD, DRILLMASTER, BURIED_COLOSSUS, DIG_SCARAB, RELIC_SHARD, ANVIL_HEART, RAMPANT, TRAINING_DUMMY } from './raids'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
@@ -91,7 +91,20 @@ export interface ArtAsset {
  * adopted, again once the Hero designs were locked, and again once World 1 was locked. The
  * next round is 1; the earlier rounds are recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
+    {
+        n: 1,
+        label: 'backgrounds',
+        prefixes: ['world_mirewood', 'world_cinderpass', 'world_rimeholt', 'world_sunken_amarath', 'world_duskspire',
+            'world_the_bonefields', 'world_the_shattered_sky', 'world_the_brink', 'world_the_void'].map(id => `bg/world/${id}`)
+    },
+    { n: 2, label: 'foreground & volcanoes', prefixes: ['bg/world/world_thornwick_vale', 'bg/world/world_cinderpass'] },
+    { n: 3, label: 'Rimeholt mountains', prefixes: ['bg/world/world_rimeholt'] },
+    { n: 4, label: 'Bonefields giants', prefixes: ['bg/world/world_the_bonefields'] },
+    { n: 5, label: 'Shattered Sky islands & clouds', prefixes: ['bg/world/world_the_shattered_sky'] },
+    { n: 6, label: 'The Brink', prefixes: ['bg/world/world_the_brink'] },
+    { n: 7, label: 'Void upgrade', prefixes: ['bg/world/world_the_void'] }
+]
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
@@ -368,7 +381,7 @@ function revealAssets(): ArtAsset[] {
 
 function backgroundAssets(): ArtAsset[] {
     return WORLD_SCENES.map((scene, i) => ({
-        ...anim(`bg/world/${scene.id}`, 'backgrounds', 'World backgrounds', `${WORLDS[i]!.index}. ${WORLDS[i]!.name}`, SW, SH, BG_FRAMES, true, (d, t) => scene.draw(d, 0, t)),
+        ...anim(`bg/world/${scene.id}`, 'backgrounds', 'World backgrounds', `${WORLDS[i]!.index}. ${WORLDS[i]!.name}`, SW, SH, BG_FRAMES, true, (d, t) => composeScene(scene, d, 0, t)),
         opaque: true
     }))
 }
