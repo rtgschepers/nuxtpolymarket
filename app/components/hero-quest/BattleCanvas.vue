@@ -167,8 +167,6 @@ const emit = defineEmits<{
     claimMilestones: [track: string | null]
     /** The guide's panel was pressed: the next page, or the tutorial closed on the last. */
     guideNext: []
-    /** The guide's Skip button: the tutorial closed unread. */
-    guideSkip: []
 }>()
 
 const wrap = ref<HTMLDivElement | null>(null)
@@ -446,9 +444,14 @@ function targetAt(e: PointerEvent): Target | null {
     const y = (e.clientY - r.top) / r.height * presenter.h
     // the reward popup takes every press: only its button does anything
     if (props.raidReward) return raidsHit?.onRaidRewardButton(presenter.w, sceneH, x, y) ? 'reward:ok' : null
-    // the guide's panel sits over the scene: a press on it is the guide's
-    const guideAt = props.guide && guideHit ? guideHit.guideTargetAt(x, y) : null
-    if (guideAt) return guideAt
+    // a tutorial is forced: only its bar answers, or for an unlock only the button it points at
+    if (props.guide) {
+        if (props.guide.focus) {
+            const item = band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? null
+            return item === props.guide.focus ? item : null
+        }
+        return guideHit?.guideTargetAt(presenter.w, sceneH, x, y, props.guide) ?? null
+    }
     // a raid round hides the menu, so a stray press can't walk out of it mid-fight
     const item = props.raidRound ? null : band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? null
     if (item) return item
@@ -653,7 +656,6 @@ function onPointerUp(e: PointerEvent) {
     // a day other than today is only pointed at, for what it pays
     else if (hit.startsWith('cal:')) return
     else if (hit === 'guide:next') emit('guideNext')
-    else if (hit === 'guide:skip') emit('guideSkip')
     else if (hit === 'ms:all') emit('claimMilestones', null)
     else if (hit.startsWith('ms:row:')) {
         // a card with nothing waiting is only pointed at, for what its next step pays
@@ -765,7 +767,7 @@ const milestonesHover = computed<MilestonesTarget | null>(() => hover.value?.sta
 function milestoneRowOf(target: string) {
     return props.milestones?.rows[Number(target.slice(7))]
 }
-const guideHover = computed<GuideTarget | null>(() => hover.value === 'guide:next' || hover.value === 'guide:skip' ? hover.value : null)
+const guideHover = computed<GuideTarget | null>(() => hover.value === 'guide:next' ? hover.value : null)
 /** The band's red dots: a scene opened and not visited yet, today's calendar reward, or a milestone step waiting. */
 const bandAlerts = computed<ReadonlySet<HqMenuScene>>(() => new Set<HqMenuScene>([
     ...(props.newScenes ?? []),
@@ -881,9 +883,10 @@ onMounted(async () => {
                                     ? settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
                                     : speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
         if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)
-        // the guide waits out a raid's reward popup rather than covering it
-        else if (props.guide && guideHit) guideHit.drawGuide(view, t, props.guide, guideHover.value, pressed.value)
-        presenter!.present(banded!.compose(view, scene, bandHover.value, pressed.value, !!props.raidRound, bandAlerts.value, props.menuScenes))
+        const frame = banded!.compose(view, scene, bandHover.value, pressed.value, !!props.raidRound, bandAlerts.value, props.menuScenes)
+        // over the whole frame, so the band dims with the scene; it waits out a raid's reward popup
+        if (props.guide && guideHit && !props.raidReward) guideHit.drawGuide(frame, view.h, t, props.guide, guideHover.value)
+        presenter!.present(frame)
     })
     observer = new ResizeObserver(fit)
     observer.observe(wrap.value!)

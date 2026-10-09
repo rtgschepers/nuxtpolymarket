@@ -163,10 +163,19 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     settings: COG
 }
 
-/** Where the `i`th of `n` buttons sits on a view of the given size: the row is centred. */
-function buttonBox(w: number, h: number, i: number, n: number): { x: number, y: number } {
+/**
+ * Where the `i`th scene's button sits on a view of the given size. The full row is centred and every
+ * scene keeps its slot, so a scene opening later fills its gap rather than shifting the rest (the user's call).
+ */
+function buttonBox(w: number, h: number, i: number): { x: number, y: number } {
+    const n = HQ_MENU_SCENES.length
     const row = n * BTN_W + (n - 1) * BTN_GAP
     return { x: ((w - row) >> 1) + i * (BTN_W + BTN_GAP), y: h - BAND_H + ((BAND_H - BTN_H) >> 1) }
+}
+
+/** A scene's button on a view of the given size: what the guide leaves lit when it points there. */
+export function menuButtonRect(w: number, h: number, scene: HqMenuScene): { x: number, y: number, w: number, h: number } {
+    return { ...buttonBox(w, h, HQ_MENU_SCENES.indexOf(scene)), w: BTN_W, h: BTN_H }
 }
 
 /**
@@ -174,9 +183,11 @@ function buttonBox(w: number, h: number, i: number, n: number): { x: number, y: 
  * the buttons shown: a scene not open yet (`tutorials.ts`) has none.
  */
 export function menuItemAt(w: number, h: number, x: number, y: number, scenes: readonly HqMenuScene[] = HQ_MENU_SCENES): HqMenuScene | null {
-    for (let i = 0; i < scenes.length; i++) {
-        const b = buttonBox(w, h, i, scenes.length)
-        if (x >= b.x && x < b.x + BTN_W && y >= b.y && y < b.y + BTN_H) return scenes[i]!
+    for (let i = 0; i < HQ_MENU_SCENES.length; i++) {
+        const id = HQ_MENU_SCENES[i]!
+        if (!scenes.includes(id)) continue
+        const b = buttonBox(w, h, i)
+        if (x >= b.x && x < b.x + BTN_W && y >= b.y && y < b.y + BTN_H) return id
     }
     return null
 }
@@ -194,9 +205,11 @@ export function drawMenuBand(s: Surface, open: HqScene, hover: HqMenuScene | nul
     rect(s, 0, y0 + 1, s.w, 1, C.night1)
     // hidden, the strip stays so the frame keeps its size, with nothing on it to press
     if (hidden) return
-    for (let i = 0; i < scenes.length; i++) {
-        const id = scenes[i]!
-        const b = buttonBox(s.w, s.h, i, scenes.length)
+    for (let i = 0; i < HQ_MENU_SCENES.length; i++) {
+        const id = HQ_MENU_SCENES[i]!
+        // a scene not open yet leaves its slot empty
+        if (!scenes.includes(id)) continue
+        const b = buttonBox(s.w, s.h, i)
         const lit = hover === id
         const down = lit && pressed ? 1 : 0
         const on = open === id

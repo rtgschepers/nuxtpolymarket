@@ -18,7 +18,7 @@ import type { RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-s
 import type { RaidId as StageRaidId, StageRaid } from '~/utils/hero-quest-art/demo'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
-import { isHqFeature, nextTutorial, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
+import { isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
 import { GUIDE_NAME, TUTORIAL_PAGES } from '#shared/utils/hero-quest/content/tutorials'
 import type { GuideView } from '~/utils/hero-quest-art/guide'
 import type { GachaBannerView, GachaButton, GachaCard, GachaSystemId, GachaView, PullPrice } from '~/utils/hero-quest-art/gacha-scene'
@@ -811,14 +811,18 @@ const unlocked = computed<readonly HqFeature[]>(() => tutorials.value?.unlocked 
 /** Closed here before the server says so, so a tutorial doesn't flash back while its write is on its way. */
 const seenLocally = ref<string[]>([])
 const seenTutorials = computed(() => [...(tutorials.value?.seen ?? []), ...seenLocally.value])
-/** The menu shows Settings and every scene open so far. */
-const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || unlocked.value.includes(s)))
+/** The open features the menu shows: with tutorials on, a feature waits for its turn behind one that opened with it. */
+const shownFeatures = computed<readonly HqFeature[]>(() => settings.value?.tutorials === false
+    ? unlocked.value
+    : revealedFeatures(unlocked.value, seenTutorials.value, props.scene))
+/** The menu shows Settings and every feature shown. */
+const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || shownFeatures.value.includes(s)))
 /** Opened and not visited yet: the button carries the red dot until it is. */
 const newScenes = computed(() => unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)))
 
-// a scene not open yet, reached by a link or a reload, falls back to the battle
-watch([() => props.scene, unlocked], ([scene]) => {
-    if (tutorials.value && isHqFeature(scene) && !unlocked.value.includes(scene)) emit('scene', 'battle')
+// a scene not open yet, or waiting its turn, reached by a link or a reload, falls back to the battle
+watch([() => props.scene, shownFeatures], ([scene]) => {
+    if (tutorials.value && isHqFeature(scene) && !shownFeatures.value.includes(scene)) emit('scene', 'battle')
 }, { immediate: true })
 
 /**
@@ -832,7 +836,7 @@ const dueTutorial = computed<TutorialId | null>(() => {
 const guidePage = ref(0)
 watch(dueTutorial, () => { guidePage.value = 0 })
 const guideView = computed<GuideView | null>(() => dueTutorial.value
-    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value }
+    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value, focus: unlockFocus(dueTutorial.value) }
     : null)
 
 function closeTutorial() {
@@ -842,6 +846,17 @@ function closeTutorial() {
     markTutorialSeen(id).catch(() => {
         // `useHeroQuest` has already shown the error; the tutorial comes round again on the next read
     })
+}
+
+/** An unlock's scene, whose menu button is the one thing a forced unlock lets the player press. */
+function unlockFocus(id: TutorialId): HqMenuScene | null {
+    return id.endsWith(':unlock') ? id.slice(0, -':unlock'.length) as HqMenuScene : null
+}
+
+/** A menu press. Pressing the button an unlock points at is how that unlock is read. */
+function onScene(scene: HqScene) {
+    if (guideView.value?.focus === scene) closeTutorial()
+    emit('scene', scene)
 }
 
 function onGuideNext() {
@@ -1052,9 +1067,11 @@ const awayReport = computed(() => {
           :crossing="crossing"
           :earned="earnedShards"
           :menu-scenes="menuScenes"
+          :guide="guideView"
           @begin="beginAgain"
           @crossed="onCrossed"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
+          @guide-next="onGuideNext"
         />
         <p class="text-center text-sm text-muted">
           Begin again at World 1 for {{ formatHq(nextPrestigeReward) }} Void Shards. Your hero keeps every level.
@@ -1100,7 +1117,7 @@ const awayReport = computed(() => {
           @fight-progress="fightProgress = $event"
           @pack="stagePack = $event"
           @challenge="onEngage"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
           @collection-tab="openCollectionTab"
           @collection-action="onCollectionAction"
           @loadout-action="onLoadoutAction"
@@ -1113,7 +1130,6 @@ const awayReport = computed(() => {
           @claim-calendar="onClaimCalendar"
           @claim-milestones="onClaimMilestones"
           @guide-next="onGuideNext"
-          @guide-skip="closeTutorial"
           @raid-enter="onRaidEnter"
           @raid-quick="onRaidQuick"
           @raid-reward-close="closeRaidReward"

@@ -3,7 +3,8 @@
  *
  * The unlocks are a gate, not only a hidden button: every route that acts for a feature asks
  * `requireFeature` first, so a client can't reach one early. They are read off the run's position,
- * which only moves forward, so a read a moment stale can only refuse, never let through.
+ * which only moves forward, so a read a moment stale can only refuse, never let through. A boss
+ * lost to counts as fought: `boss_lost` is cleared only by the win that moves the run past it.
  */
 
 import { eq, sql } from 'drizzle-orm'
@@ -20,14 +21,14 @@ import {
     type UnlockProgress
 } from '#shared/utils/hero-quest/tutorials'
 
-export function unlockProgressOf(state: Pick<HqStateRow, 'prestige' | 'world' | 'stage' | 'runCleared'>): UnlockProgress {
-    return { prestige: state.prestige, world: state.world, stage: state.stage, runCleared: state.runCleared }
+export function unlockProgressOf(state: Pick<HqStateRow, 'prestige' | 'world' | 'stage' | 'runCleared' | 'bossLost'>): UnlockProgress {
+    return { prestige: state.prestige, world: state.world, stage: state.stage, runCleared: state.runCleared, bossLost: state.bossLost }
 }
 
 /** Refuse unless `feature` is open: its checkpoint reached. */
 export async function requireFeature(userId: string, feature: HqFeature, executor: DbExecutor = db): Promise<void> {
     const [state] = await executor
-        .select({ prestige: hqState.prestige, world: hqState.world, stage: hqState.stage, runCleared: hqState.runCleared })
+        .select({ prestige: hqState.prestige, world: hqState.world, stage: hqState.stage, runCleared: hqState.runCleared, bossLost: hqState.bossLost })
         .from(hqState)
         .where(eq(hqState.userId, userId))
     if (!state) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run' })

@@ -1187,7 +1187,7 @@ export const CALENDAR_SCHEDULE: readonly CalendarDay[] = [ // UNTUNED ╧
 /** A scene that opens at a checkpoint. Battle and Settings are open from the start. */
 export type HqFeature = 'gacha' | 'collections' | 'milestones' | 'calendar' | 'loadouts' | 'speed' | 'raids' | 'prestige' | 'classes'
 
-/** A point of lifetime progress: a World's mid-boss beaten, Worlds cleared, the run cleared, prestiges made. */
+/** A point of lifetime progress: a World's mid-boss fought (beaten, or lost to), Worlds cleared, the run cleared, prestiges made. */
 export type FeatureCheckpoint =
     | { kind: 'boss', world: number }
     | { kind: 'worlds', count: number }

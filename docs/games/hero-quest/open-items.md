@@ -9,7 +9,7 @@ made it the most expensive bloat in the project.
 scripts cite them (`#22`, `#23.3`, `#18.6`). The gaps below — #4, #5, #8, #10–#21, #24, #26–#28 —
 are finished items, not missing ones; they are in `build-log.md` under the same number. #22, #23,
 #25 and #29 appear in both: the open part here, the full record there. New items continue from
-**#51** — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up.
+**#51** — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up and built the same day, with its art and name open below.
 
 **Resolving a bare `#N`:** this doc first, `build-log.md` otherwise. Sub-numbers (`#23.3`,
 `#18.6`) keep their original meaning in both.
@@ -59,23 +59,6 @@ read the older rule in the doc named in the middle column, it is superseded.**
 
 ## 🔴 Genuinely undesigned — full passes, not edits
 
-### 50. Tutorials with a guide character (backlog item 10) — **🚧 in progress, @rtgschepers, 2026-10-09**
-Picked up 2026-10-09; ask before starting on it. **Decided** (the user's calls): the guide is **a snail familiar**, working name Shellby (`GUIDE_NAME`, display only), unhurried and a little wry; the unlock schedule below; and **announce, then explain**: a line when a scene opens, two or three short pages the first time it is visited, plus an intro on a new run.
-
-| Opens at | Scenes |
-|---|---|
-| Start | Battle, Settings |
-| World 1 boss beaten | Gacha, Collections |
-| 1 World cleared | Milestones, Calendar |
-| 2 Worlds cleared | Loadouts, Battle Speed |
-| 4 Worlds cleared | Raids |
-| The run cleared | Prestige |
-| First prestige | Classes |
-
-**Built** (`FEATURE_UNLOCKS`, `shared/utils/hero-quest/tutorials.ts`, `content/tutorials.ts`): unlocks are derived from lifetime progress, never stored, and **enforced on the server** (`requireFeature` in every feature's routes, a 403 naming the checkpoint), so they can't be reached early. The tutorials seen are `hq_state.tutorials_seen` (migration `0059`); resetting them (Settings) locks nothing. The menu band shows only open scenes, a new one dotted until visited; a closed scene reached by a link falls back to the battle; the guide waits out boss and raid fights, and stays away while "show tutorials" is off.
-
-**Open:** the snail's art round (its portrait is a placeholder drawn in `guide.ts`), and its name.
-
 ### 7. Passive Skill Tree (backlog item 3)
 Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
 
@@ -86,7 +69,7 @@ Explicitly deferred scope — the gift-mechanic phase is locked, but limited-tim
 
 ## ⚠️ Open consequences of work that landed
 
-Nine items are built and working but left something undecided. The full record of each is in
+Ten items are built and working but left something undecided. The full record of each is in
 `build-log.md`; only the open half is restated here. (The `killFraction` invariant that used to
 sit here as #24 is not an open item — it is a trap, and it lives in `CLAUDE.md` §7 and
 `build-log.md` #24.)
@@ -172,6 +155,16 @@ open:
 3. **The campaign sim doesn't see milestones.** Seal income isn't part of the walk, so this changes
    nothing it measures. Pull-pacing questions (#23.2, the Seal ladder) now have this source to
    account for.
+
+### 50. Tutorials and feature unlocks — built; the guide's art is in review
+
+Full record: `build-log.md` #50. Scenes open at checkpoints of lifetime progress, enforced on the
+server, and Mossimer the snail announces each and explains it on the first visit. What it left open:
+
+1. **The snail's art is in review as Round 21** (`guide-portrait.ts`, the gallery's Guide group).
+   Lock it, or send it back, at `/hero-quest/art`.
+2. ~~**Its name.**~~ **Mossimer, keeper of the Chronicle** (2026-10-09, at the user's request for a
+   better name and lore). `GUIDE_NAME` is display only, so a rename touches no save.
 
 ### 36. Cooldowns off the level curve — the pacing half is deferred to playtesting
 
