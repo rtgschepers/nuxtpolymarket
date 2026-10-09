@@ -282,7 +282,7 @@ Two things the report says outright and are worth internalising:
 | Verdict | Meaning |
 |---|---|
 | `CLEAR` | Kills it, survives it, and beats the timer if there is one. |
-| `TIMER FAIL` | Survives fine, but the boss encounter (boss + escort) outlasts `BOSS_TIMER_SECONDS`. |
+| `TIMER FAIL` | Survives fine, but the boss encounter outlasts `BOSS_TIMER_SECONDS`. |
 | `WIPE` | Dies before the clear lands. Checked before the timer — a wipe outranks a timer fail. |
 | `STALLED` | The party cannot kill anything — `secondsPerKill` is not finite. |
 

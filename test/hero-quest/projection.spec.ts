@@ -158,7 +158,9 @@ describe('the settle projection', () => {
             // The measurement behind the asymmetric band above. An ability cannot fire at t=0,
             // so a finite fight always lands fewer casts than the steady-state rate prices —
             // and the shorter the fight, the larger the gap.
-            const snapshot = hero(FIXTURE.level, 'class_hunter')
+            // A boss alone falls too fast at the fixture's level for a cast to land, so this one
+            // fights longer: the middle of the band (144–154) where every claim below holds.
+            const snapshot = hero(150, 'class_hunter')
             const position = FIXTURE.position
             const result = runFight({ hero: snapshot, position, seed: 7 })
             const units = partyUnitStats(snapshot)

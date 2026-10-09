@@ -72,11 +72,10 @@ export const ELITE_PACK_SIZE = 6
 /**
  * Minions standing with a boss or super boss; the encounter holds `BOSS_MINION_COUNT + 1` bodies.
  *
- * Smaller than a wave pack: the escort splits the party's attention and gives AoE something to
- * answer. `BOSS_TIMER_SECONDS` covers the **whole encounter**, so every minion is time taken off
- * the boss.
+ * None (the user's call, 2026-10-09; it was 2): a boss fight is the boss alone, plus whatever adds
+ * its own fight spawns. The pack code still takes any count, so an escort is one number away.
  */
-export const BOSS_MINION_COUNT = 2
+export const BOSS_MINION_COUNT = 0
 
 /**
  * Fraction of a pack still swinging, averaged over one stage attempt.

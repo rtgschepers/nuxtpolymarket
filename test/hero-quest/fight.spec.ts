@@ -12,7 +12,7 @@ import {
     SUPER_BOSS_STAGE
 } from '#shared/utils/hero-quest/constants'
 import { attackIntervalFor } from '#shared/utils/hero-quest/combat'
-import { enemyStatsAt } from '#shared/utils/hero-quest/settle'
+import { bossMinionStats, enemyStatsAt } from '#shared/utils/hero-quest/settle'
 import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { D, ZERO } from '#shared/utils/hero-quest/numbers'
 import { ASCENDANT_ID, MASTER_IDS, getClass, kitFor } from '#shared/utils/hero-quest/content/classes'
@@ -157,45 +157,37 @@ describe('hero-quest seeded fights', () => {
         })
     })
 
-    describe('the boss escort', () => {
-        // A boss stands with `BOSS_MINION_COUNT` trash minions, and the 30s timer covers
-        // the whole encounter — so the escort is time taken off the boss, not free damage.
-        const escorted = (level: number, world = 1) =>
+    describe('a boss fight', () => {
+        // The boss alone, no escort (the user's call, 2026-10-09): the 30s timer is all its own.
+        const bossFight = (level: number, world = 1) =>
             runFight({ hero: hero(level, 'class_berserker'), position: at(world, BOSS_STAGE), seed: 7 })
 
-        it('resolves every body in the encounter, escort first', () => {
-            const result = escorted(200)
+        it('resolves the boss as the one body in the encounter', () => {
+            const result = bossFight(200)
             const downed = result.events.filter(event => event.kind === 'enemy_down')
 
-            expect(downed).toHaveLength(BOSS_MINION_COUNT + 1)
-            // Index order is kill order: minions carry the low indices, the boss the last.
-            expect(downed.map(event => event.enemyIndex))
-                .toEqual(Array.from({ length: BOSS_MINION_COUNT + 1 }, (_unused, index) => index))
+            expect(BOSS_MINION_COUNT).toBe(0)
+            expect(downed).toHaveLength(1)
+            expect(downed[0]!.enemyIndex).toBe(0)
             expect(result.outcome).toBe('win')
         })
 
-        it('attributes every hit to the body it landed on', () => {
-            const hits = escorted(200).events.filter(event => event.kind === 'attack' || event.kind === 'skill')
+        it('attributes every hit to the boss', () => {
+            const hits = bossFight(200).events.filter(event => event.kind === 'attack' || event.kind === 'skill')
             expect(hits.length).toBeGreaterThan(0)
-            for (const hit of hits) {
-                expect(hit.enemyIndex, JSON.stringify(hit)).toBeDefined()
-                expect(hit.enemyIndex!).toBeLessThanOrEqual(BOSS_MINION_COUNT)
-            }
+            for (const hit of hits) expect(hit.enemyIndex, JSON.stringify(hit)).toBe(0)
         })
 
-        it('lets the escort swing too, so incoming damage is the whole encounter', () => {
-            // A losing fight, so the escort survives long enough to be counted. World 4 rather
-            // than World 1, so this passes or fails on who is allowed to attack and not on how
-            // the opening happens to be tuned.
-            const incoming = escorted(1, 4).events.filter(event => event.kind === 'enemy_attack')
+        it('has the boss as the only attacker', () => {
+            // A losing fight, so the boss swings for long enough to be counted.
+            const incoming = bossFight(1, 4).events.filter(event => event.kind === 'enemy_attack')
             expect(incoming.length).toBeGreaterThan(0)
-            // More than one distinct attacker — the boss is not the only stream any more.
-            expect(new Set(incoming.map(event => event.enemyIndex)).size).toBeGreaterThan(1)
+            expect(new Set(incoming.map(event => event.enemyIndex))).toEqual(new Set([0]))
         })
 
-        it('counts the whole encounter in enemyMaxHp, not the boss alone', () => {
-            const result = escorted(200)
-            expect(D(result.enemyMaxHp).gt(enemyStatsAt(at(1, BOSS_STAGE)).hp)).toBe(true)
+        it('counts the boss alone in enemyMaxHp', () => {
+            const result = bossFight(200)
+            expect(D(result.enemyMaxHp).eq(enemyStatsAt(at(1, BOSS_STAGE)).hp)).toBe(true)
         })
     })
 
@@ -212,17 +204,23 @@ describe('hero-quest seeded fights', () => {
          * the party's own pool has grown into it. If this breaks, re-scan for the level band
          * where every spec below holds and take its middle rather than nudging.
          */
+        const position = at(3, SUPER_BOSS_STAGE)
+        // Bosses stand alone now, so the board an AoE or a pierce needs is built here: the old
+        // escort of two trash minions in front, the boss behind, on the boss's own timer.
+        const board = {
+            pack: { members: [bossMinionStats(position), bossMinionStats(position), enemyStatsAt(position)] },
+            seconds: BOSS_TIMER_SECONDS
+        }
         const fight = (classId: ClassId, level = 93) =>
-            runFight({ hero: hero(level, classId), position: at(3, SUPER_BOSS_STAGE), seed: 7 })
+            runFight({ hero: hero(level, classId), position, seed: 7, encounter: board })
 
         it('lands an AoE on every living body at once', () => {
-            // Marksman's Arrow Rain hits every spot; a boss encounter holds three.
+            // Marksman's Arrow Rain hits every spot; the board holds three.
             const result = fight('class_marksman')
             const rain = result.events.filter(event => event.skillId === 'skill_arrow_rain')
             const firstVolley = rain.filter(event => event.at === rain[0]!.at)
 
-            expect(new Set(firstVolley.map(event => event.enemyIndex)).size)
-                .toBe(BOSS_MINION_COUNT + 1)
+            expect(new Set(firstVolley.map(event => event.enemyIndex)).size).toBe(board.pack.members.length)
         })
 
         it('pierces exactly two bodies, not the whole board', () => {
@@ -230,7 +228,7 @@ describe('hero-quest seeded fights', () => {
             const pierce = result.events.filter(event => event.skillId === 'skill_piercing_arrow')
             const firstVolley = pierce.filter(event => event.at === pierce[0]!.at)
 
-            // A boss pack is 2 front + 1 back, so a column is exactly two deep.
+            // The board is 2 front + 1 back, so a column is exactly two deep.
             expect(new Set(firstVolley.map(event => event.enemyIndex)).size).toBe(2)
         })
 
