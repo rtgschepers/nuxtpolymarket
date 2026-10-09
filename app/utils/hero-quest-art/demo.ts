@@ -1533,7 +1533,8 @@ export class BattleDemo {
         if (dmg.gt(0)) this.number(t.x, y - 8, h.crit ? 'crit' : 'normal', false, h.crit ? `${stageNumber(dmg)}!` : stageNumber(dmg))
         this.particles.burst(t.x - 4, y, h.crit ? 14 : 8, h.crit ? 70 : 45, 0.5, 'spark', 120, t.y)
         if (h.crit) this.shake(JUICE.crit.shake, JUICE.crit.shakeFor)
-        if (t.boss) this.shake(JUICE.bossHit.shake, JUICE.bossHit.shakeFor)
+        // a basic attack on a boss doesn't shake: with a party swinging, the screen never stopped (the user's call)
+        if (t.boss && h.kind !== 'attack') this.shake(JUICE.bossHit.shake, JUICE.bossHit.shakeFor)
         if (standingAny(t)) this.struck(t, h.crit ? JUICE.crit.hold : JUICE.hit.hold)
     }
 
@@ -2641,7 +2642,7 @@ export class BattleDemo {
         if (melee) u.hold = hold // the swing connects: the striker stops on it too
         // only the Hero's own crits shake the screen: with twelve bodies trading blows, everyone's would never stop
         if (crit && u === this.units[0]) this.shake(JUICE.crit.shake, JUICE.crit.shakeFor)
-        if (tgt.boss) this.shake(JUICE.bossHit.shake, JUICE.bossHit.shakeFor)
+        if (tgt.boss && cast) this.shake(JUICE.bossHit.shake, JUICE.bossHit.shakeFor)
         if (tgt.hp <= 0) this.kill(tgt)
         else this.struck(tgt, hold)
         if (u.side === 0 && Math.random() < 0.25) { const ally = this.units[0]!; this.number(ally.x - 16, ally.y - 30, 'heal') }
