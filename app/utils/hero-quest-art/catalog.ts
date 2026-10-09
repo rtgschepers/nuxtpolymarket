@@ -42,10 +42,11 @@ import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawSplash } from './ui-art'
 import { drawLogo, LOGO_W, LOGO_H, LOGO_LOOP } from './logos'
 import { GILDED_WARLORD, GREAT_DUMMY, DEEPCOIL, BURROW_GRUB, ORE_BEETLE, FORGE_APPRENTICE, FORGE_JOURNEYMAN, FORGE_MASTER, RAMPANT, TRAINING_DUMMY } from './raids'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
+import { drawGuidePortrait, drawGuideSnail, GUIDE_LOOP, GUIDE_PORTRAIT } from './guide-portrait'
 
 export type ArtGroup =
     | 'heroes' | 'champions' | 'summons' | 'enemies' | 'bosses' | 'raids' | 'guild_raid' | 'dig_site_raid' | 'trait_raid' | 'training_raid' | 'forge_apprentice' | 'forge_journeyman' | 'forge_master' | 'class_skill_icons' | 'training_skill_icons' | 'ability_crest_icons' | 'offense_artifact_icons' | 'defense_artifact_icons' | 'tempo_artifact_icons' | 'fortune_artifact_icons' | 'gear_icons' | 'currency_icons' | 'status_icons'
-    | 'hero_skill_vfx' | 'damage_ability_vfx' | 'tank_ability_vfx' | 'support_ability_vfx' | 'control_ability_vfx' | 'training_active_vfx' | 'multi_strike_vfx' | 'feedback' | 'frames' | 'backgrounds' | 'arena_backgrounds' | 'ui' | 'branding'
+    | 'hero_skill_vfx' | 'damage_ability_vfx' | 'tank_ability_vfx' | 'support_ability_vfx' | 'control_ability_vfx' | 'training_active_vfx' | 'multi_strike_vfx' | 'feedback' | 'frames' | 'backgrounds' | 'arena_backgrounds' | 'guide' | 'ui' | 'branding'
 
 /**
  * The gallery's groups. `locked` marks art whose design is settled (the user's call, 2026-09-28):
@@ -98,6 +99,8 @@ export const ART_GROUPS: readonly { id: ArtGroup, label: string, locked?: true }
     { id: 'frames', label: 'Frames & badges', locked: true },
     { id: 'backgrounds', label: 'Backgrounds', locked: true },
     { id: 'arena_backgrounds', label: 'Arena backgrounds', locked: true },
+    // the tutorials' snail, in review (Round 21)
+    { id: 'guide', label: 'Guide' },
     // parked until the real screens are built: redrawn against their layouts then (2026-09-29, the user)
     { id: 'ui', label: 'UI chrome · parked' },
     { id: 'branding', label: 'Branding', locked: true }
@@ -142,10 +145,12 @@ export interface ArtAsset {
  * 13 when the status effects locked, Round 14 when the Hero skill VFX locked, and Rounds 15–18
  * when the Damage, Tank, Support and Control Champion abilities locked, and Round 19 when the
  * Training Grounds actives locked (all 2026-10-02). Round 20, the Ascendant, was approved and locked
- * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09, so the next round
- * is 21; every earlier round is recorded in art-style.md.
+ * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09. Round 21 is the
+ * tutorials' guide; every earlier round is recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
+    { n: 21, label: 'Mossimer, the guide', prefixes: ['guide/'] }
+]
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
@@ -612,6 +617,16 @@ function uiAssets(): ArtAsset[] {
     return out
 }
 
+function guideAssets(): ArtAsset[] {
+    const n = GUIDE_PORTRAIT
+    const frames = GUIDE_LOOP * AUTHORED_FPS
+    return [
+        anim('guide/snail', 'guide', 'Mossimer', 'The snail, idle', n, n, frames, true, (d, t) => drawGuideSnail(d, 0, 0, t)),
+        anim('guide/snail_talking', 'guide', 'Mossimer', 'The snail, talking', n, n, frames, true, (d, t) => drawGuideSnail(d, 0, 0, t, true)),
+        { ...anim('guide/portrait', 'guide', 'Mossimer', 'Portrait, as the guide panel shows it', n, n, frames, true, (d, t) => drawGuidePortrait(d, 0, 0, t)), opaque: true }
+    ]
+}
+
 function brandingAssets(): ArtAsset[] {
     return [
         anim('branding/logo', 'branding', 'Branding', 'Hero Quest logo (name pending — see trademark note)', LOGO_W, LOGO_H, Math.round(LOGO_LOOP * AUTHORED_FPS), true, (d, t) => drawLogo(d, LOGO_W / 2, 12, t)),
@@ -623,7 +638,7 @@ function brandingAssets(): ArtAsset[] {
 // ── Registry ───────────────────────────────────────────────────────────────────────
 
 type Provider = () => ArtAsset[]
-const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, paletteAssets, brandingAssets]
+const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, guideAssets, paletteAssets, brandingAssets]
 
 /** Register more providers (bosses, VFX, icons, …) — each module adds its own. */
 export function registerArt(p: Provider): void {
