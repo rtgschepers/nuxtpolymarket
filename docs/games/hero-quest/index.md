@@ -133,7 +133,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Gems source/sinks | `economy-and-currencies.md` | §4 |
 | Seal earn sources (milestone / daily / raid) | `economy-and-currencies.md` | §5 |
 | Milestones: tracks, formulas, claim | `build-log.md` #48, `open-items.md` #48 | |
-| Tutorials, the guide, feature unlocks | `build-log.md` #50, `open-items.md` #50 | |
+| Tutorials, the guide, feature unlocks | `build-log.md` #50 | |
 | Essence source/sink | `economy-and-currencies.md` | §6 |
 | Trait Gems | `economy-and-currencies.md` | §8 |
 | Raid Keys (×5) | `economy-and-currencies.md` §9, `raid-system.md` §3 | |

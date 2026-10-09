@@ -99,8 +99,8 @@ export const ART_GROUPS: readonly { id: ArtGroup, label: string, locked?: true }
     { id: 'frames', label: 'Frames & badges', locked: true },
     { id: 'backgrounds', label: 'Backgrounds', locked: true },
     { id: 'arena_backgrounds', label: 'Arena backgrounds', locked: true },
-    // the tutorials' snail, in review (Round 21)
-    { id: 'guide', label: 'Guide' },
+    // the tutorials' snail, Mossimer: Round 21, approved and locked (2026-10-09, the user)
+    { id: 'guide', label: 'Guide', locked: true },
     // parked until the real screens are built: redrawn against their layouts then (2026-09-29, the user)
     { id: 'ui', label: 'UI chrome · parked' },
     { id: 'branding', label: 'Branding', locked: true }
@@ -145,12 +145,11 @@ export interface ArtAsset {
  * 13 when the status effects locked, Round 14 when the Hero skill VFX locked, and Rounds 15–18
  * when the Damage, Tank, Support and Control Champion abilities locked, and Round 19 when the
  * Training Grounds actives locked (all 2026-10-02). Round 20, the Ascendant, was approved and locked
- * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09. Round 21 is the
- * tutorials' guide; every earlier round is recorded in art-style.md.
+ * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09, and Round 21, the
+ * tutorials' guide, into the Guide group the same day, so the next round is 22; every earlier round
+ * is recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
-    { n: 21, label: 'Mossimer, the guide', prefixes: ['guide/'] }
-]
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
