@@ -592,6 +592,8 @@ over 30 s: a level-5 Knight lands 14 of 14 strikes, a level-60 Archer 23 of 23, 
 Master 581 of 604 at the 0.2 s floor (hit-stop freezes take the rest), and each foe 12 swings of 12.
 `party-kits.spec` pins the interval and strike count against a real fight.
 
+**Every boss replay closes itself — 2026-10-10.** A fight engaged from the challenge button (#38) used to hold its result until the panel's Continue was pressed, but that panel sits under the stage, out of sight, so the run waited behind a VICTORY banner until it was found. Every fight now closes after `AUTO_ENGAGE_REPLAY_HOLD_SECONDS`, however it was started.
+
 ### 35. Sessions and the splash — **landed 2026-10-02**
 
 **Hero Quest opens on its splash** (`HeroQuestSplash`, drawn by `menu-splash.ts`) whenever there

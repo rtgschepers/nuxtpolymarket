@@ -1301,8 +1301,9 @@ export const AUTO_ENGAGE_MAX_DELAY_SECONDS = 10
 export const AUTO_ENGAGE_RETRY_SECONDS = 3
 
 /**
- * How long an automatically-engaged replay holds on its outcome before closing itself. A
- * *manually* engaged fight never auto-closes — the player dismisses it themselves.
+ * How long a boss replay holds on its outcome before closing itself and the run moving on. Every
+ * fight closes so, a challenged one too: its Continue button sat under the stage, out of sight, and
+ * the run waited behind a VICTORY banner until it was found (2026-10-10).
  */
 export const AUTO_ENGAGE_REPLAY_HOLD_SECONDS = 2.5
 

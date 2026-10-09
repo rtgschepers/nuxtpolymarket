@@ -890,8 +890,6 @@ function onGuideNext() {
     else closeTutorial()
 }
 const engaging = ref(false)
-/** Which of the two paths opened the replay — only an automatic one dismisses itself. */
-const fightWasAutomatic = ref(false)
 
 /**
  * The boss's name and timer, taken as the fight is engaged: the payload that lands with the
@@ -996,7 +994,6 @@ async function runFightAt(automatic: boolean) {
         const name = liveRun.value?.farming ? run.value?.enemyName : liveRun.value?.enemyName
         const boss = { name: name ?? 'Boss', timer: liveRun.value?.bossTimerSeconds ?? 30 }
         const result = await engageBoss({ silentErrors: automatic })
-        fightWasAutomatic.value = automatic
         fightBoss.value = boss
         fightProgress.value = { time: 0, done: false }
         fight.value = result
@@ -1163,7 +1160,7 @@ const awayReport = computed(() => {
         />
       </template>
 
-      <!-- Hidden rather than unmounted under a scene: the fight panel closes an automatic fight on its own timer. -->
+      <!-- Hidden rather than unmounted under a scene: the fight panel closes every fight on its own timer. -->
       <div
         v-show="scene === 'battle' && !showGate"
         class="space-y-6"
@@ -1176,7 +1173,7 @@ const awayReport = computed(() => {
           :boss-timer-seconds="fightBoss.timer"
           :time="fightProgress.time"
           :done="fightProgress.done"
-          :auto-close="fightWasAutomatic"
+          auto-close
           @skip="battleCanvas?.skipFight()"
           @close="fight = null"
         />
