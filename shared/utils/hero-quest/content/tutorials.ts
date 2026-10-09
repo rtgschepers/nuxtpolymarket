@@ -26,6 +26,11 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Off you go, then. I\'ll catch up. Eventually.'
     ],
 
+    'loss_reminder': [
+        'Knocked back again? No shame in it. I\'ve lost a race or two myself.',
+        'Pull at the Gacha, then equip what you find in Collections. Bosses hate that.'
+    ],
+
     'gacha:unlock': ['Bosses are a different breed. Time to find some help: the Gacha is open.'],
     'gacha:visit': [
         'Four shrines, four gachas: Gear, Champions, Skills and Artifacts.',

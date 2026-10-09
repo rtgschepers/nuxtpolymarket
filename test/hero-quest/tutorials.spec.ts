@@ -5,6 +5,7 @@ import {
     TUTORIAL_IDS,
     checkpointReached,
     featureUnlocked,
+    bossLossMark,
     nextTutorial,
     revealedFeatures,
     unlockedFeatures,
@@ -92,6 +93,21 @@ describe('hero-quest tutorials', () => {
         expect(revealedFeatures(open, gachaDone, 'gacha')).toEqual(['gacha'])
         expect(revealedFeatures(open, gachaDone, 'battle')).toEqual(['gacha', 'collections'])
         expect(revealedFeatures(open, [...gachaDone, 'collections:visit'], 'gacha')).toEqual(['gacha', 'collections'])
+    })
+
+    it('reminds once, on the battle after the second boss lost, once the Gacha and Collections are explained', () => {
+        const open = unlockedFeatures(at(1, BOSS_STAGE, 0, false, true))
+        const taught = ['intro', 'gacha:unlock', 'gacha:visit', 'collections:unlock', 'collections:visit']
+        expect(bossLossMark(taught)).toBe('boss_lost_1')
+        expect(bossLossMark([...taught, 'boss_lost_1'])).toBe('boss_lost_2')
+        expect(bossLossMark([...taught, 'boss_lost_1', 'boss_lost_2'])).toBeNull()
+        // one loss: nothing; two: the reminder, on the battle only; read: never again
+        expect(nextTutorial(open, [...taught, 'boss_lost_1'], 'battle')).toBeNull()
+        expect(nextTutorial(open, [...taught, 'boss_lost_1', 'boss_lost_2'], 'battle')).toBe('loss_reminder')
+        expect(nextTutorial(open, [...taught, 'boss_lost_1', 'boss_lost_2'], 'gacha')).toBeNull()
+        expect(nextTutorial(open, [...taught, 'boss_lost_1', 'boss_lost_2', 'loss_reminder'], 'battle')).toBeNull()
+        // the scenes it names not explained yet: their own tutorials come first, and it waits
+        expect(nextTutorial(open, ['intro', 'boss_lost_1', 'boss_lost_2'], 'battle')).toBe('gacha:unlock')
     })
 
     it('hides only the group being introduced, so a reset never hides the rest', () => {

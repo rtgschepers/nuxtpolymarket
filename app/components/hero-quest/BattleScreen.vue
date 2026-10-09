@@ -18,7 +18,7 @@ import type { RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-s
 import type { RaidId as StageRaidId, StageRaid } from '~/utils/hero-quest-art/demo'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
-import { isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
+import { bossLossMark, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
 import { GUIDE_NAME, TUTORIAL_PAGES } from '#shared/utils/hero-quest/content/tutorials'
 import type { GuideView } from '~/utils/hero-quest-art/guide'
 import type { GachaBannerView, GachaButton, GachaCard, GachaSystemId, GachaView, PullPrice } from '~/utils/hero-quest-art/gacha-scene'
@@ -859,6 +859,16 @@ function onScene(scene: HqScene) {
     emit('scene', scene)
 }
 
+/** A boss fight lost: counted toward the guide's one reminder, which shows once the replay is done. */
+function countBossLoss() {
+    const mark = bossLossMark(seenTutorials.value)
+    if (!mark) return
+    seenLocally.value = [...seenLocally.value, mark]
+    markTutorialSeen(mark).catch(() => {
+        // `useHeroQuest` has already shown the error; this loss just goes uncounted
+    })
+}
+
 function onGuideNext() {
     const view = guideView.value
     if (!view) return
@@ -976,6 +986,7 @@ async function runFightAt(automatic: boolean) {
         fightBoss.value = boss
         fightProgress.value = { time: 0, done: false }
         fight.value = result
+        if (result && result.outcome !== 'win') countBossLoss()
     } finally {
         engaging.value = false
     }

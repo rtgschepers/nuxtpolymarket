@@ -72,17 +72,34 @@ export function checkpointLabel(at: FeatureCheckpoint): string {
 
 // ── Tutorials ──────────────────────────────────────────────────────────────────────────
 
-export type TutorialId = 'intro' | `${HqFeature}:unlock` | `${HqFeature}:visit`
+export type TutorialId = 'intro' | 'loss_reminder' | `${HqFeature}:unlock` | `${HqFeature}:visit`
 
 export const TUTORIAL_IDS: readonly TutorialId[] = [
     'intro',
+    'loss_reminder',
     ...HQ_FEATURES.flatMap(f => [`${f}:unlock`, `${f}:visit`] as const)
 ]
 
-const TUTORIAL_ID_SET = new Set<string>(TUTORIAL_IDS)
+/**
+ * Silent marks kept with the tutorials seen: the boss fights lost, counted to the second, which is
+ * when the guide reminds the player once that the Gacha and Collections are the answer (the user's
+ * call, 2026-10-09). A reset clears them with the rest.
+ */
+export const BOSS_LOSS_MARKS = ['boss_lost_1', 'boss_lost_2'] as const
+export type TutorialMark = typeof BOSS_LOSS_MARKS[number]
 
-export function isTutorialId(value: unknown): value is TutorialId {
-    return typeof value === 'string' && TUTORIAL_ID_SET.has(value)
+/** Anything the seen set may hold: a tutorial read, or a mark. */
+export type TutorialRecord = TutorialId | TutorialMark
+
+const TUTORIAL_RECORD_SET = new Set<string>([...TUTORIAL_IDS, ...BOSS_LOSS_MARKS])
+
+export function isTutorialRecord(value: unknown): value is TutorialRecord {
+    return typeof value === 'string' && TUTORIAL_RECORD_SET.has(value)
+}
+
+/** The mark a lost boss fight records, or null once the count has reached the reminder. */
+export function bossLossMark(seen: readonly string[]): TutorialMark | null {
+    return BOSS_LOSS_MARKS.find(m => !seen.includes(m)) ?? null
 }
 
 /**
@@ -97,6 +114,9 @@ export function isTutorialId(value: unknown): value is TutorialId {
 export function nextTutorial(unlocked: readonly HqFeature[], seen: readonly string[], scene: string): TutorialId | null {
     const had = new Set(seen)
     if (!had.has('intro')) return 'intro'
+    // once, on the battle after the second boss lost, and only once the scenes it names are explained
+    if (scene === 'battle' && had.has('boss_lost_2') && !had.has('loss_reminder')
+        && had.has('gacha:visit') && had.has('collections:visit')) return 'loss_reminder'
     const f = unlocked.find(u => !had.has(`${u}:visit`))
     if (!f) return null
     if (scene === f) return `${f}:visit`

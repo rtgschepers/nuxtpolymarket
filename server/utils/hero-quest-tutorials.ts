@@ -17,7 +17,7 @@ import {
     featureUnlocked,
     unlockedFeatures,
     type HqFeature,
-    type TutorialId,
+    type TutorialRecord,
     type UnlockProgress
 } from '#shared/utils/hero-quest/tutorials'
 
@@ -46,7 +46,7 @@ export function serializeTutorials(state: HqStateRow) {
 }
 
 /** Record a tutorial as seen. A set, so a repeat is a no-op, and nothing of value moves. */
-export async function markTutorialSeen(userId: string, id: TutorialId): Promise<void> {
+export async function markTutorialSeen(userId: string, id: TutorialRecord): Promise<void> {
     await db.update(hqState)
         .set({ tutorialsSeen: sql`${hqState.tutorialsSeen} || ${JSON.stringify([id])}::jsonb` })
         .where(sql`${hqState.userId} = ${userId} and not (${hqState.tutorialsSeen} ? ${id})`)
