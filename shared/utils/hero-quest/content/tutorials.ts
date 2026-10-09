@@ -31,11 +31,12 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Pull at the Gacha, then equip what you find in Collections. Bosses hate that.'
     ],
 
-    'gacha:unlock': ['Bosses are a different breed. Time to find some help: the Gacha is open.'],
+    'gacha:unlock': ['Bosses are a different breed. Time to find some help: the Gacha is now available.'],
     'gacha:visit': [
         'Four shrines, four gachas: Gear, Champions, Skills and Artifacts.',
         'Feed one Seals and it gives something back. Some days, something wonderful.',
-        'A few free 10-pulls come round each day. Short on Seals? A pull buys them with Gold.'
+        'A few free 10-pulls come round each day. Short on Seals? A pull buys them with Gold.',
+        'Every pull levels its gacha up, and a higher level brings rarer rewards.'
     ],
 
     'collections:unlock': ['Everything you pull is kept in your Collections. I do like a tidy hoard.'],
@@ -45,39 +46,39 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Even what you leave on the shelf lends you a little strength.'
     ],
 
-    'milestones:unlock': ['A whole World cleared! That earns a line in the Chronicle. Milestones are open.'],
+    'milestones:unlock': ['A whole World cleared! That earns a line in the Chronicle. Milestones are now available.'],
     'milestones:visit': [
         'Every deed worth writing down is counted here: Worlds, prestiges, raids, collections.',
         'The tracks never end and nothing expires. Claim whenever you like. I never rush.'
     ],
 
-    'calendar:unlock': ['The Calendar is open. Visit once a day and I\'ll have something for you.'],
+    'calendar:unlock': ['The Calendar is now available. Visit once a day and I\'ll have something for you.'],
     'calendar:visit': [
         'One gift a day, and the cycle builds to a grand one at the end.',
         'Missed a day? It happens to the best of us. A few make-ups a cycle let you claim late.'
     ],
 
-    'loadouts:unlock': ['Two Worlds behind you. Time to plan ahead: Loadouts are open.'],
+    'loadouts:unlock': ['Two Worlds behind you. Time to plan ahead: Loadouts are now available.'],
     'loadouts:visit': [
         'A Loadout saves your party, formation, Skills, Artifacts and Gear.',
         'Keep one for waves and one for bosses. Saving is free, and swapping is one tap.'
     ],
 
-    'speed:unlock': ['Battle Speed is open. I\'ve never tried it myself, but I hear it\'s thrilling.'],
+    'speed:unlock': ['Battle Speed is now available. I\'ve never tried it myself, but I hear it\'s thrilling.'],
     'speed:visit': [
         'Spend Gems on a stretch of faster battles.',
         'It keeps running while you\'re away. Take it from a snail: speed is precious.'
     ],
 
-    'raids:unlock': ['Four Worlds cleared, and something big has noticed you. Raids are open.'],
+    'raids:unlock': ['Four Worlds cleared, and something big has noticed you. Raids are now available.'],
     'raids:visit': [
         'Five great beasts wait in the raids, each with a trick of its own.',
-        'Each attempt costs a Key, and Keys come back every day.',
+        'Each reward costs a Key, and Keys come back every day.',
         'Beat a level to open the next, and quick-clear your best whenever you like.',
-        'Raids pay Seals, and the Trait raid pays Trait Gems.'
+        'Raids pay Seals, and the Trait raid pays Trait Gems. A higher level pays more.'
     ],
 
-    'prestige:unlock': ['You beat the Void. I\'ve seen this moment before. Prestige is open.'],
+    'prestige:unlock': ['You beat the Void. I\'ve seen this moment before. Prestige is now available.'],
     'prestige:visit': [
         'The secret of the Chronicle: the Void is never gone. It folds the world back up.',
         'Prestige walks you back to Thornwick Vale, on a harder road. The Void pays in Shards.',
@@ -86,7 +87,7 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'The Void forgets every run. I don\'t. A snail carries everything it owns.'
     ],
 
-    'classes:unlock': ['Your first class token! Classes are open. The Chronicle loves a new costume.'],
+    'classes:unlock': ['Your first class token! Classes are now available. The Chronicle loves a new costume.'],
     'classes:visit': [
         'A token takes your class one step deeper down the tree.',
         'Switching back to a class you\'ve had is always free.',
