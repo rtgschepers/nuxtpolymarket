@@ -820,9 +820,22 @@ const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || 
 /** Opened and not visited yet: the button carries the red dot until it is. */
 const newScenes = computed(() => unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)))
 
-// a scene not open yet, or waiting its turn, reached by a link or a reload, falls back to the battle
-watch([() => props.scene, shownFeatures], ([scene]) => {
-    if (tutorials.value && isHqFeature(scene) && !shownFeatures.value.includes(scene)) emit('scene', 'battle')
+/** The scene last opened from the menu: picked from what the menu showed, so it is never sent back. */
+let openedFromMenu: HqScene | null = null
+
+/**
+ * A scene not open yet, or waiting its turn, reached by a link or a reload falls back to the battle.
+ * Checked on arrival and when the tutorials first load, never against a scene opened from the menu:
+ * re-checking as the tutorials moved sent players out of scenes they had just opened.
+ */
+watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
+    if (scene === openedFromMenu) return
+    openedFromMenu = null
+    if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) return
+    if (import.meta.dev) {
+        console.warn('[hero-quest] scene not shown, back to the battle', { scene, unlocked: unlocked.value, seen: seenTutorials.value, shown: shownFeatures.value })
+    }
+    emit('scene', 'battle')
 }, { immediate: true })
 
 /**
@@ -856,6 +869,7 @@ function unlockFocus(id: TutorialId): HqMenuScene | null {
 /** A menu press. Pressing the button an unlock points at is how that unlock is read. */
 function onScene(scene: HqScene) {
     if (guideView.value?.focus === scene) closeTutorial()
+    openedFromMenu = scene
     emit('scene', scene)
 }
 
