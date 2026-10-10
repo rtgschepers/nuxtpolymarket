@@ -86,6 +86,13 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Save a good board to come back to. Even I write the best ones down.'
     ],
 
+    'arena:unlock': ['Five Worlds behind you, and other heroes want a word. The Arena is now available.'],
+    'arena:visit': [
+        'Set your current loadout as your defence first. Other players fight it while you\'re away.',
+        'Win to climb the Rating, and earn Medals to spend in the Arena Shop.',
+        'A few free attacks a day. Each season pays out by rank. I\'ve kept every result.'
+    ],
+
     'shop:unlock': ['Your first boss down! A merchant has set up shop. The Shop is now available.'],
     'shop:visit': [
         'The Shop sells upgrades that last through everything, even the Void.',

@@ -534,7 +534,7 @@ export interface SettleOutcome {
     shopLevels?: Record<string, number>
     collections?: HqCollections
     /** The live Trait board, read inside the same lock. */
-    traits?: (TraitSlotState | null)[]
+    traits?: TraitBoard
 }
 
 /**
@@ -627,7 +627,9 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
                 recoverySeconds: result.recoverySeconds,
                 atBossGate: isBossStage(result.position.stage),
                 heroLevel: result.heroLevel,
-                heroXp: toStore(result.heroXp)
+                heroXp: toStore(result.heroXp),
+                // the platform leaderboard's GPN, at the level the window ends on
+                ...powerWrites({ ...state, heroLevel: result.heroLevel }, shopLevels, collections, traits)
             })
             .where(eq(hqState.userId, userId))
             .returning()
@@ -651,6 +653,41 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
             traits
         }
     })
+}
+
+/**
+ * The row with its stored Arena defence fielded in place of the live loadout (`arena.md` §1), for
+ * `heroSnapshotOf` to read: the defender's class, level and collection as they stand, the five
+ * Loadout components from the defence. Null without a defence.
+ */
+export function withDefenseLoadout(state: HqStateRow): HqStateRow | null {
+    const defense = state.defenseLoadout
+    if (!defense) return null
+    return {
+        ...state,
+        partyChampionIds: defense.partyChampionIds,
+        formation: defense.formation,
+        equippedSkillIds: defense.equippedSkillIds,
+        equippedArtifactIds: defense.equippedArtifactIds,
+        equippedGear: defense.equippedGear
+    }
+}
+
+/** Defense GPN (`arena.md` §2), for show: written when the defence is set, and only then. */
+export function defenseGpnOf(state: HqStateRow, shopLevels: Record<string, number>, collections: HqCollections, traits?: TraitBoard) {
+    const defended = withDefenseLoadout(state)
+    if (!defended) return { defenseGpn: null }
+    return { defenseGpn: globalPower(heroSnapshotOf(defended, shopLevels, collections, undefined, traits)).gpn.toString() }
+}
+
+/**
+ * The live GPN as of `state`, for the platform leaderboard's Hero Quest column
+ * (`tech-architecture.md` §3: recomputed on every settle). Defense GPN is not refreshed here:
+ * the locked docs recompute it only when the defence is saved (`arena.md` §2), though the
+ * defender's level and collection keep moving it between saves (`open-items.md` #52).
+ */
+function powerWrites(state: HqStateRow, shopLevels: Record<string, number>, collections: HqCollections, traits?: TraitBoard) {
+    return { globalPowerNumber: globalPower(heroSnapshotOf(state, shopLevels, collections, undefined, traits)).gpn.toString() }
 }
 
 /**

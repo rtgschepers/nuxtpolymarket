@@ -11,9 +11,9 @@ import { textOut } from './font'
 import { HQ_MENU_SCENES, HQ_SCENE_LABELS, type HqMenuScene, type HqScene } from '../hero-quest-scenes'
 
 export const BAND_H = 22
+// up to eleven buttons across the 272 px stage at 22 wide, 2 apart (ten with the Arena, one slot kept for the Passive Skill Tree)
 const BTN_W = 22
 const BTN_H = 18
-/** Two pixels, so eleven buttons fit the stage's 272 with room either side. */
 const BTN_GAP = 2
 
 /** The Loadouts glyph, shared with the prestige shop's Loadout Slots track. */
@@ -149,6 +149,8 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     // a Trait Gem: what every Roll and every stored board spends
     traits: CURRENCY_ICONS.trait_gems!,
     raids: RAID_BANNER,
+    // the Arena pays in its Medals
+    arena: CURRENCY_ICONS.arena_medals!,
     classes: NODE_TREE,
     // the Shop (the user's call, 2026-10-10: open from the World 1 boss, so no longer prestige's)
     shop: SHOP_STALL,
