@@ -978,7 +978,8 @@ export const RAID_KEY_BANK_DAYS = 7
  * What a raid clear pays (§6), in the raid's own currency: `BASE × GROWTH^(level − 1)`.
  *
  * Set by the user on 2026-10-04: 3 Seals at level 1 for the four Seal raids (three clears a day is
- * about one 10-pull), 10 Trait Gems for the Trait Raid (two cheap rolls), all +3% a level. Kept
+ * about one 10-pull), 10 Trait Gems for the Trait Raid (two cheap rolls; 100 since 2026-10-10), all +3%
+ * a level. Kept
  * gentle because the ladder is slow to climb: a raid level costs a world of account growth, so
  * level 100 takes the power of about ten prestiges (`build-log.md`).
  */
@@ -987,7 +988,8 @@ export const RAID_REWARD_BASE: Readonly<Record<string, number>> = {
     raid_training_grounds: 3,
     raid_dig_site: 3,
     raid_forge: 3,
-    raid_trait: 10
+    // 10x on 2026-10-10 (the user's call), so the calendar's Trait Gem days, sized off it, are 10x too
+    raid_trait: 100
 }
 export const RAID_REWARD_GROWTH: Readonly<Record<string, number>> = {
     raid_guild: 1.03,
