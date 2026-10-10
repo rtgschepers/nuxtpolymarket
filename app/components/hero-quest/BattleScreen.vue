@@ -579,7 +579,7 @@ const raidRows = computed<RaidRowView[]>(() => (raids.value ?? []).map(r => ({
     id: r.id as RaidId,
     open: r.open,
     loadout: preferredName(r.id),
-    loadoutLive: loadoutSession.value?.target === r.id,
+    loadoutLive: loadoutSession.value?.target === r.id && loadoutSession.value.slotIndex !== null,
     keys: r.keys,
     keyCap: r.keyCap,
     nextKeys: r.nextKeyAt === null ? null : countdown(r.nextKeyAt - raidClock.value),
@@ -652,8 +652,9 @@ function closeRaidReward() {
 }
 
 /**
- * Leaving the raid puts back the loadout its preferred one replaced (`loadouts.md` §4): not after
- * each attempt, but once the player is neither on the Raids scene nor watching a round. A reload
+ * Leaving the raid lets the run go on and puts back the loadout its preferred one replaced
+ * (`loadouts.md` §4): not after each attempt, but once the player is neither on the Raids scene
+ * nor watching a round. Every raid opens a session, so every raid is left this way. A reload
  * onto another scene leaves too, since the session is the server's. `raidReturning` covers the
  * beat between a round's popup closing and the route reaching the Raids scene again.
  */
@@ -894,7 +895,8 @@ async function onShopBuy(upgradeId: string) {
  * `run`/`hero` stay in scope deliberately: `liveHero` is the right thing to *show* and the wrong
  * thing to compare a payload against, so anything that needs the anchor still has it.
  */
-const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed)
+// the run holds while a raid session is open, as the server's settle does
+const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed, computed(() => loadoutSession.value !== null))
 
 /**
  * Who stands on the stage: the Hero and the Champions fielded, in party order, each on its row.
@@ -1100,7 +1102,8 @@ useHqAutoBoss({
     lostHere: () => lostHere.value,
     secondsPerKill: () => liveRun.value?.secondsPerKill ?? null,
     engaging: () => engaging.value,
-    replayOpen: () => fight.value !== null || raidRound.value !== null,
+    // a raid session holds the run, its gate included, until the player leaves the raid
+    replayOpen: () => fight.value !== null || raidRound.value !== null || loadoutSession.value !== null,
     engage: () => runFightAt(true)
 })
 

@@ -14,14 +14,13 @@
  */
 
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { db, type DbExecutor } from '#server/database'
+import type { DbExecutor } from '#server/database'
 import { hqCollection, hqLoadouts, hqState } from '#server/database/schema'
 import { artifactSlots, championSlots, getShopLevels, loadoutSlots, openLoadoutSnapshotOf, restoreLoadoutSession, skillSlots } from '#server/utils/hero-quest'
-import { ASCENDANT_KIT_SIZE, FORMATION_ROW_CAPACITY, HQ_SESSION_TIMEOUT_MS, LOADOUT_NAME_MAX_LENGTH } from '#shared/utils/hero-quest/constants'
+import { ASCENDANT_KIT_SIZE, FORMATION_ROW_CAPACITY, LOADOUT_NAME_MAX_LENGTH } from '#shared/utils/hero-quest/constants'
 import {
     loadoutPreferencesOf,
     loadoutSessionOf,
-    loadoutSessionStale,
     openLoadoutSession,
     planLoadoutEngage,
     type LoadoutPreferences,
@@ -304,23 +303,24 @@ export function serializeLoadoutPreferences(state: HqStateRow, rows: readonly { 
     return out
 }
 
-/** The open session as the client needs it: which target it is for and the slot it applied; null when none. */
+/** The open raid session as the client needs it: which target it is for and the slot it applied (null for none); null when none is open. */
 export function serializeLoadoutSession(state: HqStateRow) {
     const session = loadoutSessionOf(state.preRaidSnapshot)
     return session ? { target: session.target, slotIndex: session.slotIndex } : null
 }
 
 /**
- * The swap a fresh engage makes before its fight (`loadouts.md` §4), under the `hqState` row lock
- * and read inside it, so a burst of engages decides one after another: the first opens the session,
- * the rest find it open and keep it. Returns the row the fight is to run on, and the slot now live
- * for the target (null when the fight runs on the player's own loadout).
+ * What a fresh engage does before its fight (`loadouts.md` §4), under the `hqState` row lock and
+ * read inside it, so a burst of engages decides one after another: the first opens the session,
+ * the rest find it open and keep it. Every raid opens one, preferred Loadout or not, since the run
+ * holds while one is open (`settleHq`). Returns the row the fight is to run on, and the slot now
+ * live for the target (null when the fight runs on the player's own loadout).
  *
  * - The preferred slot counts only while it is unlocked and holds a save; otherwise the target has
  *   none, and nothing is applied.
  * - A session open for another target (or on a slot no longer preferred) is one the player left:
- *   its snapshot goes back first, and stays the snapshot, so the pre-raid loadout is never lost
- *   under another raid's.
+ *   its loadout goes back first, and the new session snapshots that, so the pre-raid loadout is
+ *   never lost under another raid's.
  * - The preset passes the same validation as `loadout/apply`. One that can't be applied refuses
  *   the engage, before anything is spent, rather than fighting on the wrong loadout.
  *
@@ -339,31 +339,31 @@ export async function engageLoadout(tx: DbExecutor, userId: string, target: Load
     // read whole or refused: a snapshot that doesn't read is never overwritten by a new one
     const session = openLoadoutSnapshotOf(locked)
     const plan = planLoadoutEngage(target, preset ? wanted! : null, session)
-
-    if (plan.kind === 'none') return { state: locked, slotIndex: null }
     if (plan.kind === 'keep') return { state: locked, slotIndex: session!.slotIndex }
-    if (plan.kind === 'restore') return { state: await restoreLoadoutSession(tx, userId, locked), slotIndex: null }
 
-    // apply: over the pre-raid loadout, put back first when a session was open
-    const before = plan.restoreFirst ? { ...locked, ...session!.columns } : locked
-    let writes: LoadoutWrites
-    try {
-        writes = await validateLiveLoadout(tx, userId, before, {
-            championIds: preset!.partyChampionIds,
-            formation: preset!.formation,
-            skillIds: preset!.equippedSkillIds,
-            artifactIds: preset!.equippedArtifactIds,
-            gear: preset!.equippedGear,
-            // a preset saved without picks leaves the live ones alone, as `loadout/apply` does
-            ...(preset!.ascendantSkillIds.length ? { ascendantSkillIds: preset!.ascendantSkillIds } : {})
-        }, shopLevels)
-    } catch (e) {
-        const message = (e as { statusMessage?: string }).statusMessage ?? 'it is no longer valid'
-        throw createError({ statusCode: 400, statusMessage: `The preferred Loadout can't be applied: ${message}` })
+    // over the pre-raid loadout: a session left open for another raid puts its loadout back first
+    const putBack = session?.columns ?? null
+    const before = putBack ? { ...locked, ...putBack } : locked
+    let writes: LoadoutWrites = {}
+    if (plan.slotIndex !== null) {
+        try {
+            writes = await validateLiveLoadout(tx, userId, before, {
+                championIds: preset!.partyChampionIds,
+                formation: preset!.formation,
+                skillIds: preset!.equippedSkillIds,
+                artifactIds: preset!.equippedArtifactIds,
+                gear: preset!.equippedGear,
+                // a preset saved without picks leaves the live ones alone, as `loadout/apply` does
+                ...(preset!.ascendantSkillIds.length ? { ascendantSkillIds: preset!.ascendantSkillIds } : {})
+            }, shopLevels)
+        } catch (e) {
+            const message = (e as { statusMessage?: string }).statusMessage ?? 'it is no longer valid'
+            throw createError({ statusCode: 400, statusMessage: `The preferred Loadout can't be applied: ${message}` })
+        }
     }
     const [updated] = await tx.update(hqState)
         .set({
-            ...(plan.restoreFirst ? session!.columns : {}),
+            ...(putBack ?? {}),
             ...writes,
             preRaidSnapshot: openLoadoutSession(target, plan.slotIndex, before)
         })
@@ -382,20 +382,4 @@ export async function leaveLoadoutSession(tx: DbExecutor, userId: string): Promi
     if (!locked || locked.preRaidSnapshot === null) return false
     await restoreLoadoutSession(tx, userId, locked)
     return true
-}
-
-/**
- * Close a session the player can no longer be in, on a read: one whose last settle is further back
- * than a game session lasts (`HQ_SESSION_TIMEOUT_MS`), as after a tab shut mid-raid. Run before the
- * read's settle, so the time away accrues on the player's own loadout. Checked again under the
- * lock, so a raid engaged in between keeps its session.
- */
-export async function restoreStaleLoadoutSession(userId: string, now = Date.now()): Promise<boolean> {
-    return db.transaction(async (tx) => {
-        const [locked] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
-        if (!locked || locked.preRaidSnapshot === null) return false
-        if (!loadoutSessionStale(locked.lastSettledAt.getTime(), now, HQ_SESSION_TIMEOUT_MS)) return false
-        await restoreLoadoutSession(tx, userId, locked)
-        return true
-    })
 }

@@ -1,8 +1,8 @@
 /**
  * Preferred Loadouts on raid engage (`loadouts.md` §4), against the real tables: a fresh engage
- * snapshots and applies, a retry keeps, leaving reverts, a stale session reverts on read, the run's
- * boss and every loadout write put the player's own loadout back first, and quick-clear touches
- * none of it.
+ * snapshots and applies, a retry keeps, leaving reverts, the run holds while a session is open and
+ * a settle past presence closes it, the run's boss and every loadout write put the player's own
+ * loadout back first, and quick-clear touches none of it.
  *
  * Needs the local Postgres from .env. Skips when DATABASE_URL is unset.
  */
@@ -11,12 +11,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { db } from '#server/database'
 import { hqCollection, hqFights, hqLoadouts, hqRaidState, hqShopUpgrades, hqState } from '#server/database/schema'
-import { ensureHqState, lockLiveLoadout, resolveBossEngage } from '#server/utils/hero-quest'
+import { ensureHqState, lockLiveLoadout, resolveBossEngage, settleHq } from '#server/utils/hero-quest'
 import { engageRaid, quickClearRaid } from '#server/utils/hero-quest-raids'
-import { leaveLoadoutSession, restoreStaleLoadoutSession, serializeLoadoutPreferences, setLoadoutPreference } from '#server/utils/hero-quest-loadout'
+import { leaveLoadoutSession, serializeLoadoutPreferences, setLoadoutPreference } from '#server/utils/hero-quest-loadout'
 import { CHAMPIONS } from '#shared/utils/hero-quest/content/champions'
 import { GEAR } from '#shared/utils/hero-quest/content/gear'
-import { HQ_SESSION_TIMEOUT_MS, RAID_KEYS_PER_DAY } from '#shared/utils/hero-quest/constants'
+import { ONLINE_THRESHOLD_MS, RAID_KEYS_PER_DAY } from '#shared/utils/hero-quest/constants'
 import { ZERO } from '#shared/utils/hero-quest/numbers'
 import type { HeroSnapshot } from '#shared/utils/hero-quest/types'
 import type { GachaSystem } from '#shared/utils/hero-quest/gacha'
@@ -70,13 +70,17 @@ describe.skipIf(SKIP)('hero-quest preferred loadouts on raid engage', () => {
     afterEach(cleanup)
     afterAll(async () => { await db.$client.end() })
 
-    it('does nothing for a raid with no preferred Loadout', async () => {
+    it('swaps nothing for a raid with no preferred Loadout, but still opens its session', async () => {
         const result = await engage('raid_training_grounds')
 
         expect(result.loadoutSlot).toBeNull()
         const state = await stateOf()
         expect(state.partyChampionIds).toEqual([C1])
-        expect(state.preRaidSnapshot).toBeNull()
+        expect(state.preRaidSnapshot).toEqual({ target: 'raid_training_grounds', slotIndex: null })
+
+        expect(await leave()).toBe(true)
+        expect((await stateOf()).preRaidSnapshot).toBeNull()
+        expect((await stateOf()).partyChampionIds).toEqual([C1])
     })
 
     it('snapshots, applies and fights on the preferred Loadout on a fresh engage', async () => {
@@ -134,7 +138,7 @@ describe.skipIf(SKIP)('hero-quest preferred loadouts on raid engage', () => {
         const own: string[][] = []
         await engage('raid_dig_site', own)
         expect(own).toEqual([[C1]])
-        expect((await stateOf()).preRaidSnapshot).toBeNull()
+        expect((await stateOf()).preRaidSnapshot).toEqual({ target: 'raid_dig_site', slotIndex: null })
     })
 
     it('follows a picker changed mid-session on the next engage', async () => {
@@ -170,7 +174,7 @@ describe.skipIf(SKIP)('hero-quest preferred loadouts on raid engage', () => {
 
         expect((await engage('raid_training_grounds')).loadoutSlot).toBeNull()
         expect((await engage('raid_trait')).loadoutSlot).toBeNull()
-        expect((await stateOf()).preRaidSnapshot).toBeNull()
+        expect((await stateOf()).preRaidSnapshot).toEqual({ target: 'raid_trait', slotIndex: null })
         expect(serializeLoadoutPreferences(await stateOf(), [{ slotIndex: 0 }], {})).toEqual({})
     })
 
@@ -199,18 +203,54 @@ describe.skipIf(SKIP)('hero-quest preferred loadouts on raid engage', () => {
         expect((await stateOf()).raidLoadoutPreferences).toEqual({ arena: 0 })
     })
 
-    it('reverts a session left open past a game session on the next read, and only then', async () => {
+    it('holds the run while a session is open: a settle pays nothing and only moves the clock', async () => {
         await prefer('raid_training_grounds', 0)
         await engage('raid_training_grounds')
+        const before = await stateOf()
+        await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - 120_000) }).where(eq(hqState.userId, USER_ID))
 
-        expect(await restoreStaleLoadoutSession(USER_ID)).toBe(false)
-        expect((await stateOf()).partyChampionIds).toEqual([C2, C3])
+        const outcome = await settleHq(USER_ID)
 
-        await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - HQ_SESSION_TIMEOUT_MS - 60_000) }).where(eq(hqState.userId, USER_ID))
-        expect(await restoreStaleLoadoutSession(USER_ID)).toBe(true)
+        expect(outcome.result).toBeNull()
         const state = await stateOf()
-        expect(state.partyChampionIds).toEqual([C1])
+        expect(Date.now() - state.lastSettledAt.getTime()).toBeLessThan(5_000)
+        expect([state.world, state.stage, state.killCount, state.heroXp]).toEqual([before.world, before.stage, before.killCount, before.heroXp])
+        expect(state.partyChampionIds).toEqual([C2, C3])
+        expect(state.preRaidSnapshot).not.toBeNull()
+    })
+
+    it('drops the time spent in the raid on leaving, and the run goes on from there', async () => {
+        await engage('raid_training_grounds')
+        await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - 120_000) }).where(eq(hqState.userId, USER_ID))
+
+        expect(await leave()).toBe(true)
+
+        expect(Date.now() - (await stateOf()).lastSettledAt.getTime()).toBeLessThan(5_000)
+    })
+
+    it('closes a session left open past presence on the next settle, and settles the gap on the player\'s own loadout', async () => {
+        await prefer('raid_training_grounds', 0)
+        await engage('raid_training_grounds')
+        await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - ONLINE_THRESHOLD_MS - 60_000) }).where(eq(hqState.userId, USER_ID))
+
+        const outcome = await settleHq(USER_ID)
+
+        expect(outcome.result).not.toBeNull()
+        expect(outcome.online).toBe(false)
+        expect(outcome.state.partyChampionIds).toEqual([C1])
+        const state = await stateOf()
         expect(state.preRaidSnapshot).toBeNull()
+        expect(state.equippedGear).toEqual({ weapon: WEAPON })
+    })
+
+    it('leaves a gap past presence to the settle when the session is left late', async () => {
+        await engage('raid_training_grounds')
+        const awayAt = new Date(Date.now() - ONLINE_THRESHOLD_MS - 60_000)
+        await db.update(hqState).set({ lastSettledAt: awayAt }).where(eq(hqState.userId, USER_ID))
+
+        expect(await leave()).toBe(true)
+
+        expect((await stateOf()).lastSettledAt.getTime()).toBe(awayAt.getTime())
     })
 
     it('puts back the loadout of a session whose raid no longer reads', async () => {
