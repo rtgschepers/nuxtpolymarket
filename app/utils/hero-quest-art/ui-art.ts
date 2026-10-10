@@ -1,11 +1,9 @@
-// UI backgrounds (asset-list §4), UI chrome (§5) and branding (§6).
-//
-// Tab backgrounds sit behind Nuxt UI panels, so they are deliberately low-contrast: dark
-// ramps, one accent, nothing that competes with text. Chrome pieces are pixel panels and
+// UI backgrounds (asset-list §4), UI chrome (§5) and branding (§6). The menu scenes draw on plain
+// dark (the bespoke tab backgrounds were dropped 2026-10-10). Chrome pieces are pixel panels and
 // cards; the web UI can use them as 9-slice borders or reference renders.
 
-import { C, RARITY_COLORS, TRAIT_GRADES, TRAIT_GRADE_COLORS } from './palette'
-import { Surface, rect, px, line, disc, ring, tri, ellipse, dither, ditherDisc, ditherEllipse, poly, arc, hash2, bayer, blit } from './surface'
+import { C, RARITY_COLORS, TRAIT_GRADES } from './palette'
+import { Surface, rect, px, disc, ring, dither, ditherEllipse, poly, arc, bayer, blit } from './surface'
 import { drawText } from './font'
 import { qt } from './vfx-kit'
 import { drawLogo } from './logos'
@@ -16,7 +14,6 @@ import { championLook, CHASSIS } from './champions'
 import { glyph } from './icon-kit'
 import { ARTIFACT_ICONS, CURRENCY_ICONS } from './icons-items'
 import { traitFrame } from './icons-misc'
-import { sword, shield, staff, bow, axe, M, ShieldStyle, Gem } from './weapons'
 import type { Mat } from './weapons'
 
 const R = Math.round
@@ -80,193 +77,6 @@ export function drawWorldMap(s: Surface, t: number): void {
     drawText(s, 'FRONTIER', 8, SH - 12, C.green3, { shadow: 1 })
     drawText(s, 'THE EDGE', SW - 8, SH - 12, C.purple2, { align: 2, shadow: 1 })
 }
-
-// ── Tab backgrounds ────────────────────────────────────────────────────────────────
-
-function vignette(s: Surface): void {
-    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
-        const dx = (x - SW / 2) / (SW / 2)
-        const dy = (y - SH / 2) / (SH / 2)
-        const d = dx * dx + dy * dy
-        if (d > 0.55 && bayer(x, y, Math.min(16, R((d - 0.55) * 30)))) s.set(x, y, C.ink)
-    }
-}
-
-function floorLine(s: Surface, y: number, c: number, c2: number): void {
-    rect(s, 0, y, SW, SH - y, c)
-    rect(s, 0, y, SW, 1, c2)
-    dither(s, 0, y + 1, SW, SH - y, C.ink, 5)
-}
-
-function torch(s: Surface, x: number, y: number, t: number): void {
-    rect(s, x - 1, y, 3, 8, C.brown1)
-    const f = Math.floor(qt(t) * 8) & 1
-    tri(s, x - 3, y, x + 3, y, x + f, y - 7, C.orange)
-    tri(s, x - 1, y, x + 1, y, x, y - 4, C.gold3)
-    ditherDisc(s, x, y - 3, 14, C.orange, 2)
-}
-
-export interface TabBackground { id: string, label: string, built: boolean, draw(s: Surface, t: number): void }
-
-export const TAB_BACKGROUNDS: readonly TabBackground[] = [
-    {
-        id: 'battle', label: 'Battle', built: true,
-        draw(s, t) {
-            WORLD_SCENES[0]!.draw(s, 0, t)
-            dither(s, 0, 0, SW, SH, C.night0, 9) // dimmed so the battle UI owns the foreground
-            // the camp: tents and banners
-            for (let i = 0; i < 4; i++) {
-                const x = 30 + i * 80
-                tri(s, x - 18, 150, x + 18, 150, x, 122, C.brown1); tri(s, x, 122, x + 18, 150, x + 6, 150, C.brown0)
-                line(s, x, 122, x, 108, C.brown2); poly(s, [0, 0, 10, 2, 8, 5, 10, 8, 0, 7], x + 1, 108 + (Math.floor(qt(t) * 3) & 1), C.red1)
-            }
-            vignette(s)
-        }
-    },
-    {
-        id: 'gacha', label: 'Gacha', built: true,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.night0)
-            floorLine(s, 140, C.night1, C.night2)
-            // an altar of four seals round a summoning circle
-            ditherEllipse(s, 160, 140, 80, 14, C.purple0, 10)
-            const k = qt(t)
-            for (let i = 0; i < 16; i++) { const a = k * 0.5 + i * Math.PI / 8; px(s, R(160 + Math.cos(a) * 70), R(140 + Math.sin(a) * 11), i & 1 ? C.purple2 : C.pink) }
-            rect(s, 140, 110, 40, 30, C.stone1); rect(s, 136, 106, 48, 5, C.stone2); rect(s, 140, 110, 40, 1, C.stone3)
-            const seals = [C.blue1, C.red1, C.orange, C.teal2]
-            seals.forEach((c, i) => { const x = 90 + i * 47 - (i > 1 ? -46 : 0) * 0; disc(s, 70 + i * 60, 96 + (i === 1 || i === 2 ? -10 : 0), 8, c); disc(s, 70 + i * 60, 96 + (i === 1 || i === 2 ? -10 : 0), 5, C.ink); void x })
-            ditherDisc(s, 160, 86, 22, C.gold2, 2 + (Math.floor(k * 4) & 1))
-            vignette(s)
-        }
-    },
-    {
-        id: 'collections', label: 'Collections', built: true,
-        draw(s) {
-            rect(s, 0, 0, SW, SH, C.brown0)
-            // shelves of relics
-            for (let row = 0; row < 4; row++) {
-                const y = 30 + row * 36
-                rect(s, 0, y, SW, 4, C.brown1); rect(s, 0, y, SW, 1, C.brown2)
-                for (let i = 0; i < 12; i++) {
-                    const x = 14 + i * 26
-                    const ids = Object.keys(ARTIFACT_ICONS)
-                    glyph(s, ARTIFACT_ICONS[ids[(row * 12 + i) % ids.length]!]!, x, y - 10)
-                }
-            }
-            dither(s, 0, 0, SW, SH, C.brown0, 8)
-            vignette(s)
-        }
-    },
-    {
-        id: 'loadouts', label: 'Loadouts', built: true,
-        draw(s) {
-            rect(s, 0, 0, SW, SH, C.stone0)
-            floorLine(s, 146, C.stone1, C.stone2)
-            // armoury racks
-            for (let i = 0; i < 6; i++) {
-                const x = 30 + i * 52
-                rect(s, x - 16, 60, 32, 3, C.brown1); rect(s, x - 16, 60, 2, 86, C.brown1); rect(s, x + 14, 60, 2, 86, C.brown1)
-                if (i % 3 === 0) { sword(s, x - 6, 140, -Math.PI / 2, 60, M.steel, M.gold, C.brown1); sword(s, x + 6, 140, -Math.PI / 2, 56, M.iron, M.bronze, C.brown0) }
-                if (i % 3 === 1) { shield(s, x, 96, ShieldStyle.Kite, M.steel, [C.blue0, C.blue1, C.blue2], C.gold2); axe(s, x - 8, 140, -Math.PI / 2, 50, M.steel, M.wood) }
-                if (i % 3 === 2) { staff(s, x - 6, 140, -Math.PI / 2, 60, M.wood, M.arcane, Gem.Crystal, 0, 0); bow(s, x + 6, 100, 0, 0, false, M.wood, 16) }
-            }
-            dither(s, 0, 0, SW, SH, C.stone0, 8)
-            vignette(s)
-        }
-    },
-    {
-        id: 'prestige', label: 'Prestige', built: true,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.ink)
-            for (let i = 0; i < 40; i++) px(s, R(hash2(5, i) * SW), R(hash2(6, i) * SH), (i + Math.floor(qt(t) * 3)) % 4 ? C.night2 : C.haze)
-            // the door, and the Void through it
-            rect(s, 130, 40, 60, 120, C.stone1); ellipse(s, 160, 42, 30, 22, C.stone1)
-            rect(s, 138, 46, 44, 114, C.void); ellipse(s, 160, 46, 22, 16, C.void)
-            for (let r = 4; r < 30; r += 6) { const a0 = qt(t) + r * 0.2; arc(s, 160, 100, r, a0, a0 + 3.5, r & 4 ? C.purple1 : C.purple2) }
-            disc(s, 160, 100, 3, C.pink)
-            floorLine(s, 160, C.night0, C.purple1)
-            vignette(s)
-        }
-    },
-    {
-        id: 'wiki', label: 'Wiki', built: true,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.brown0)
-            // a scholar's desk: open tome, map, candles
-            rect(s, 0, 120, SW, 60, C.brown1); rect(s, 0, 120, SW, 2, C.brown2)
-            rect(s, 110, 96, 100, 34, C.bone1); rect(s, 159, 96, 2, 34, C.bone0)
-            for (let i = 0; i < 6; i++) { line(s, 116, 102 + i * 4, 154, 102 + i * 4, C.stone2); line(s, 166, 102 + i * 4, 204, 102 + i * 4, C.stone2) }
-            rect(s, 20, 104, 70, 22, C.bone0); for (let i = 0; i < 5; i++) line(s, 26 + i * 12, 108, 32 + i * 12, 122, C.brown2)
-            for (const x of [240, 262]) { rect(s, x, 100, 5, 20, C.bone1); const f = Math.floor(qt(t) * 6 + x) & 1; tri(s, x, 100, x + 4, 100, x + 2 + f, 93, C.gold2); ditherDisc(s, x + 2, 96, 18, C.gold1, 2) }
-            dither(s, 0, 0, SW, 120, C.brown1, 4) // bookshelves in the dark
-            for (let i = 0; i < 30; i++) rect(s, i * 11, 30, 8, 50, (i * 7) % 3 === 0 ? C.red0 : (i * 5) % 3 === 0 ? C.teal0 : C.brown1)
-            dither(s, 0, 0, SW, SH, C.brown0, 7)
-            vignette(s)
-        }
-    },
-    {
-        id: 'raids', label: 'Raids', built: false,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.stone0)
-            // a dungeon gate between torches
-            rect(s, 110, 50, 100, 100, C.stone1); ellipse(s, 160, 52, 50, 24, C.stone1)
-            rect(s, 124, 64, 72, 86, C.ink); ellipse(s, 160, 66, 36, 18, C.ink)
-            for (let i = 0; i < 7; i++) line(s, 128 + i * 11, 58, 128 + i * 11, 150, C.stone2) // portcullis
-            for (let i = 0; i < 5; i++) line(s, 124, 76 + i * 16, 196, 76 + i * 16, C.stone2)
-            torch(s, 96, 80, t); torch(s, 224, 80, t)
-            floorLine(s, 150, C.stone1, C.stone2)
-            vignette(s)
-        }
-    },
-    {
-        id: 'traits', label: 'Traits', built: true,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.night0)
-            // a crystal cavern with five sockets
-            for (let i = 0; i < 12; i++) { const x = i * 30; tri(s, x, 0, x + 20, 0, x + 10, 20 + (i * 7) % 20, C.night1) }
-            for (let i = 0; i < 5; i++) {
-                const x = 60 + i * 50
-                const g = TRAIT_GRADE_COLORS[TRAIT_GRADES[i * 2]!]
-                tri(s, x - 10, 130, x + 10, 130, x, 96 - (i === 2 ? 10 : 0), g[1])
-                tri(s, x - 10, 130, x, 130, x, 96 - (i === 2 ? 10 : 0), g[0])
-                ditherDisc(s, x, 110, 20, g[2], 2 + (Math.floor(qt(t) * 3 + i) & 1))
-            }
-            floorLine(s, 130, C.night1, C.night3)
-            vignette(s)
-        }
-    },
-    {
-        id: 'arena', label: 'Arena', built: false,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.night1)
-            // coliseum tiers with banners, sand floor
-            for (let tier = 0; tier < 4; tier++) {
-                const y = 20 + tier * 22
-                rect(s, 0, y, SW, 18, tier & 1 ? C.stone1 : C.stone2)
-                for (let i = 0; i < 20; i++) rect(s, i * 16 + 4, y + 4, 8, 12, C.stone0)
-                for (let i = 0; i < 40; i++) px(s, i * 8 + (tier * 3) % 8, y + 2, hash2(tier, i) > 0.6 ? C.skin1 : C.brown1) // the crowd
-            }
-            for (let i = 0; i < 5; i++) { const x = 32 + i * 64; line(s, x, 10, x, 40, C.brown1); poly(s, [0, 0, 12, 0, 12, 16, 6, 12, 0, 16], x + 1, 12 + (Math.floor(qt(t) * 3 + i) & 1), i & 1 ? C.red1 : C.blue1) }
-            floorLine(s, 110, C.gold0, C.gold1)
-            dither(s, 0, 112, SW, 68, C.brown3, 4)
-            vignette(s)
-        }
-    },
-    {
-        id: 'leaderboard', label: 'Leaderboard', built: false,
-        draw(s, t) {
-            rect(s, 0, 0, SW, SH, C.night0)
-            // the podium: three steps, laurel banners
-            const steps = [[140, 90, C.gold2], [96, 110, C.steel2], [184, 120, C.brown3]] as const
-            for (const [x, y, c] of steps) { rect(s, x, y, 40, 150 - y, c as number); rect(s, x, y, 40, 2, C.white) }
-            drawText(s, '1', 160, 96, C.ink, { font: 'big', align: 1, shadow: 0 }); drawText(s, '2', 116, 116, C.ink, { font: 'big', align: 1, shadow: 0 }); drawText(s, '3', 204, 126, C.ink, { font: 'big', align: 1, shadow: 0 })
-            for (const x of [40, 280]) { line(s, x, 20, x, 150, C.brown1, 2); poly(s, [0, 0, 18, 0, 18, 40, 9, 34, 0, 40], x + 1, 22 + (Math.floor(qt(t) * 3) & 1), C.purple1); arc(s, x + 10, 40, 5, 0.4, 2.8, C.gold2) }
-            ditherDisc(s, 160, 60, 40, C.gold1, 2)
-            floorLine(s, 150, C.night1, C.night3)
-            vignette(s)
-        }
-    }
-]
 
 // ── UI chrome ──────────────────────────────────────────────────────────────────────
 

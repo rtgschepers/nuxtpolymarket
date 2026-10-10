@@ -2,7 +2,7 @@
 // name, the Keys in hand and its best; on the right the chosen raid's boss, framed as a portrait in
 // its idle loop, over what the fight asks, what it pays and what it costs, and the button that
 // will enter it. The bosses are drawn for the whole-scene camera and stand taller than the stage,
-// so the portrait is the top of the body, not the whole of it. In the portrait's corner, the raid's
+// so the portrait is the top of the body, not the whole of it. Above the buttons, the raid's
 // preferred Loadout (`loadouts.md` §4): a picker that drops a list of the saved slots, set here, on
 // the screen of the fight it is for.
 
@@ -111,13 +111,15 @@ const SELECTED_RIM = [C.gold0, C.gold1, C.gold2] as const
 const ENTER_PLATE = [C.red0, C.red1, C.red2] as const
 const QUICK_PLATE = [C.green0, C.green1, C.green2] as const
 const LOADOUT_PLATE = [C.blue0, C.blue1, C.blue2] as const
-/** The Loadout picker, in the portrait's top-left corner, under its caption. */
-const LOADOUT = { x: SHOW.x + 4, y: SHOW.y + 11, w: 58, h: 11 }
-/** The picker's list, dropped under it: NONE first, then each saved slot. */
-const PICK = { w: 86, rowH: 10 }
+/** The Loadout picker, on its own row above the daily-Keys line, its caption to its left. */
+// as wide as QUICK and ENTER together, right over them
+const LOADOUT = { x: SHOW.x + SHOW.w - 4 - (ENTER.w * 2 + 3), y: SHOW.y + SHOW.h - ENTER.h - 16, w: ENTER.w * 2 + 3, h: 11 }
+/** The picker's list, opening upward from it: NONE first, then each saved slot. */
+const PICK = { rowH: 10 }
 
 function pickBox(view: RaidsView): Box {
-    return { x: LOADOUT.x, y: LOADOUT.y + LOADOUT.h + 1, w: PICK.w, h: (view.loadouts.length + 1) * PICK.rowH + 4 }
+    const h = (view.loadouts.length + 1) * PICK.rowH + 4
+    return { x: LOADOUT.x, y: LOADOUT.y - h - 1, w: LOADOUT.w, h }
 }
 
 /** The list's lines, top to bottom: NONE, then the saved slots. */
@@ -292,7 +294,7 @@ export class RaidsScene {
 
         // the preferred Loadout: its caption says when it is the one live now
         if (row?.open) {
-            drawText(s, row.loadoutLive ? 'LOADOUT ON' : 'LOADOUT', LOADOUT.x + 1, SHOW.y + 4, row.loadoutLive ? C.green3 : C.stone3, { shadow: 1 })
+            drawText(s, row.loadoutLive ? 'LOADOUT ON' : 'LOADOUT', SHOW.x + 5, LOADOUT.y + 2, row.loadoutLive ? C.green3 : C.stone3, { shadow: 1 })
             const label = fit((row.loadout ?? (view.loadouts.length ? 'NONE' : 'NONE SAVED')).toUpperCase(), LOADOUT.w - 6)
             plateButton(s, LOADOUT, label, LOADOUT_PLATE, raidLoadoutEnabled(view), hover === 'loadout' || view.pickerOpen, pressed && hover === 'loadout')
         }

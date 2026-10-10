@@ -3,13 +3,11 @@
 // is what shows when every scene is closed, and an open scene's button turns into its close.
 
 import { C, CLEAR } from './palette'
-import { Surface, rect, line, poly, blit, disc, px } from './surface'
+import { Surface, rect, line, poly, disc, px } from './surface'
 import { glyph, type Glyph } from './icon-kit'
 import { ABILITY_ICON_PARTS } from './icons-abilities'
 import { CURRENCY_ICONS } from './icons-items'
-import { TAB_BACKGROUNDS } from './ui-art'
 import { textOut } from './font'
-import { SW, SH } from './scenery'
 import { HQ_MENU_SCENES, HQ_SCENE_LABELS, type HqMenuScene, type HqScene } from '../hero-quest-scenes'
 
 export const BAND_H = 22
@@ -252,11 +250,10 @@ export class BandedFrame {
 }
 
 /**
- * The menu scenes, drawn as their tab backgrounds (`ui-art.ts`) cut to the stage's camera, with
- * the scene's name over them. Each is a stand-in for the scene it will become.
+ * The menu scenes' ground: the plain dark every scene draws on (the user's call, 2026-10-10, over
+ * the bespoke tab backgrounds), the stage's camera in size, with the scene's name over it.
  */
 export class SceneBackdrops {
-    private readonly full = new Surface(SW, SH, 0, 0)
     private readonly view: Surface
 
     constructor(private readonly cam: { x: number, y: number, w: number, h: number }) {
@@ -264,12 +261,7 @@ export class SceneBackdrops {
     }
 
     render(scene: HqMenuScene, t: number, titled = true): Surface {
-        // a scene with no tab background of its own (Classes) stands on plain black
-        const bg = TAB_BACKGROUNDS.find(b => b.id === scene)
-        this.full.clear(C.ink)
-        bg?.draw(this.full, t)
         this.view.clear(C.ink)
-        blit(this.view, this.full, -this.cam.x, -this.cam.y)
         if (titled) textOut(this.view, HQ_SCENE_LABELS[scene].toUpperCase(), this.cam.w >> 1, 10, C.gold2, 'big', 1, 1, 1, C.ink, -1)
         return this.view
     }

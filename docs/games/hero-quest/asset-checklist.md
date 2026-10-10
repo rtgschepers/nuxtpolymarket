@@ -1010,21 +1010,7 @@ One per world, drawn from the same theme line as that world's roster. **Art dire
 
 - [ ] Stage-select / world map UI
 
-**Tab backgrounds (10).** Built, from `app/pages/hero-quest.vue`:
-
-- [ ] Battle tab background
-- [ ] Gacha tab background
-- [ ] Collections tab background
-- [ ] Loadouts tab background
-- [ ] Prestige tab background
-- [ ] Wiki tab background
-
-**Phase 4, not yet built:**
-
-- [ ] Raids tab background
-- [ ] Traits tab background
-- [ ] Arena tab background
-- [ ] Leaderboard tab background
+**Tab backgrounds — dropped 2026-10-10** (the user's call). Every menu scene draws on the plain dark ground instead; the ten placeholder renders and their gallery entries are gone. The battle view keeps its world scenery and the raids their colosseum.
 
 > The Dev tab is development-only and needs no art.
 
