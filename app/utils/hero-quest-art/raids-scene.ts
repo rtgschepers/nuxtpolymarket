@@ -3,8 +3,8 @@
 // its idle loop, over what the fight asks, what it pays and what it costs, and the button that
 // will enter it. The bosses are drawn for the whole-scene camera and stand taller than the stage,
 // so the portrait is the top of the body, not the whole of it. In the portrait's corner, the raid's
-// preferred Loadout (`loadouts.md` §4): a picker that steps through the saved slots, set here, on the
-// screen of the fight it is for.
+// preferred Loadout (`loadouts.md` §4): a picker that drops a list of the saved slots, set here, on
+// the screen of the fight it is for.
 
 import { C } from './palette'
 import { Surface, rect, blit, dither, ditherEllipse } from './surface'
@@ -27,8 +27,15 @@ export interface RaidsView {
     raids: readonly RaidRowView[]
     /** A round or a quick-clear is on its way. */
     busy: boolean
-    /** Any Loadout is saved, so the picker has something to point at. */
-    loadoutsSaved: boolean
+    /** The saved Loadouts the picker lists, in slot order; empty with none saved. */
+    loadouts: readonly RaidLoadoutOption[]
+    /** The picker's list is down. */
+    pickerOpen: boolean
+}
+
+export interface RaidLoadoutOption {
+    slotIndex: number
+    name: string
 }
 
 export interface RaidRowView {
@@ -42,12 +49,17 @@ export interface RaidRowView {
     bestReward: number
     /** The name of the saved Loadout this raid applies on a fresh engage; null with none. */
     loadout: string | null
+    /** Its slot; null with none. */
+    loadoutSlot: number | null
     /** That Loadout is live now, applied by this raid's engage and put back on leaving. */
     loadoutLive: boolean
 }
 
-/** What the pointer is over: a raid's row, one of the showcase's two buttons, or the Loadout picker. */
-export type RaidsHover = RaidId | 'enter' | 'quick' | 'loadout' | null
+/**
+ * What the pointer is over: a raid's row, one of the showcase's two buttons, the Loadout picker, or
+ * with its list down one of the list's lines ('pick:none' to point at none) or anywhere off it.
+ */
+export type RaidsHover = RaidId | 'enter' | 'quick' | 'loadout' | `pick:${number | 'none'}` | 'shut' | null
 
 /** The boss a raid's portrait shows: the Forge's finale, the Rampant at its first tier. */
 const BOSS: Readonly<Record<RaidId, CreatureDef>> = {
@@ -101,6 +113,17 @@ const QUICK_PLATE = [C.green0, C.green1, C.green2] as const
 const LOADOUT_PLATE = [C.blue0, C.blue1, C.blue2] as const
 /** The Loadout picker, in the portrait's top-left corner, under its caption. */
 const LOADOUT = { x: SHOW.x + 4, y: SHOW.y + 11, w: 58, h: 11 }
+/** The picker's list, dropped under it: NONE first, then each saved slot. */
+const PICK = { w: 86, rowH: 10 }
+
+function pickBox(view: RaidsView): Box {
+    return { x: LOADOUT.x, y: LOADOUT.y + LOADOUT.h + 1, w: PICK.w, h: (view.loadouts.length + 1) * PICK.rowH + 4 }
+}
+
+/** The list's lines, top to bottom: NONE, then the saved slots. */
+function pickLines(view: RaidsView): { key: number | 'none', name: string }[] {
+    return [{ key: 'none' as const, name: 'NONE' }, ...view.loadouts.map(o => ({ key: o.slotIndex, name: o.name }))]
+}
 
 function rowBox(i: number): Box {
     return { x: LIST.x, y: TOP + i * (ROW_H + ROW_GAP), w: LIST.w, h: ROW_H }
@@ -119,9 +142,16 @@ function inside(b: Box, x: number, y: number): boolean {
     return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h
 }
 
-/** What a point on the view is over. */
-export function raidsHoverAt(x: number, y: number): RaidsHover {
+/** What a point on the view is over. With the picker's list down, only the list and the picker are. */
+export function raidsHoverAt(view: RaidsView, x: number, y: number): RaidsHover {
     if (inside(LOADOUT, x, y)) return 'loadout'
+    if (view.pickerOpen) {
+        const b = pickBox(view)
+        if (!inside(b, x, y)) return 'shut'
+        const i = Math.floor((y - b.y - 2) / PICK.rowH)
+        const line = pickLines(view)[i]
+        return line ? `pick:${line.key}` : null
+    }
     for (let i = 0; i < RAIDS.length; i++) if (inside(rowBox(i), x, y)) return RAIDS[i]!.id
     if (inside(enterBox(), x, y)) return 'enter'
     return inside(quickBox(), x, y) ? 'quick' : null
@@ -137,7 +167,7 @@ export function raidButtonEnabled(view: RaidsView, button: 'enter' | 'quick'): b
 /** Whether the Loadout picker does anything for the chosen raid now: open, a Loadout saved, nothing on its way. */
 export function raidLoadoutEnabled(view: RaidsView): boolean {
     const raid = view.raids.find(r => r.id === view.selected)
-    return !!raid?.open && view.loadoutsSaved && !view.busy
+    return !!raid?.open && view.loadouts.length > 0 && !view.busy
 }
 
 /** `text` cut to fit `max` px. */
@@ -263,8 +293,8 @@ export class RaidsScene {
         // the preferred Loadout: its caption says when it is the one live now
         if (row?.open) {
             drawText(s, row.loadoutLive ? 'LOADOUT ON' : 'LOADOUT', LOADOUT.x + 1, SHOW.y + 4, row.loadoutLive ? C.green3 : C.stone3, { shadow: 1 })
-            const label = fit((row.loadout ?? (view.loadoutsSaved ? 'NONE' : 'NONE SAVED')).toUpperCase(), LOADOUT.w - 6)
-            plateButton(s, LOADOUT, label, LOADOUT_PLATE, raidLoadoutEnabled(view), hover === 'loadout', pressed)
+            const label = fit((row.loadout ?? (view.loadouts.length ? 'NONE' : 'NONE SAVED')).toUpperCase(), LOADOUT.w - 6)
+            plateButton(s, LOADOUT, label, LOADOUT_PLATE, raidLoadoutEnabled(view), hover === 'loadout' || view.pickerOpen, pressed && hover === 'loadout')
         }
 
         // its name, what the fight asks, and on one line what it pays and the Keys in hand
@@ -295,6 +325,21 @@ export class RaidsScene {
         const open = row?.open ?? false
         plateButton(s, enterBox(), open ? 'ENTER' : 'SOON', ENTER_PLATE, raidButtonEnabled(view, 'enter'), hover === 'enter', pressed)
         if (open) plateButton(s, quickBox(), 'QUICK', QUICK_PLATE, raidButtonEnabled(view, 'quick'), hover === 'quick', pressed)
+        if (view.pickerOpen && row?.open) this.drawPicker(s, view, row, hover)
+    }
+
+    /** The picker's list over the portrait: the raid's current pick marked, the pointed-at line lit. */
+    private drawPicker(s: Surface, view: RaidsView, row: RaidRowView, hover: RaidsHover): void {
+        const b = pickBox(view)
+        panel(s, b.x, b.y, b.w, b.h, [C.blue0, C.blue1, C.blue2], C.night1)
+        pickLines(view).forEach((line, i) => {
+            const y = b.y + 2 + i * PICK.rowH
+            const current = line.key === 'none' ? row.loadoutSlot === null : row.loadoutSlot === line.key
+            const lit = hover === `pick:${line.key}`
+            if (lit) rect(s, b.x + 2, y, b.w - 4, PICK.rowH, C.night3)
+            if (current) drawText(s, '>', b.x + 4, y + 1, C.gold3, { shadow: 1 })
+            drawText(s, fit(line.name.toUpperCase(), b.w - 16), b.x + 11, y + 1, current ? C.gold3 : lit ? C.white : C.bone1, { shadow: 1 })
+        })
     }
 }
 

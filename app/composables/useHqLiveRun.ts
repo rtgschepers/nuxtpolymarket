@@ -42,7 +42,9 @@ type HqBattleSpeed = HqState['battleSpeed']['value']
 export function useHqLiveRun(
     run: Ref<HqRun | null> | ComputedRef<HqRun | null>,
     hero: Ref<HqHero | null> | ComputedRef<HqHero | null>,
-    battleSpeed?: Ref<HqBattleSpeed> | ComputedRef<HqBattleSpeed>
+    battleSpeed?: Ref<HqBattleSpeed> | ComputedRef<HqBattleSpeed>,
+    /** A raid session is open: the server pays nothing for the time, so the projection stands still. */
+    held?: Ref<boolean> | ComputedRef<boolean>
 ) {
     /**
      * Seconds since the payload that supplied the anchor.
@@ -200,7 +202,9 @@ export function useHqLiveRun(
     const goldSincePayload = computed(() => D(forecast.value?.goldEarned ?? 0))
 
     onMounted(() => {
-        ticker = setInterval(() => { sincePayload.value += 0.1 }, 100)
+        ticker = setInterval(() => {
+            if (!held?.value) sincePayload.value += 0.1
+        }, 100)
     })
     onUnmounted(() => {
         if (ticker) clearInterval(ticker)

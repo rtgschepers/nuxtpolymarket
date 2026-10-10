@@ -3,17 +3,20 @@
  * gift, once per holiday per year. First pass; another holiday is a row here and a gift in
  * `HOLIDAY_GIFTS`, never a system change. IDs are stable: a claim row stores them.
  *
- * Dates are UTC days (§2). Three are fixed; Lunar New Year moves with the lunisolar calendar, so it
- * reads a lookup table instead. A year missing from the table simply has no Lunar New Year gift,
- * which `holidays.spec.ts` guards against by asserting the table runs far enough ahead.
+ * Dates are UTC days (§2). Most are fixed. Lunar New Year moves with the lunisolar calendar, so it
+ * reads a lookup table instead; a year missing from the table simply has no Lunar New Year gift,
+ * which `holidays.spec.ts` guards against by asserting the table runs far enough ahead. Easter
+ * (Western, Gregorian) is computed, so it needs no table.
  */
 
-export type HolidayId = 'holiday_new_year' | 'holiday_lunar_new_year' | 'holiday_halloween' | 'holiday_christmas'
+export type HolidayId = 'holiday_new_year' | 'holiday_lunar_new_year' | 'holiday_valentines' | 'holiday_easter' | 'holiday_halloween' | 'holiday_christmas'
 
 export type HolidayDate =
     | { kind: 'fixed', month: number, day: number }
     /** Year → `MM-DD`. */
     | { kind: 'table', dates: Readonly<Record<number, string>> }
+    /** Western Easter Sunday, computed for any year. */
+    | { kind: 'easter' }
 
 export interface HolidayDef {
     id: HolidayId
@@ -36,6 +39,8 @@ export const LUNAR_NEW_YEAR_DATES: Readonly<Record<number, string>> = {
 export const HOLIDAYS: readonly HolidayDef[] = [
     { id: 'holiday_new_year', name: "New Year's Day", date: { kind: 'fixed', month: 1, day: 1 } },
     { id: 'holiday_lunar_new_year', name: 'Lunar New Year', date: { kind: 'table', dates: LUNAR_NEW_YEAR_DATES } },
+    { id: 'holiday_valentines', name: "Valentine's Day", date: { kind: 'fixed', month: 2, day: 14 } },
+    { id: 'holiday_easter', name: 'Easter', date: { kind: 'easter' } },
     { id: 'holiday_halloween', name: 'Halloween', date: { kind: 'fixed', month: 10, day: 31 } },
     { id: 'holiday_christmas', name: 'Christmas', date: { kind: 'fixed', month: 12, day: 25 } }
 ]

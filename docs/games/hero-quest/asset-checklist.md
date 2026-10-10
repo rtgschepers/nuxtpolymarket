@@ -1052,8 +1052,8 @@ One shared flash recolored per rarity tier, not a bespoke cinematic per tier.
 - [ ] Arena Rating leaderboard
 - [ ] Encyclopedia list view — 168 collectibles + 16 class nodes
 - [ ] Encyclopedia detail view
-- [ ] Holiday claim banner
-- [ ] Holiday gift-box icon — 4 holidays
+- [x] Holiday gift reveal (replaces the claim banner) — round 22, in review
+- [x] Holiday gift-box icon — 6 holidays — round 22, in review
 
 ---
 

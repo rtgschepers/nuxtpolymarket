@@ -21,6 +21,8 @@ export function holidayDayIn(holiday: HolidayDef, year: number): number | null {
     if (holiday.date.kind === 'fixed') {
         month = holiday.date.month
         day = holiday.date.day
+    } else if (holiday.date.kind === 'easter') {
+        ({ month, day } = easterSunday(year))
     } else {
         const md = holiday.date.dates[year]
         if (!md) return null
@@ -29,6 +31,24 @@ export function holidayDayIn(holiday: HolidayDef, year: number): number | null {
         day = d!
     }
     return Math.floor(Date.UTC(year, month - 1, day) / DAY_MS)
+}
+
+/** Western Easter Sunday in `year`: the anonymous Gregorian algorithm (Meeus/Jones/Butcher). */
+export function easterSunday(year: number): { month: number, day: number } {
+    const a = year % 19
+    const b = Math.floor(year / 100)
+    const c = year % 100
+    const d = Math.floor(b / 4)
+    const e = b % 4
+    const f = Math.floor((b + 8) / 25)
+    const g = Math.floor((b - f + 1) / 3)
+    const h = (19 * a + b - d - g + 15) % 30
+    const i = Math.floor(c / 4)
+    const k = c % 4
+    const l = (32 + 2 * e + 2 * i - h - k) % 7
+    const m = Math.floor((a + 11 * h + 22 * l) / 451)
+    const n = h + l - 7 * m + 114
+    return { month: Math.floor(n / 31), day: (n % 31) + 1 }
 }
 
 export interface HolidayWindow {
@@ -69,20 +89,6 @@ export function openHolidayWindows(now: number, holidays: readonly HolidayDef[] 
 /** The open window for one holiday at `now`, or null. */
 export function openHolidayWindow(id: HolidayId, now: number, holidays: readonly HolidayDef[] = HOLIDAYS, windowDays = HOLIDAY_CLAIM_WINDOW_DAYS): HolidayWindow | null {
     return openHolidayWindows(now, holidays, windowDays).find(w => w.holiday.id === id) ?? null
-}
-
-/** The next window to open after today, for "next gift" on the calendar; null past the end of every table. */
-export function nextHolidayWindow(now: number, holidays: readonly HolidayDef[] = HOLIDAYS, windowDays = HOLIDAY_CLAIM_WINDOW_DAYS): HolidayWindow | null {
-    const today = Math.floor(now / DAY_MS)
-    const year = new Date(now).getUTCFullYear()
-    let best: HolidayWindow | null = null
-    for (const y of [year, year + 1]) {
-        for (const holiday of holidays) {
-            const w = windowOf(holiday, y, windowDays)
-            if (w && w.opensDay > today && (!best || w.opensDay < best.opensDay)) best = w
-        }
-    }
-    return best
 }
 
 export function holidayGift(id: HolidayId): HolidayGift {
