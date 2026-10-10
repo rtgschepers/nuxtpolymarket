@@ -19,6 +19,7 @@ import type { TraitGrade } from '~/utils/hero-quest-art/palette'
 import type { RaidLoadoutOption, RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
 import type { RaidId as StageRaidId, StagePack, StageRaid } from '~/utils/hero-quest-art/demo'
 import { RAIDS, type RaidId } from '#shared/utils/hero-quest/content/raids'
+import { TRAIT_GRADES } from '#shared/utils/hero-quest/content/traits'
 import { LOADOUT_TARGETS } from '#shared/utils/hero-quest/loadout-session'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
 import { bossLossMark, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
@@ -47,7 +48,7 @@ const {
     shop, voidShards, buyUpgrade, classTree, classToken, pickClass, battleSpeed, buyBattleSpeed,
     pull, freePull, settings, setSetting, raids, engageRaid, quickClearRaid, calendar, claimCalendar,
     holidays, claimHoliday, milestones, claimMilestones, ascendant, tutorials, markTutorialSeen, resetTutorials,
-    traits, rollTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot
+    traits, rollTraits, autoRollTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot
 } = useHeroQuest()
 const { user, fetchSession } = useAuth()
 
@@ -842,6 +843,18 @@ async function onClaimMilestones(track: string | null) {
 /** The Roll being revealed: its slots spin from the press and land once the new board is in. */
 const traitRoll = ref<TraitRollView | null>(null)
 let traitRollKey = 0
+/** The grade Auto Roll stops at, or better. */
+const traitAutoGrade = ref<TraitGrade>('S')
+
+/** What an Auto Roll came to, for the scene's bottom line. */
+function autoRollNote(res: { rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', slots: ({ grade: string } | null)[] }): string {
+    const rolls = `${res.rolls} ROLL${res.rolls === 1 ? '' : 'S'}, ${formatNumber(res.spent)} TRAIT GEMS`
+    if (res.stoppedBy === 'hit') {
+        const best = res.slots.reduce((top, slot) => slot && TRAIT_GRADES.indexOf(slot.grade as TraitGrade) > TRAIT_GRADES.indexOf(top) ? slot.grade as TraitGrade : top, 'F' as TraitGrade)
+        return `GRADE ${best} AFTER ${rolls}!`
+    }
+    return res.stoppedBy === 'gems' ? `OUT OF TRAIT GEMS AFTER ${rolls}.` : `STOPPED AFTER ${rolls}. AUTO AGAIN TO GO ON.`
+}
 
 /**
  * The Traits scene: the live board, the Roll's price, every Set's count and tier, and the save
@@ -852,7 +865,7 @@ const traitsView = computed<TraitsView>(() => {
     const gems = user.value?.gems ?? 0
     const armed = confirm.armed.value?.startsWith('trait:') ? confirm.armed.value.slice(6) as TraitsTarget : null
     if (!t) {
-        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed, roll: null }
+        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed, roll: null, autoGrade: traitAutoGrade.value, gradePickerOpen: false }
     }
     return {
         traitGems: formatNumber(t.traitGems),
@@ -891,7 +904,10 @@ const traitsView = computed<TraitsView>(() => {
         boardFull: t.slots.every(slot => slot !== null),
         gems,
         armed,
-        roll: traitRoll.value
+        roll: traitRoll.value,
+        autoGrade: traitAutoGrade.value,
+        // the canvas holds whether the list is open
+        gradePickerOpen: false
     }
 })
 const traitsBusy = ref(false)
@@ -903,17 +919,26 @@ const traitsBusy = ref(false)
 async function onTraitAction(target: TraitsTarget) {
     const [kind, n] = target.split(':') as [string, string | undefined]
     const i = Number(n)
-    const asks = kind === 'load' || kind === 'buy' || (kind === 'save' && !!traitsView.value.saves[i]?.grades)
+    if (kind === 'grade') {
+        if (n) traitAutoGrade.value = n as TraitGrade
+        return
+    }
+    const asks = kind === 'auto' || kind === 'load' || kind === 'buy' || (kind === 'save' && !!traitsView.value.saves[i]?.grades)
     if (asks && !confirm.press(`trait:${target}`)) return
     confirm.clear()
     traitsBusy.value = true
     try {
-        if (kind === 'roll') {
+        if (kind === 'roll' || kind === 'auto') {
             const slots = traitsView.value.slots.flatMap((slot, index) => slot?.locked ? [] : [index])
-            traitRoll.value = { key: ++traitRollKey, slots, landed: false }
+            traitRoll.value = { key: ++traitRollKey, slots, landed: false, note: null }
             try {
-                await rollTraits()
-                traitRoll.value = { ...traitRoll.value, landed: true }
+                if (kind === 'roll') {
+                    await rollTraits()
+                    traitRoll.value = { ...traitRoll.value, landed: true }
+                } else {
+                    const res = await autoRollTraits(traitAutoGrade.value)
+                    traitRoll.value = { ...traitRoll.value, landed: true, note: res ? autoRollNote(res) : null }
+                }
             } catch (e) {
                 traitRoll.value = null
                 throw e

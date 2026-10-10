@@ -205,7 +205,8 @@ const INK = PALETTE[C.ink]!
 /** What the Traits scene draws before its payload lands. */
 const EMPTY_TRAITS: TraitsView = {
     traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [],
-    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null, roll: null
+    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null, roll: null,
+    autoGrade: 'S', gradePickerOpen: false
 }
 /** The smallest move in the pack's HP share worth a re-render of the readout: half a percent. */
 const PACK_REPORT_STEP = 0.005
@@ -565,11 +566,11 @@ function targetAt(e: PointerEvent): Target | null {
         if (at === 'all') return !props.milestonesBusy && milestonesHit.milestonesClaimAllEnabled(props.milestones) ? 'ms:all' : null
         return at ? `ms:${at}` : null
     }
-    if (openScene.value === 'traits' && traitsHit && props.traits) {
+    if (openScene.value === 'traits' && traitsHit && traitsView.value) {
         // a Roll still spinning or landing takes every press, to show it all
-        if (traitsScene?.rollRevealing(props.traits, sceneTime)) return 'trait:skip'
+        if (traitsScene?.rollRevealing(traitsView.value, sceneTime)) return 'trait:skip'
         // anything on the board is pointed at for what it is; only what can be pressed is pressed
-        const at = traitsHit.traitsTargetAt(props.traits, presenter.w, x, y)
+        const at = traitsHit.traitsTargetAt(traitsView.value, presenter.w, x, y)
         return at ? `trait:${at}` : null
     }
     if (openScene.value === 'calendar' && calendarHit && props.calendar) {
@@ -710,9 +711,14 @@ function onPointerUp(e: PointerEvent) {
     else if (hit.startsWith('trait:')) {
         const target = hit.slice(6) as TraitsTarget
         if (target === 'skip') {
-            if (props.traits) traitsScene?.skipRoll(props.traits)
+            if (traitsView.value) traitsScene?.skipRoll(traitsView.value)
         }
-        else if (traitsHit && props.traits && traitsHit.traitsTargetEnabled(props.traits, target, !!props.traitsBusy)) emit('traitAction', target)
+        else if (target === 'grade') traitGradePicker.value = !traitGradePicker.value
+        else if (target === 'shut') traitGradePicker.value = false
+        else if (traitsHit && traitsView.value && traitsHit.traitsTargetEnabled(traitsView.value, target, !!props.traitsBusy)) {
+            if (target.startsWith('grade:')) traitGradePicker.value = false
+            emit('traitAction', target)
+        }
     }
     else if (hit === 'ms:all') emit('claimMilestones', null)
     else if (hit.startsWith('ms:row:')) {
@@ -805,7 +811,7 @@ const pointer = computed(() => {
         const ascendant = props.classes?.ascendant
         return !!ascendant && classesHit !== null && classesHit.togglePick(ascendant, h.slice(4)) !== ascendant.picks
     }
-    if (h.startsWith('trait:')) return !!traitsHit && !!props.traits && traitsHit.traitsTargetEnabled(props.traits, h.slice(6) as TraitsTarget, !!props.traitsBusy)
+    if (h.startsWith('trait:')) return !!traitsHit && !!traitsView.value && traitsHit.traitsTargetEnabled(traitsView.value, h.slice(6) as TraitsTarget, !!props.traitsBusy)
     if (!h.startsWith('class:')) return true
     const node = props.classes?.classes.find(c => c.id === h.slice(6))
     return (!!node?.pickable && !node.current) || (!!node?.current && node.tier === 'capstone')
@@ -832,6 +838,10 @@ const raidSelected = ref<RaidId>('raid_training_grounds')
 /** The preferred-Loadout list is down; leaving the scene puts it away. */
 const raidPicker = ref(false)
 watch(openScene, () => { raidPicker.value = false })
+/** The list of grades Auto Roll stops at is open; leaving the scene puts it away. */
+const traitGradePicker = ref(false)
+watch(openScene, () => { traitGradePicker.value = false })
+const traitsView = computed<TraitsView | null>(() => props.traits ? { ...props.traits, gradePickerOpen: traitGradePicker.value } : null)
 const raidsView = computed<RaidsView>(() => ({
     selected: raidSelected.value,
     raids: props.raids ?? [],
@@ -963,7 +973,7 @@ onMounted(async () => {
                                 : scene === 'raids'
                                     ? raidsScene!.render(t, raidsView.value, raidsHover.value, pressed.value)
                                     : scene === 'traits'
-                                    ? traitsScene!.render(t, props.traits ?? EMPTY_TRAITS, traitsHover.value, pressed.value, !!props.traitsBusy)
+                                    ? traitsScene!.render(t, traitsView.value ?? EMPTY_TRAITS, traitsHover.value, pressed.value, !!props.traitsBusy)
                                     : scene === 'milestones'
                                     ? milestonesScene!.render(t, props.milestones ?? { rows: [] }, milestonesHover.value, pressed.value, !!props.milestonesBusy)
                                     : scene === 'calendar'

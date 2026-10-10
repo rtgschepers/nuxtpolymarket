@@ -270,6 +270,12 @@ export const useHeroQuest = () => {
         return call<{ spent: number, traitGems: number }>('/api/hero-quest/trait/roll', {}, '')
     }
 
+    /** Roll until a rerolled slot lands at `minGrade` or better, or the Trait Gems run short. */
+    async function autoRollTraits(minGrade: string) {
+        return call<{ rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', traitGems: number, slots: ({ grade: string } | null)[] }>(
+            '/api/hero-quest/trait/auto-roll', { minGrade }, '')
+    }
+
     /** Lock or unlock a Trait slot: free. */
     async function lockTrait(slotIndex: number, locked: boolean) {
         return call('/api/hero-quest/trait/lock', { slotIndex, locked }, '')
@@ -513,6 +519,7 @@ export const useHeroQuest = () => {
         markTutorialSeen,
         resetTutorials,
         rollTraits,
+        autoRollTraits,
         lockTrait,
         saveTraits,
         loadTraits,
