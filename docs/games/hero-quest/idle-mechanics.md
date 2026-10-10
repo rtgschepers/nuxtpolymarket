@@ -138,6 +138,8 @@ The same window applies the **Gold tenure ceiling** at the account age of the wi
 
 ### Upgrade cost formulas
 
+*(Overridden 2026-10-10, `open-items.md` precedence row #55: both lines are bought with **Gold** in the Shop, from the World 1 boss's first win. Efficiency costs 1M ×10 a level, Cap 100K ×1.5 a level. The shapes below are the original Void Shard design.)*
+
 Two different curve shapes, matched to how many levels each track has:
 
 - **Few-level tracks (doubling cost per level)** — applies to the **Offline Efficiency** line (5 levels), and fits the same shape already implied for the Champion/Skill/Artifact slot tracks (3 levels each) if you want one unified rule across all short prestige-shop tracks:
