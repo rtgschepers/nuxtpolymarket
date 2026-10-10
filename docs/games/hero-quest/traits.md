@@ -306,5 +306,6 @@ Built as `build-log.md` #52 records; what it left open is `open-items.md` #52. I
 - **Champion ATK reaches every Champion, Tank included** (§4). The Implementation Note's "non-Tank" sentence above is stale; recorded in `open-items.md` #52.
 - **A Roll with all five locked is refused** server-side as well as disabled on the stage, so nobody pays 30 for nothing.
 - **A save slot stores the locks** with the five slots, and a load restores them.
+- **Auto Roll** (the user's call, 2026-10-10, beyond this doc): Rolls back to back, each priced as one, until a rerolled slot lands at a chosen grade or better or the Trait Gems run short (`build-log.md` #52).
 - **A Roll is revealed slot by slot** (`build-log.md` #52), and a Roll or load settles the idle run first.
 - **⚠ Deep Impact's tiers break the first run's pacing** (`open-items.md` #52.1): one piece alone cuts Worlds 5–10 from about nine days to under two.
