@@ -814,7 +814,7 @@ Phase 4's Traits (`traits.md`, issue #3), with the `1 − EVA` accuracy check an
 
 ### 53. Holiday gifts — **landed 2026-10-09**
 
-`holiday-events.md`'s gift mechanic, the Phase 4 system the plan called a day's work. Gameplay events stay out of scope (open item #9).
+`holiday-events.md`'s gift mechanic, the Phase 4 system the plan called a day's work. Gameplay events are not being built (#9, decided 2026-10-10).
 
 - **The roster** (`content/holidays.ts`): New Year's Day, Lunar New Year, Valentine's Day, Easter, Halloween and Christmas, with stable IDs (`holiday_new_year`, `holiday_lunar_new_year`, `holiday_valentines`, `holiday_easter`, `holiday_halloween`, `holiday_christmas`). Four fixed dates; Lunar New Year reads `LUNAR_NEW_YEAR_DATES`, 2024 to 2050, each the date in China taken as that UTC day. A year past the table has no Lunar New Year gift, and a spec fails once the table runs out within twenty years of launch. Easter is computed (`easterSunday`, the Gregorian computus) for any year. Valentine's Day and Easter were added 2026-10-10 (the user's call).
 - **The window** (`holidays.ts`, pure): opens on the holiday's UTC day and runs `HOLIDAY_CLAIM_WINDOW_DAYS` (3, the holiday itself counted: §2's "e.g." read as the whole window, `UNTUNED ╧`). A gift belongs to the year its holiday fell in, so a window running past New Year's Eve still claims the earlier year's. No catch-up and nothing stored for a missed window, per §2.
@@ -840,6 +840,10 @@ Phase 4's Traits (`traits.md`, issue #3), with the `1 − EVA` accuracy check an
 ### 1. Arena attack auto-apply, and where preferred Loadouts are set — **decided 2026-10-04**
 
 Was an open question: raids auto-applied a preferred Loadout on engage and the Arena did not. **The Arena gets the same**, used only when a Loadout is assigned for it; nothing changes otherwise. **Each assignment is made on the screen it applies to** — a picker on each raid's entry screen and on the Arena screen — rather than from the Loadouts scene, which at most marks the slots something points at. Recorded in `loadouts.md` §4 and `arena.md` §1. Nothing built yet: the pickers and the stored pointers come with the first raid and the Arena (the user's call). **The raids' half landed 2026-10-09 (#54)**; the `arena` pointer is stored and nothing reads it until the Arena.
+
+### 9. Holiday gameplay events — **decided 2026-10-10: not built**
+
+Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
 
 ---
 

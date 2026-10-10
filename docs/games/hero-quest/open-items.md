@@ -63,9 +63,6 @@ read the older rule in the doc named in the middle column, it is superseded.**
 ### 7. Passive Skill Tree (backlog item 3)
 Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
 
-### 9. Holiday gameplay events
-Explicitly deferred scope — the gift-mechanic phase is locked, but limited-time modes/content were never started.
-
 ---
 
 ## ⚠️ Open consequences of work that landed

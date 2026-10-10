@@ -1,13 +1,13 @@
 # Holiday Events
 
-Status: **Locked** — decisions confirmed for the "simple gift" phase, idea backlog item 6. Gameplay-event content (limited-time modes/mechanics) is explicitly **deferred, not designed here** — matches the backlog's own "starts simple, leaves room for later" framing, and your call to stop this doc's scope at the gift mechanic.
+Status: **Locked** — decisions confirmed for the "simple gift" phase, idea backlog item 6. Gameplay-event content (limited-time modes/mechanics) is **not being built** (2026-10-10, the user's call, `build-log.md` #9): holidays are gifts only.
 
 ## Structure recap
 
 - Real-world calendar holidays trigger a claimable gift, once per holiday per year.
 - The gift is a **mixed bundle** (Gold, Gems, optionally themed Seals) that varies per holiday — content-authored per holiday, not computed from one shared formula.
 - **Claim-then-reward**, the same server-authoritative pattern already used for every other currency mutation in this project.
-- Out of scope here: actual gameplay events (limited-time modes/content). This doc only locks the gift mechanic.
+- Not built: actual gameplay events (limited-time modes/content). Holidays are gifts only (2026-10-10).
 
 ---
 
