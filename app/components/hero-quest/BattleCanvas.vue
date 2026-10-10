@@ -14,7 +14,9 @@ import type { CalendarScene, CalendarTarget, CalendarView } from '~/utils/hero-q
 import type { MilestonesScene, MilestonesTarget, MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
 import type { GuideTarget, GuideView } from '~/utils/hero-quest-art/guide'
 import type { TraitsScene, TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
-import type { RaidRewardView, RaidRowView, RaidsHover, RaidsScene, RaidsView } from '~/utils/hero-quest-art/raids-scene'
+import type { RaidLoadoutOption, RaidRewardView, RaidRowView, RaidsHover, RaidsScene, RaidsView } from '~/utils/hero-quest-art/raids-scene'
+import type { GiftReveal, HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
+import type { SceneTab } from '~/utils/hero-quest-art/scene-tabs'
 import type { ArenaResultView, ArenaScene, ArenaTarget, ArenaView } from '~/utils/hero-quest-art/arena-scene'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import { LOADOUT_NAME_MAX_LENGTH } from '#shared/utils/hero-quest/constants'
@@ -73,6 +75,14 @@ const props = defineProps<{
     challenge?: boolean
     /** The scene on the stage; the battle when none is open. */
     scene?: HqScene
+    /** The Shop's open tab. */
+    shopTab?: HqShopTab
+    /** The Calendar's open tab. */
+    calendarTab?: HqCalendarTab
+    /** The Milestones are open, so their Calendar tab can be pressed. */
+    milestonesOpen?: boolean
+    /** Battle Speed is open, so its Shop tab can be pressed. */
+    speedOpen?: boolean
     /** The Collections scene's open tab, that roster's entries in order, and that gacha's Essence. */
     collections?: CollectionsView
     /** A Collections equip or craft is on its way: the detail's buttons wait for it. */
@@ -103,8 +113,12 @@ const props = defineProps<{
     raids?: readonly RaidRowView[]
     /** A raid round or quick-clear is on its way. */
     raidsBusy?: boolean
-    /** Any Loadout is saved, for the Raids scene's preferred-Loadout picker. */
-    loadoutsSaved?: boolean
+    /** The saved Loadouts, for the Raids scene's preferred-Loadout picker. */
+    raidLoadouts?: readonly RaidLoadoutOption[]
+    /** A holiday gift waiting to be opened, for the battle view's corner; null with none. */
+    holidayGift?: HolidayGiftIconView | null
+    /** The holiday gift being opened, over everything; null when none is. */
+    holidayReveal?: HolidayRevealView | null
     /** A raid round to play in place of the run; the stage goes back to the run once it is cleared. */
     raidRound?: StageRaid | null
     /** What a raid round or quick-clear paid, shown over the stage until its button is pressed. */
@@ -148,6 +162,10 @@ const emit = defineEmits<{
     challenge: []
     /** A menu band button was pressed: the scene to show, or the battle when the open one closes. */
     scene: [scene: HqScene]
+    /** A Shop tab was pressed. */
+    shopTab: [tab: HqShopTab]
+    /** A Calendar tab was pressed. */
+    calendarTab: [tab: HqCalendarTab]
     /** A Collections detail button was pressed, for the entry it shows. */
     collectionAction: [action: DetailButton, id: string]
     /** A Collections tab was pressed. */
@@ -173,8 +191,8 @@ const emit = defineEmits<{
     /** A raid's enter or quick-clear button was pressed. */
     raidEnter: [raidId: RaidId]
     raidQuick: [raidId: RaidId]
-    /** A raid's preferred-Loadout picker was pressed. */
-    raidLoadout: [raidId: RaidId]
+    /** A line of a raid's preferred-Loadout list was pressed: the slot to point at, or null for none. */
+    raidLoadout: [raidId: RaidId, slotIndex: number | null]
     /** The reward popup's button was pressed. */
     raidRewardClose: []
     /** An Arena button was pressed: an attack, a purchase, a defence copy or a claim. */
@@ -185,14 +203,14 @@ const emit = defineEmits<{
     arenaResultClose: []
     /** Today's calendar cell, or the make-up button, was pressed. */
     claimCalendar: [makeup: boolean]
-    /** The Calendar scene's holiday gift button was pressed. */
-    claimHoliday: []
+    /** The holiday gift in the battle view's corner was pressed. */
+    holidayOpen: []
+    /** The holiday reveal's button was pressed once everything was out. */
+    holidayRevealClose: []
     /** A milestone card with steps waiting was pressed, or claim-all (null). */
     claimMilestones: [track: string | null]
     /** The guide's panel was pressed: the next page, or the tutorial closed on the last. */
     guideNext: []
-    /** The guide's Skip button: the tutorial closed unread. */
-    guideSkip: []
     /** A Traits button was pressed: Roll, a lock, a board's Save or Load, or a save slot's Buy. */
     traitAction: [target: TraitsTarget]
 }>()
@@ -213,7 +231,8 @@ const INK = PALETTE[C.ink]!
 /** What the Traits scene draws before its payload lands. */
 const EMPTY_TRAITS: TraitsView = {
     traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [],
-    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null
+    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null, roll: null,
+    autoGrade: 'S', gradePickerOpen: false
 }
 /** The smallest move in the pack's HP share worth a re-render of the readout: half a percent. */
 const PACK_REPORT_STEP = 0.005
@@ -231,6 +250,7 @@ let classesScene: ClassesScene | null = null
 let classesHit: typeof import('~/utils/hero-quest-art/classes-scene') | null = null
 let speedScene: SpeedScene | null = null
 let speedHit: typeof import('~/utils/hero-quest-art/speed-scene') | null = null
+let sceneTabsHit: typeof import('~/utils/hero-quest-art/scene-tabs') | null = null
 let gachaScene: GachaScene | null = null
 let gachaHit: typeof import('~/utils/hero-quest-art/gacha-scene') | null = null
 let settingsScene: SettingsScene | null = null
@@ -246,6 +266,8 @@ let traitsScene: TraitsScene | null = null
 let traitsHit: typeof import('~/utils/hero-quest-art/traits-scene') | null = null
 let arenaScene: ArenaScene | null = null
 let arenaHit: typeof import('~/utils/hero-quest-art/arena-scene') | null = null
+let giftHit: typeof import('~/utils/hero-quest-art/holiday-gift') | null = null
+let giftReveal: GiftReveal | null = null
 /** The stage's clock, for the scene that times its own animation (the gacha reveal). */
 let sceneTime = 0
 let band: typeof import('~/utils/hero-quest-art/menu-band') | null = null
@@ -409,9 +431,9 @@ defineExpose({ skipFight, closeIris })
  * The challenge button and the menu band live in the canvas, so the pointer is hit-tested against
  * them in the view's own pixels. The page's own Fight button stays the keyboard's way in.
  */
-type Target = 'challenge' | HqMenuScene | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
+type Target = 'challenge' | 'gift' | 'gift:ok' | 'gift:skip' | HqMenuScene | `scenetab:${string}` | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
     | `card:${number}` | `loadout:${LoadoutButton}` | `buy:${number}` | 'shop:prev' | 'shop:next' | `class:${string}` | KitTarget | `speed:${number}:${number}`
-    | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${RaidId | 'enter' | 'quick' | 'loadout'}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
+    | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${Exclude<RaidsHover, null>}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
     | `trait:${TraitsTarget}`
     | `arena:${ArenaTarget}` | 'result:ok'
 
@@ -495,12 +517,23 @@ function targetAt(e: PointerEvent): Target | null {
     const r = canvas.value.getBoundingClientRect()
     const x = (e.clientX - r.left) / r.width * presenter.w
     const y = (e.clientY - r.top) / r.height * presenter.h
+    // the holiday reveal takes every press: before the end a press shows it all, after it the button closes it
+    if (props.holidayReveal) {
+        if (!giftReveal || !giftHit) return null
+        if (!giftReveal.done(props.holidayReveal, sceneTime)) return 'gift:skip'
+        return giftHit.onRevealButton(presenter.w, sceneH, x, y) ? 'gift:ok' : null
+    }
     // the reward popup takes every press: only its button does anything
     if (props.raidReward) return raidsHit?.onRaidRewardButton(presenter.w, sceneH, x, y) ? 'reward:ok' : null
     if (props.arenaResult) return arenaHit?.onArenaResultButton(presenter.w, sceneH, x, y) ? 'result:ok' : null
-    // the guide's panel sits over the scene: a press on it is the guide's
-    const guideAt = props.guide && guideHit ? guideHit.guideTargetAt(x, y) : null
-    if (guideAt) return guideAt
+    // a tutorial is forced: only its bar answers, or for an unlock only the button it points at
+    if (props.guide) {
+        if (props.guide.focus) {
+            const item = band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? null
+            return item === props.guide.focus ? item : null
+        }
+        return guideHit?.guideTargetAt(presenter.w, sceneH, x, y, props.guide) ?? null
+    }
     // a raid or Arena round hides the menu, so a stray press can't walk out of it mid-fight
     const item = props.raidRound || props.arenaRound ? null : band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? null
     if (item) return item
@@ -539,7 +572,16 @@ function targetAt(e: PointerEvent): Target | null {
         const id = classesHit.classNodeAt(props.classes?.classes ?? [], x, y)
         return id ? `class:${id}` : null
     }
-    if (openScene.value === 'prestige' && prestigeHit) {
+    // the Shop's tabs sit over both of its tabs' scenes; a tab not open yet is only pointed at
+    // a scene with tabs (the Shop, the Calendar): the tabs sit over every tab's scene; a tab not open yet is only pointed at
+    if (sceneTabs.value && sceneTabsHit) {
+        const id = sceneTabsHit.sceneTabAt(sceneTabs.value.tabs, x, y)
+        if (id) {
+            const tab = sceneTabs.value.tabs.find(t => t.id === id)!
+            return id !== sceneTabs.value.open && !tab.locked ? `scenetab:${id}` : null
+        }
+    }
+    if (openScene.value === 'shop' && shopTab.value === 'upgrades' && prestigeHit) {
         const tracks = props.prestige?.tracks ?? []
         const pages = Math.max(1, Math.ceil(tracks.length / prestigeHit.SHOP_PAGE_SIZE))
         const pager = pages > 1 ? prestigeHit.shopPagerAt(presenter.w, x, y) : null
@@ -551,10 +593,11 @@ function targetAt(e: PointerEvent): Target | null {
         return i !== null && track?.affordable && track.cost !== null && !props.prestigeBusy ? `buy:${first + i}` : null
     }
     if (openScene.value === 'raids' && raidsHit) {
-        const at = raidsHit.raidsHoverAt(x, y)
+        const at = raidsHit.raidsHoverAt(raidsView.value, x, y)
         // the enter button waits for the fights; until then only the rows are pressed
         if (at === 'enter' || at === 'quick') return raidsHit.raidButtonEnabled(raidsView.value, at) ? `raid:${at}` : null
-        if (at === 'loadout') return raidsHit.raidLoadoutEnabled(raidsView.value) ? 'raid:loadout' : null
+        if (at === 'loadout') return raidsHit.raidLoadoutEnabled(raidsView.value) || raidPicker.value ? 'raid:loadout' : null
+        if (at?.startsWith('pick:') && props.raidsBusy) return null
         return at ? `raid:${at}` : null
     }
     if (openScene.value === 'arena' && arenaHit && props.arena) {
@@ -576,31 +619,36 @@ function targetAt(e: PointerEvent): Target | null {
         const banner = props.gacha.banners.find(b => b.system === at.system)
         return banner && !props.gachaBusy && gachaHit.gachaButtonEnabled(banner, at.part) ? `gacha:${at.system}:${at.part}` : null
     }
-    if (openScene.value === 'milestones' && milestonesHit && props.milestones) {
+    if (openScene.value === 'calendar' && calendarTab.value === 'milestones' && milestonesHit && props.milestones) {
         const at = milestonesHit.milestonesTargetAt(props.milestones, presenter.w, x, y)
         // claim-all is no target with nothing waiting; a card is pointed at for what it pays
         if (at === 'all') return !props.milestonesBusy && milestonesHit.milestonesClaimAllEnabled(props.milestones) ? 'ms:all' : null
         return at ? `ms:${at}` : null
     }
-    if (openScene.value === 'traits' && traitsHit && props.traits) {
+    if (openScene.value === 'traits' && traitsHit && traitsView.value) {
+        // an Auto Roll going answers only STOP; a Roll still spinning or landing takes every press, to show it all
+        if (traitsHit.autoRolling(traitsView.value)) {
+            const at = traitsHit.traitsTargetAt(traitsView.value, presenter.w, x, y)
+            return at ? `trait:${at}` : null
+        }
+        if (traitsScene?.rollRevealing(traitsView.value, sceneTime)) return 'trait:skip'
         // anything on the board is pointed at for what it is; only what can be pressed is pressed
-        const at = traitsHit.traitsTargetAt(props.traits, presenter.w, x, y)
+        const at = traitsHit.traitsTargetAt(traitsView.value, presenter.w, x, y)
         return at ? `trait:${at}` : null
     }
-    if (openScene.value === 'calendar' && calendarHit && props.calendar) {
+    if (openScene.value === 'calendar' && calendarTab.value === 'calendar' && calendarHit && props.calendar) {
         const at = calendarHit.calendarTargetAt(props.calendar, presenter.w, x, y)
         // the make-up button is no target with nothing to make up; a day is pointed at for what it pays
         if (at === 'makeup') return !props.calendarBusy && calendarHit.calendarMakeupEnabled(props.calendar) ? 'cal:makeup' : null
         if (at === 'claim') return props.calendarBusy ? null : 'cal:claim'
-        // an open gift is a button; a claimed one is pointed at for what it paid, the next one for nothing
-        if (at === 'gift') return props.calendar.gift?.state === 'claimed' || (props.calendar.gift?.state === 'open' && !props.calendarBusy) ? 'cal:gift' : null
         return at ? `cal:${at}` : null
     }
-    if (openScene.value === 'speed' && speedHit && props.speedView) {
+    if (openScene.value === 'shop' && shopTab.value === 'speed' && speedHit && props.speedView) {
         const block = speedHit.speedBlockAt(props.speedView, x, y)
         // a block that cannot be bought (too dear, or another speed running) is no target
         return block && !props.speedBusy && speedHit.speedBlockOpen(props.speedView, block) ? `speed:${block.speed}:${block.minutes}` : null
     }
+    if (openScene.value === 'battle' && giftShows() && giftHit?.onGiftIcon(presenter.w, x, y)) return 'gift'
     return openScene.value === 'battle' && props.challenge && stage?.onChallenge(x, y) ? 'challenge' : null
 }
 
@@ -696,6 +744,11 @@ function onPointerUp(e: PointerEvent) {
     if (!wasPressed || !hit) return
     const item = HQ_MENU_SCENES.find(s => s === hit)
     if (hit === 'challenge') emit('challenge')
+    else if (hit === 'gift') emit('holidayOpen')
+    else if (hit === 'gift:ok') emit('holidayRevealClose')
+    else if (hit === 'gift:skip') {
+        if (props.holidayReveal) giftReveal?.skip(props.holidayReveal)
+    }
     else if (item) emit('scene', item === openScene.value ? 'battle' : item)
     else if (hit === 'close') detail.value = null
     else if (hit === 'shop:prev' || hit === 'shop:next') shopPage.value += hit === 'shop:next' ? 1 : -1
@@ -725,16 +778,20 @@ function onPointerUp(e: PointerEvent) {
         else emit('arenaAction', at)
     }
     else if (hit === 'cal:claim' || hit === 'cal:makeup') emit('claimCalendar', hit === 'cal:makeup')
-    else if (hit === 'cal:gift') {
-        if (props.calendar?.gift?.state === 'open' && !props.calendarBusy) emit('claimHoliday')
-    }
     // a day other than today is only pointed at, for what it pays
     else if (hit.startsWith('cal:')) return
     else if (hit === 'guide:next') emit('guideNext')
-    else if (hit === 'guide:skip') emit('guideSkip')
     else if (hit.startsWith('trait:')) {
         const target = hit.slice(6) as TraitsTarget
-        if (traitsHit && props.traits && traitsHit.traitsTargetEnabled(props.traits, target, !!props.traitsBusy)) emit('traitAction', target)
+        if (target === 'skip') {
+            if (traitsView.value) traitsScene?.skipRoll(traitsView.value)
+        }
+        else if (target === 'grade') traitGradePicker.value = !traitGradePicker.value
+        else if (target === 'shut') traitGradePicker.value = false
+        else if (traitsHit && traitsView.value && traitsHit.traitsTargetEnabled(traitsView.value, target, !!props.traitsBusy)) {
+            if (target.startsWith('grade:')) traitGradePicker.value = false
+            emit('traitAction', target)
+        }
     }
     else if (hit === 'ms:all') emit('claimMilestones', null)
     else if (hit.startsWith('ms:row:')) {
@@ -743,11 +800,17 @@ function onPointerUp(e: PointerEvent) {
         if (row?.claimable.length && !props.milestonesBusy) emit('claimMilestones', row.id)
     }
     else if (hit.startsWith('raid:')) {
-        const id = hit.slice(5) as RaidId | 'enter' | 'quick' | 'loadout'
+        const id = hit.slice(5) as Exclude<RaidsHover, null>
         if (id === 'enter') emit('raidEnter', raidSelected.value)
         else if (id === 'quick') emit('raidQuick', raidSelected.value)
-        else if (id === 'loadout') emit('raidLoadout', raidSelected.value)
-        else raidSelected.value = id
+        else if (id === 'loadout') raidPicker.value = !raidPicker.value
+        else if (id === 'shut') raidPicker.value = false
+        else if (id.startsWith('pick:')) {
+            const key = id.slice(5)
+            raidPicker.value = false
+            emit('raidLoadout', raidSelected.value, key === 'none' ? null : Number(key))
+        }
+        else raidSelected.value = id as RaidId
     }
     else if (hit === 'reveal') {
         // a press while the cards deal turns them all over; once they have, it puts the board away
@@ -757,6 +820,11 @@ function onPointerUp(e: PointerEvent) {
     else if (hit.startsWith('gacha:')) {
         const [, system, part] = hit.split(':') as [string, GachaSystemId, GachaButton | 'emblem']
         if (part !== 'emblem') emit('gachaAction', system, part)
+    }
+    else if (hit.startsWith('scenetab:')) {
+        const id = hit.slice(9)
+        if (openScene.value === 'shop') emit('shopTab', id as HqShopTab)
+        else emit('calendarTab', id as HqCalendarTab)
     }
     else if (hit.startsWith('speed:')) {
         const [, speed, minutes] = hit.split(':')
@@ -768,7 +836,7 @@ function onPointerUp(e: PointerEvent) {
     }
     else if (hit.startsWith('card:')) {
         const slot = props.loadouts?.slots[Number(hit.slice(5))]
-        if (slot?.locked) emit('scene', 'prestige')
+        if (slot?.locked) emit('scene', 'shop')
         else loadoutDetail.value = slot?.slotIndex ?? null
     }
     else if (hit.startsWith('loadout:')) {
@@ -798,6 +866,11 @@ function onPointerLeave() {
     draftAtPress = null
 }
 
+/** The gift waits in the battle view's corner, but not over a fight, a raid round or its own reveal. */
+function giftShows(): boolean {
+    return !!props.holidayGift && !props.fight && !props.raidRound && !props.holidayReveal
+}
+
 const challengeState = computed(() => !props.challenge ? 'off' as const : hover.value !== 'challenge' ? 'idle' as const : pressed.value ? 'pressed' as const : 'hover' as const)
 const bandHover = computed(() => HQ_MENU_SCENES.find(s => s === hover.value) ?? null)
 const collectionsHover = computed<CollectionsHover>(() => {
@@ -816,7 +889,7 @@ const pointer = computed(() => {
         const ascendant = props.classes?.ascendant
         return !!ascendant && classesHit !== null && classesHit.togglePick(ascendant, h.slice(4)) !== ascendant.picks
     }
-    if (h.startsWith('trait:')) return !!traitsHit && !!props.traits && traitsHit.traitsTargetEnabled(props.traits, h.slice(6) as TraitsTarget, !!props.traitsBusy)
+    if (h.startsWith('trait:')) return !!traitsHit && !!traitsView.value && traitsHit.traitsTargetEnabled(traitsView.value, h.slice(6) as TraitsTarget, !!props.traitsBusy)
     if (!h.startsWith('class:')) return true
     const node = props.classes?.classes.find(c => c.id === h.slice(6))
     return (!!node?.pickable && !node.current) || (!!node?.current && node.tier === 'capstone')
@@ -858,7 +931,20 @@ const arenaHover = computed<ArenaTarget | null>(() => hover.value?.startsWith('a
 
 /** The raid shown in the Raids scene; it keeps its place while the scene is closed and reopened. */
 const raidSelected = ref<RaidId>('raid_training_grounds')
-const raidsView = computed<RaidsView>(() => ({ selected: raidSelected.value, raids: props.raids ?? [], busy: !!props.raidsBusy, loadoutsSaved: !!props.loadoutsSaved }))
+/** The preferred-Loadout list is down; leaving the scene puts it away. */
+const raidPicker = ref(false)
+watch(openScene, () => { raidPicker.value = false })
+/** The list of grades Auto Roll stops at is open; leaving the scene puts it away. */
+const traitGradePicker = ref(false)
+watch(openScene, () => { traitGradePicker.value = false })
+const traitsView = computed<TraitsView | null>(() => props.traits ? { ...props.traits, gradePickerOpen: traitGradePicker.value } : null)
+const raidsView = computed<RaidsView>(() => ({
+    selected: raidSelected.value,
+    raids: props.raids ?? [],
+    busy: !!props.raidsBusy,
+    loadouts: props.raidLoadouts ?? [],
+    pickerOpen: raidPicker.value
+}))
 const raidsHover = computed<RaidsHover>(() => hover.value?.startsWith('raid:') ? hover.value.slice(5) as RaidsHover : null)
 const settingsHover = computed<SettingsTarget | null>(() => hover.value?.startsWith('setting:') ? hover.value.slice(8) as SettingsTarget : null)
 const calendarHover = computed<CalendarTarget | null>(() => hover.value?.startsWith('cal:') ? hover.value.slice(4) as CalendarTarget : null)
@@ -868,14 +954,42 @@ const traitsHover = computed<TraitsTarget | null>(() => hover.value?.startsWith(
 function milestoneRowOf(target: string) {
     return props.milestones?.rows[Number(target.slice(7))]
 }
-const guideHover = computed<GuideTarget | null>(() => hover.value === 'guide:next' || hover.value === 'guide:skip' ? hover.value : null)
-/** The band's red dots: a scene opened and not visited yet, today's calendar reward or a holiday gift, or a milestone step waiting. */
+const guideHover = computed<GuideTarget | null>(() => hover.value === 'guide:next' ? hover.value : null)
+/** The band's red dots: a scene opened and not visited yet, today's calendar reward, or a milestone step waiting. */
 const bandAlerts = computed<ReadonlySet<HqMenuScene>>(() => new Set<HqMenuScene>([
     ...(props.newScenes ?? []),
-    ...(props.calendar?.days[props.calendar.today]?.state === 'today' || props.calendar?.gift?.state === 'open' ? ['calendar' as const] : []),
-    ...(props.arena?.rewards.length ? ['arena' as const] : []),
-    ...(props.milestones?.rows.some(r => r.claimable.length > 0) ? ['milestones' as const] : [])
+    ...(calendarWaiting.value || milestonesWaiting.value ? ['calendar' as const] : []),
+    // a season's rank reward waiting to be claimed
+    ...(props.arena?.rewards.length ? ['arena' as const] : [])
 ]))
+/** Today's calendar reward waits, and a milestone step: each dots its Calendar tab, either the button. */
+const calendarWaiting = computed(() => props.calendar?.days[props.calendar.today]?.state === 'today')
+const milestonesWaiting = computed(() => !!props.milestones?.rows.some(r => r.claimable.length > 0))
+/** The Shop's and the Calendar's open tabs. */
+const shopTab = computed<HqShopTab>(() => props.shopTab ?? 'upgrades')
+const calendarTab = computed<HqCalendarTab>(() => props.calendarTab ?? 'calendar')
+/** The open scene's tabs, and which is open; null for a scene without any. */
+const sceneTabs = computed<{ tabs: SceneTab[], open: string } | null>(() => {
+    if (openScene.value === 'shop') {
+        return {
+            open: shopTab.value,
+            tabs: HQ_SHOP_TABS.map(id => ({ id, label: HQ_SHOP_TAB_LABELS[id], locked: id === 'speed' && !props.speedOpen }))
+        }
+    }
+    if (openScene.value === 'calendar') {
+        return {
+            open: calendarTab.value,
+            tabs: HQ_CALENDAR_TABS.map(id => ({
+                id,
+                label: HQ_CALENDAR_TAB_LABELS[id],
+                locked: id === 'milestones' && !props.milestonesOpen,
+                alert: id === 'calendar' ? calendarWaiting.value : milestonesWaiting.value
+            }))
+        }
+    }
+    return null
+})
+const sceneTabHover = computed<string | null>(() => hover.value?.startsWith('scenetab:') ? hover.value.slice(9) : null)
 const speedHover = computed<SpeedBlock | null>(() => {
     const h = hover.value
     if (!h?.startsWith('speed:')) return null
@@ -892,7 +1006,7 @@ const loadoutsHover = computed<LoadoutsHover>(() => {
 onMounted(async () => {
     // started before the engine loads, so the box never paints in its own place first
     const landed = intro && wrap.value ? growFrom(wrap.value, intro) : Promise.resolve()
-    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt, traitsArt, arenaArt] = await Promise.all([
+    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt, giftArt, traitsArt, sceneTabsArt, arenaArt] = await Promise.all([
         import('~/utils/hero-quest-art/demo'),
         import('~/utils/hero-quest-art/canvas'),
         import('~/utils/hero-quest-art/menu-band'),
@@ -907,7 +1021,9 @@ onMounted(async () => {
         import('~/utils/hero-quest-art/calendar-scene'),
         import('~/utils/hero-quest-art/milestones-scene'),
         import('~/utils/hero-quest-art/guide'),
+        import('~/utils/hero-quest-art/holiday-gift'),
         import('~/utils/hero-quest-art/traits-scene'),
+        import('~/utils/hero-quest-art/scene-tabs'),
         import('~/utils/hero-quest-art/arena-scene')
     ])
     if (disposed || !canvas.value) return
@@ -925,6 +1041,7 @@ onMounted(async () => {
     classesHit = classesArt
     speedScene = new speedArt.SpeedScene(backdrops)
     speedHit = speedArt
+    sceneTabsHit = sceneTabsArt
     gachaScene = new gachaArt.GachaScene(backdrops)
     gachaHit = gachaArt
     settingsScene = new settingsArt.SettingsScene(backdrops)
@@ -940,6 +1057,8 @@ onMounted(async () => {
     traitsHit = traitsArt
     arenaScene = new arenaArt.ArenaScene(backdrops)
     arenaHit = arenaArt
+    giftHit = giftArt
+    giftReveal = new giftArt.GiftReveal()
     stage = new BattleDemo()
     build()
     if (intro) {
@@ -979,28 +1098,32 @@ onMounted(async () => {
                     ? loadoutsScene!.render(t, props.loadouts ?? { slots: [], unlocked: 0, max: 0 }, loadoutsHover.value, pressed.value, loadoutDetail.value, !!props.loadoutsBusy)
                     : scene === 'classes'
                         ? classesScene!.render(t, classesView.value, classHover.value, !!props.classesBusy, pressed.value)
-                        : scene === 'prestige'
-                            ? prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
+                        : scene === 'shop'
+                            ? shopTab.value === 'speed'
+                                ? speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
+                                : prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0', gold: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
                             : scene === 'gacha'
                                 ? gachaScene!.render(t, props.gacha ?? { banners: [], gold: '0', reveal: null, armed: null }, gachaHover.value, pressed.value, !!props.gachaBusy)
                                 : scene === 'raids'
                                     ? raidsScene!.render(t, raidsView.value, raidsHover.value, pressed.value)
                                     : scene === 'traits'
-                                    ? traitsScene!.render(t, props.traits ?? EMPTY_TRAITS, traitsHover.value, pressed.value, !!props.traitsBusy)
+                                    ? traitsScene!.render(t, traitsView.value ?? EMPTY_TRAITS, traitsHover.value, pressed.value, !!props.traitsBusy)
                                     : scene === 'arena'
                                     ? arenaScene!.render(t, arenaView.value, arenaHover.value, pressed.value)
-                                    : scene === 'milestones'
+                                    : scene === 'calendar' && calendarTab.value === 'milestones'
                                     ? milestonesScene!.render(t, props.milestones ?? { rows: [] }, milestonesHover.value, pressed.value, !!props.milestonesBusy)
                                     : scene === 'calendar'
-                                    ? calendarScene!.render(t, props.calendar ?? { today: 0, days: [], makeupsLeft: 0, makeupsPerCycle: 0, makeupDay: null, nextDayIn: '', cycleDaysLeft: 0, gift: null }, calendarHover.value, pressed.value, !!props.calendarBusy)
-                                    : scene === 'settings'
-                                    ? settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
-                                    : speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
-        if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)
-        // the guide waits out a raid's reward popup rather than covering it
-        else if (props.guide && guideHit && !props.arenaResult) guideHit.drawGuide(view, t, props.guide, guideHover.value, pressed.value)
+                                    ? calendarScene!.render(t, props.calendar ?? { today: 0, days: [], makeupsLeft: 0, makeupsPerCycle: 0, makeupDay: null, nextDayIn: '', cycleDaysLeft: 0 }, calendarHover.value, pressed.value, !!props.calendarBusy)
+                                    : settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
+        if (sceneTabs.value && sceneTabsHit) sceneTabsHit.drawSceneTabs(view, sceneTabs.value.tabs, sceneTabs.value.open, sceneTabHover.value)
+        if (scene === 'battle' && giftShows() && giftHit) giftHit.drawGiftIcon(view, t, props.holidayGift!, hover.value === 'gift')
+        if (props.holidayReveal && giftReveal) giftReveal.render(view, t, props.holidayReveal, hover.value === 'gift:ok', pressed.value)
+        else if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)
         if (props.arenaResult && arenaHit) arenaHit.drawArenaResult(view, props.arenaResult, hover.value === 'result:ok', pressed.value)
-        presenter!.present(banded!.compose(view, scene, bandHover.value, pressed.value, !!props.raidRound || !!props.arenaRound, bandAlerts.value, props.menuScenes))
+        const frame = banded!.compose(view, scene, bandHover.value, pressed.value, !!props.raidRound || !!props.arenaRound, bandAlerts.value, props.menuScenes)
+        // over the whole frame, so the band dims with the scene; it waits out a raid's or an Arena round's popup and a holiday reveal
+        if (props.guide && guideHit && !props.raidReward && !props.arenaResult && !props.holidayReveal) guideHit.drawGuide(frame, view.h, t, props.guide, guideHover.value)
+        presenter!.present(frame)
     })
     observer = new ResizeObserver(fit)
     observer.observe(wrap.value!)

@@ -1,29 +1,49 @@
-// The guide's dialog (`shared/utils/hero-quest/tutorials.ts`): a panel near the top of the stage,
-// clear of the party band and the menu, with the snail's portrait, its name, the page being read,
-// a page count and a Skip button. A press anywhere else on the panel turns the page, and on the last
-// page closes it. Drawn over whatever scene is open, so the battle runs on behind it.
+// The guide's dialog (`shared/utils/hero-quest/tutorials.ts`): a bar along the bottom of the scene,
+// just over the menu band, with Mossimer's portrait (`guide-portrait.ts`), its name, the page being
+// read and a page count. A tutorial is forced (the user's call, 2026-10-09): the whole frame dims
+// behind the bar and only one thing answers a press. An unlock points at its scene's menu button,
+// left lit, and only that button works; any other tutorial is read by pressing the bar, which turns
+// the page and closes it on the last. There is no skip.
 
-import { C } from './palette'
-import { disc, line, px, rect, ring, type Surface } from './surface'
+import { C, shadeLut } from './palette'
+import { rect, type Surface } from './surface'
 import { drawText, textWidth } from './font'
 import { panel } from './ui-art'
-import { plateButton, type Box } from './collections-scene'
+import { drawGuidePortrait } from './guide-portrait'
+import { menuButtonRect } from './menu-band'
+import type { Box } from './collections-scene'
+import { HQ_SCENE_LABELS, type HqMenuScene } from '../hero-quest-scenes'
 
 export interface GuideView {
     name: string
     pages: readonly string[]
     /** 0-based. */
     page: number
+    /** An unlock's scene: its menu button is the one thing that can be pressed. Null to read by pressing the bar. */
+    focus: HqMenuScene | null
 }
 
-export type GuideTarget = 'guide:next' | 'guide:skip'
+export type GuideTarget = 'guide:next'
 
-const BOX: Box = { x: 4, y: 16, w: 264, h: 38 }
-const PORTRAIT: Box = { x: BOX.x + 3, y: BOX.y + 3, w: 32, h: 32 }
-const SKIP: Box = { x: BOX.x + BOX.w - 33, y: BOX.y + 3, w: 30, h: 11 }
-const TEXT_X = PORTRAIT.x + PORTRAIT.w + 5
-const TEXT_W = BOX.x + BOX.w - 6 - TEXT_X
-const SKIP_PLATE = [C.stone0, C.stone1, C.stone2] as const
+/** As wide as the battle stage allows; a wider scene (the prestige gate) centres it. */
+const BAR_W = 264
+const BAR_H = 38
+const BAR_MARGIN = 4
+/** The text column: after the portrait, short of the right edge. */
+const TEXT_DX = 3 + 32 + 5
+const TEXT_W = BAR_W - 6 - TEXT_DX
+/** How far the lit ring round a pointed-at button stands off it. */
+const FOCUS_PAD = 2
+
+/** Where the bar and its parts sit on a scene of the given size. */
+function layout(w: number, sceneH: number) {
+    const box: Box = { x: (w - BAR_W) >> 1, y: sceneH - BAR_H - BAR_MARGIN, w: BAR_W, h: BAR_H }
+    return {
+        box,
+        portrait: { x: box.x + 3, y: box.y + 3, w: 32, h: 32 },
+        textX: box.x + TEXT_DX
+    }
+}
 
 function inside(b: Box, x: number, y: number): boolean {
     return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h
@@ -54,52 +74,79 @@ export function guidePageFits(page: string): boolean {
     return wrap(page, TEXT_W).length <= 2
 }
 
-export function guideTargetAt(x: number, y: number): GuideTarget | null {
-    if (inside(SKIP, x, y)) return 'guide:skip'
-    return inside(BOX, x, y) ? 'guide:next' : null
+/**
+ * What a press at `x`, `y` on a `w`-wide frame whose scene is `sceneH` tall turns the page of. An
+ * unlock's bar takes no press: its scene's button does, which the stage hit-tests on the band.
+ */
+export function guideTargetAt(w: number, sceneH: number, x: number, y: number, view: GuideView): GuideTarget | null {
+    if (view.focus) return null
+    return inside(layout(w, sceneH).box, x, y) ? 'guide:next' : null
+}
+
+/** How long the snail's mouth works after a page appears. */
+const TALK_SECONDS = 1.2
+
+// the page last drawn and when it appeared, so the snail talks as each one comes up
+let talkPage = ''
+let talkFrom = 0
+
+let dimLut: Uint8Array | null = null
+
+/** Darken every pixel of `s` outside `keep`, by palette remap: the frame stays indexed. */
+function dim(s: Surface, keep: Box | null): void {
+    dimLut ??= shadeLut(0.4, 'night0', 0.25)
+    const d = s.data
+    for (let y = 0; y < s.h; y++) {
+        const kept = keep !== null && y >= keep.y && y < keep.y + keep.h
+        for (let x = 0; x < s.w; x++) {
+            if (kept && x >= keep.x && x < keep.x + keep.w) continue
+            const i = y * s.w + x
+            d[i] = dimLut[d[i]!]!
+        }
+    }
 }
 
 /**
- * The snail, a placeholder until its art round: a brown spiral shell on a green body, two eye
- * stalks, bobbing a pixel as it talks.
+ * The guide over a whole frame: the scene `sceneH` tall with the menu band under it. Everything
+ * dims but the bar and, for an unlock, the button it points at, ringed in pulsing gold.
  */
-function snail(s: Surface, b: Box, t: number): void {
-    rect(s, b.x, b.y, b.w, b.h, C.night0)
-    const bob = Math.floor(t * 3) % 2
-    const cx = b.x + 17
-    const cy = b.y + 18 + bob
-    // the body: a soft foot along the ground, the head raised at the left
-    rect(s, cx - 13, cy + 7, 24, 4, C.green2)
-    rect(s, cx - 13, cy + 7, 24, 1, C.green3)
-    rect(s, cx - 13, cy + 2, 5, 6, C.green2)
-    px(s, cx - 12, cy + 2, C.green3)
-    // eye stalks and their eyes
-    line(s, cx - 12, cy + 2, cx - 14, cy - 5, C.green2)
-    line(s, cx - 9, cy + 2, cx - 8, cy - 5, C.green2)
-    disc(s, cx - 14, cy - 6, 1.5, C.white); px(s, cx - 14, cy - 6, C.ink)
-    disc(s, cx - 8, cy - 6, 1.5, C.white); px(s, cx - 8, cy - 6, C.ink)
-    // the shell: a disc with a spiral wound into it
-    disc(s, cx + 2, cy + 1, 8, C.brown1)
-    disc(s, cx + 2, cy + 1, 7, C.brown2)
-    ring(s, cx + 2, cy + 1, 5, C.brown3)
-    ring(s, cx + 3, cy + 1, 2, C.brown1)
-    px(s, cx + 3, cy + 1, C.gold2)
-    px(s, cx - 1, cy - 4, C.bone1)
-}
-
-export function drawGuide(s: Surface, t: number, view: GuideView, hover: GuideTarget | null, pressed: boolean): void {
-    panel(s, BOX.x, BOX.y, BOX.w, BOX.h, undefined, C.night1)
-    snail(s, PORTRAIT, t)
-    drawText(s, view.name.toUpperCase(), TEXT_X, BOX.y + 4, C.gold2, { shadow: 1 })
-    if (view.pages.length > 1) {
-        drawText(s, `${view.page + 1}/${view.pages.length}`, SKIP.x - 4, BOX.y + 4, C.stone3, { align: 2, shadow: 1 })
+export function drawGuide(s: Surface, sceneH: number, t: number, view: GuideView, hover: GuideTarget | null): void {
+    const pulse = Math.floor(t * 2) % 2 === 0
+    const btn = view.focus ? menuButtonRect(s.w, s.h, view.focus) : null
+    const ring = btn ? { x: btn.x - FOCUS_PAD, y: btn.y - FOCUS_PAD, w: btn.w + 2 * FOCUS_PAD, h: btn.h + 2 * FOCUS_PAD } : null
+    dim(s, ring)
+    if (ring) {
+        const c = pulse ? C.gold3 : C.gold2
+        panelRing(s, ring, c)
     }
-    plateButton(s, SKIP, 'SKIP', SKIP_PLATE, true, hover === 'guide:skip', pressed)
-    guideLines(view.pages[view.page] ?? '').forEach((l, i) => {
-        drawText(s, l, TEXT_X, BOX.y + 14 + i * 7, C.bone1, { shadow: 1 })
+
+    const { box, portrait, textX } = layout(s.w, sceneH)
+    panel(s, box.x, box.y, box.w, box.h, undefined, C.night1)
+    const page = view.pages[view.page] ?? ''
+    if (page !== talkPage) {
+        talkPage = page
+        talkFrom = t
+    }
+    drawGuidePortrait(s, portrait.x, portrait.y, t, t - talkFrom < TALK_SECONDS)
+    drawText(s, view.name.toUpperCase(), textX, box.y + 4, C.gold2, { shadow: 1 })
+    if (view.pages.length > 1) {
+        drawText(s, `${view.page + 1}/${view.pages.length}`, box.x + box.w - 6, box.y + 4, C.stone3, { align: 2, shadow: 1 })
+    }
+    guideLines(page).forEach((l, i) => {
+        drawText(s, l, textX, box.y + 16 + i * 7, C.bone1, { shadow: 1 })
     })
     const last = view.page >= view.pages.length - 1
-    const pulse = Math.floor(t * 2) % 2 === 0
-    drawText(s, last ? 'TAP TO CLOSE' : 'TAP TO GO ON', BOX.x + BOX.w - 6, BOX.y + BOX.h - 9,
+    const hint = view.focus
+        ? `TAP ${HQ_SCENE_LABELS[view.focus].toUpperCase()} BELOW`
+        : last ? 'TAP TO CLOSE' : 'TAP TO GO ON'
+    drawText(s, hint, box.x + box.w - 6, box.y + box.h - 9,
         hover === 'guide:next' || pulse ? C.gold3 : C.gold1, { align: 2, shadow: 1 })
+}
+
+/** A 1px frame round `b`, inside it. */
+function panelRing(s: Surface, b: Box, c: number): void {
+    rect(s, b.x, b.y, b.w, 1, c)
+    rect(s, b.x, b.y + b.h - 1, b.w, 1, c)
+    rect(s, b.x, b.y, 1, b.h, c)
+    rect(s, b.x + b.w - 1, b.y, 1, b.h, c)
 }

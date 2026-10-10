@@ -35,6 +35,7 @@ Mostly already decided by other locked docs; stated here as the single reference
   - **The client waits one kill before firing** (`AUTO_ENGAGE_GRACE_KILLS = 1`, clamped to 1–10s). The screen projects kills fractionally so bars move smoothly, while the server floors to whole kills, so the screen reaches a gate up to one kill before the server agrees. An engage sent in that window is rejected with a 400; the client swallows it and retries after 3s rather than showing an error.
   - **Never re-fights a cleared run.** A won World 10 super boss leaves the run parked on the same gate with `runCleared` set; auto-engage holds there, since firing would re-fight the final boss forever and every win pays Milestone Seals.
   - An automatically engaged replay closes itself 2.5s after its outcome; a manually engaged one waits for the player.
+- **The run holds while the player is in a raid** (2026-10-10, `open-items.md` #54): from a raid's first engage until the player leaves it, nothing accrues and no boss fires on its own. The time spent there is dropped, not banked.
 - **Skill casting is not a separate axis anymore.** Every skill on every unit auto-fires on cooldown (`classes-and-combat.md` §3), so stage/kill-count auto-advancement and skill firing are simply the same always-on behavior. Nothing about the party's DPS contribution depends on the player being present or attentive.
 
 ---
@@ -43,7 +44,7 @@ Mostly already decided by other locked docs; stated here as the single reference
 
 **Naming note:** referred to here as **Battle Speed** rather than "speed-up," specifically to avoid collision with the SPD stat (`classes-and-combat.md` §2–3) — the two are unrelated mechanics that happen to share a word. SPD is a per-unit stat that shortens *cooldown length*; Battle Speed is a session-wide clock multiplier. Flagging the naming choice in case you'd rather call it something else in-game.
 
-- **Purchased in fixed-duration blocks with Gems** (the platform's premium currency, `core-progression-and-prestige.md` §4). The purchased window is **pure wall-clock** — it runs down in real time whether the app is open or not, so there's no ambiguity about "was it still running when I closed the app": it was.
+- **Purchased in fixed-duration blocks with Gems** (the platform's premium currency, `core-progression-and-prestige.md` §4). The purchased window is **pure wall-clock** — it runs down in real time whether the app is open or not, so there's no ambiguity about "was it still running when I closed the app": it was. *(Overridden for raids, 2026-10-10: the block waits while the run holds in a raid session, `open-items.md` precedence row #54.)*
 - **Revised — Battle Speed does apply offline.** (Supersedes this doc's earlier "live-session only, offline always runs at 1x" rule.) The multiplier applies to **wave-stage kill accrual** (Stages 1–4 and 6–9) both online and offline: the settle function multiplies the boosted portion of elapsed time before offline efficiency is applied. See Section 4 for exactly where it enters the formula, and `tech-architecture.md` §4b for the settle-side mechanics.
 - **Scope, stated in full:**
 
@@ -136,6 +137,8 @@ The same window applies the **Gold tenure ceiling** at the account age of the wi
 - **`OFFLINE_CAP_BASE_HOURS = 8`** — **locked.** Prestige-shop upgrade line: **+2 hours per purchase level, hard-capped at 72 hours total** — **32 levels** (8, 10, 12, ... 70, 72). No longer uncapped; this now fits the same "fixed-level-count shop track" shape as every other prestige-shop lever, just with far more levels than the 3-level Champion/Skill/Artifact slot tracks.
 
 ### Upgrade cost formulas
+
+*(Overridden 2026-10-10, `open-items.md` precedence row #55: both lines are bought with **Gold** in the Shop, from the World 1 boss's first win. Efficiency costs 1M ×10 a level, Cap 100K ×1.5 a level. The shapes below are the original Void Shard design.)*
 
 Two different curve shapes, matched to how many levels each track has:
 

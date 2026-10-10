@@ -1203,11 +1203,11 @@ export const hqState = pgTable('hq_state', {
   raidLoadoutPreferences: jsonb('raid_loadout_preferences').$type<Partial<Record<string, number>>>().notNull().default({}),
 
   /**
-   * The open preferred-Loadout session (`LoadoutSession`): the live loadout (all six components) as it was before a
-   * raid's fresh engage applied its preferred one, which target opened it and which slot it
-   * applied. Put back, and cleared, when the player leaves the raid; null when none is open.
-   * Stored rather than held by the client, so a reload keeps it and a tab shut mid-raid is put
-   * back by the next read (`loadout-session.ts`).
+   * The open raid session (`LoadoutSession`): which raid's fresh engage opened it and, when it
+   * applied a preferred Loadout, that slot and the live loadout (all six components) as it was
+   * before. The run holds while one is open (`settleHq`). Put back, and cleared, when the player
+   * leaves the raid; null when none is open. Stored rather than held by the client, so a reload
+   * keeps it and a tab shut mid-raid is closed by the next settle past presence (`loadout-session.ts`).
    */
   preRaidSnapshot: jsonb('pre_raid_snapshot').$type<LoadoutSession | null>(),
 

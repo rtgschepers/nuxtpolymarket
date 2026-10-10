@@ -1,16 +1,10 @@
 <script setup lang="ts">
 /**
- * The login calendar's route, drawn on the stage as the Calendar scene, which is where days are
- * claimed (`shared/utils/hero-quest/calendar.ts`).
+ * The Calendar, drawn on the stage: its tabs, the login calendar and the Milestones, are each a
+ * route of their own, rendered here, as the Shop's and the Collections tabs are.
  */
-const { initialized } = useHeroQuest()
 </script>
 
 <template>
-  <div
-    v-if="!initialized"
-    class="text-center py-16 text-muted"
-  >
-    Start a run first.
-  </div>
+  <NuxtPage />
 </template>

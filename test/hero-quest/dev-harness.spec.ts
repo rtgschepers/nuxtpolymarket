@@ -289,6 +289,16 @@ describe.skipIf(SKIP)('dev harness against the real settle path', () => {
             expect(result.chunksRun).toBe(1)
         })
 
+        it('leaves an open raid session before it skips', async () => {
+            await db.update(hqState).set({ preRaidSnapshot: { target: 'raid_training_grounds', slotIndex: null }, lastSettledAt: new Date() }).where(eq(hqState.userId, USER_ID))
+
+            const result = await devSkip(USER_ID, 1, 'online')
+
+            expect(result.kills).toBeGreaterThan(0)
+            const [state] = await db.select().from(hqState).where(eq(hqState.userId, USER_ID))
+            expect(state!.preRaidSnapshot).toBeNull()
+        })
+
         it('stops early at a boss gate instead of burning windows on zeros', async () => {
             // `settle()` never resolves a boss, so every window after the run parks on one earns
             // nothing. Reporting the stop is more useful than reporting 20 empty windows — and

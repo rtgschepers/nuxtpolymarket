@@ -73,11 +73,10 @@ export const ELITE_PACK_SIZE = 6
 /**
  * Minions standing with a boss or super boss; the encounter holds `BOSS_MINION_COUNT + 1` bodies.
  *
- * Smaller than a wave pack: the escort splits the party's attention and gives AoE something to
- * answer. `BOSS_TIMER_SECONDS` covers the **whole encounter**, so every minion is time taken off
- * the boss.
+ * None (the user's call, 2026-10-09; it was 2): a boss fight is the boss alone, plus whatever adds
+ * its own fight spawns. The pack code still takes any count, so an escort is one number away.
  */
-export const BOSS_MINION_COUNT = 2
+export const BOSS_MINION_COUNT = 0
 
 /**
  * Fraction of a pack still swinging, averaged over one stage attempt.
@@ -979,7 +978,8 @@ export const RAID_KEY_BANK_DAYS = 7
  * What a raid clear pays (§6), in the raid's own currency: `BASE × GROWTH^(level − 1)`.
  *
  * Set by the user on 2026-10-04: 3 Seals at level 1 for the four Seal raids (three clears a day is
- * about one 10-pull), 10 Trait Gems for the Trait Raid (two cheap rolls), all +3% a level. Kept
+ * about one 10-pull), 10 Trait Gems for the Trait Raid (two cheap rolls; 100 since 2026-10-10), all +3%
+ * a level. Kept
  * gentle because the ladder is slow to climb: a raid level costs a world of account growth, so
  * level 100 takes the power of about ten prestiges (`build-log.md`).
  */
@@ -988,7 +988,8 @@ export const RAID_REWARD_BASE: Readonly<Record<string, number>> = {
     raid_training_grounds: 3,
     raid_dig_site: 3,
     raid_forge: 3,
-    raid_trait: 10
+    // 10x on 2026-10-10 (the user's call), so the calendar's Trait Gem days, sized off it, are 10x too
+    raid_trait: 100
 }
 export const RAID_REWARD_GROWTH: Readonly<Record<string, number>> = {
     raid_guild: 1.03,
@@ -1297,15 +1298,17 @@ export const CALENDAR_SCHEDULE: readonly CalendarDay[] = [ // UNTUNED ╧
 //
 // Every menu scene but Settings opens at a checkpoint of lifetime progress, and the guide announces
 // it there (`tutorials.ts`). The schedule is the user's (2026-10-09): each scene opens where it first
-// becomes useful, Prestige at the run's clear and Classes at the first prestige, which is when each
-// can first do anything.
+// becomes useful, the Shop at the World 1 boss's first win since 2026-10-10, and Classes at the
+// first prestige. Battle Speed is a tab in the Shop now, and the Milestones one in the Calendar, each
+// still opening where it did.
 
 /** A scene that opens at a checkpoint. Battle and Settings are open from the start. */
-export type HqFeature = 'gacha' | 'collections' | 'milestones' | 'calendar' | 'loadouts' | 'speed' | 'raids' | 'traits' | 'arena' | 'prestige' | 'classes'
+export type HqFeature = 'gacha' | 'collections' | 'milestones' | 'calendar' | 'loadouts' | 'speed' | 'raids' | 'traits' | 'arena' | 'shop' | 'classes'
 
-/** A point of lifetime progress: a World's mid-boss beaten, Worlds cleared, the run cleared, prestiges made. */
+/** A point of lifetime progress: a World's mid-boss fought (beaten, or lost to) or beaten, Worlds cleared, the run cleared, prestiges made. */
 export type FeatureCheckpoint =
     | { kind: 'boss', world: number }
+    | { kind: 'boss_beaten', world: number }
     | { kind: 'worlds', count: number }
     | { kind: 'run_cleared' }
     | { kind: 'prestiges', count: number }
@@ -1314,8 +1317,11 @@ export type FeatureCheckpoint =
 export const FEATURE_UNLOCKS: readonly { feature: HqFeature, at: FeatureCheckpoint }[] = [
     { feature: 'gacha', at: { kind: 'boss', world: 1 } },
     { feature: 'collections', at: { kind: 'boss', world: 1 } },
-    { feature: 'milestones', at: { kind: 'worlds', count: 1 } },
+    // the Shop takes the win, and comes after the two above when they open on the same fight
+    { feature: 'shop', at: { kind: 'boss_beaten', world: 1 } },
+    // the Calendar first: it is the main page of the button the two share
     { feature: 'calendar', at: { kind: 'worlds', count: 1 } },
+    { feature: 'milestones', at: { kind: 'worlds', count: 1 } },
     { feature: 'loadouts', at: { kind: 'worlds', count: 2 } },
     { feature: 'speed', at: { kind: 'worlds', count: 2 } },
     { feature: 'raids', at: { kind: 'worlds', count: 4 } },
@@ -1323,7 +1329,6 @@ export const FEATURE_UNLOCKS: readonly { feature: HqFeature, at: FeatureCheckpoi
     { feature: 'traits', at: { kind: 'worlds', count: 4 } },
     // a World after the raids, so its tutorial doesn't land on top of theirs
     { feature: 'arena', at: { kind: 'worlds', count: 5 } },
-    { feature: 'prestige', at: { kind: 'run_cleared' } },
     { feature: 'classes', at: { kind: 'prestiges', count: 1 } }
 ]
 
@@ -1347,13 +1352,15 @@ export interface HolidayGift {
 
 /**
  * Each holiday's gift, authored per holiday rather than computed (§3): Christmas richest, Halloween
- * the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
+ * and Valentine's Day the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
  * platform-wide currency, so these reach past Hero Quest; size them with the calendar's Gem days
  * and the milestones' (`open-items.md` #47, #48).
  */
 export const HOLIDAY_GIFTS: Readonly<Record<HolidayId, HolidayGift>> = { // UNTUNED ╧
     holiday_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 3, gear: 3, skill: 3, artifact: 3 } },
     holiday_lunar_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 5 } },
+    holiday_valentines: { goldMinutes: 30, gems: 25, seals: { champion: 3 } },
+    holiday_easter: { goldMinutes: 45, gems: 40, seals: { skill: 5 } },
     holiday_halloween: { goldMinutes: 30, gems: 25, seals: { artifact: 5 } },
     holiday_christmas: { goldMinutes: 120, gems: 100, seals: { champion: 5, gear: 5, skill: 5, artifact: 5 } }
 }
@@ -1388,11 +1395,15 @@ export const MILESTONE_COLLECTION_EVERY = 6 // UNTUNED ╧
 export const MILESTONE_COLLECTION_SEALS_BASE = 2 // UNTUNED ╧
 export const MILESTONE_COLLECTION_SEALS_STEP = 2 // UNTUNED ╧
 
-/** Short prestige-shop tracks double per level; the 32-level cap track uses a gentler base. */
-export const OFFLINE_EFFICIENCY_BASE_COST = 50 // UNTUNED ╧
-export const OFFLINE_EFFICIENCY_COST_GROWTH = 2
-export const OFFLINE_CAP_BASE_COST = 25 // UNTUNED ╧
-export const OFFLINE_CAP_COST_GROWTH = 1.72
+/**
+ * The two offline tracks are bought with Gold (the user's call, 2026-10-10), so they can be had from
+ * the World 1 boss on: Offline Efficiency 1M ×10 a level, 10B for the fifth; Offline Cap 100K ×1.5 a
+ * level, 28,762,658,885 for the 32nd. Set by the user, so no marker.
+ */
+export const OFFLINE_EFFICIENCY_BASE_COST = 1_000_000
+export const OFFLINE_EFFICIENCY_COST_GROWTH = 10
+export const OFFLINE_CAP_BASE_COST = 100_000
+export const OFFLINE_CAP_COST_GROWTH = 1.5
 
 // ── Presence ───────────────────────────────────────  tech-architecture.md §4b
 
@@ -1453,8 +1464,9 @@ export const AUTO_ENGAGE_MAX_DELAY_SECONDS = 10
 export const AUTO_ENGAGE_RETRY_SECONDS = 3
 
 /**
- * How long an automatically-engaged replay holds on its outcome before closing itself. A
- * *manually* engaged fight never auto-closes — the player dismisses it themselves.
+ * How long a boss replay holds on its outcome before closing itself and the run moving on. Every
+ * fight closes so, a challenged one too: its Continue button sat under the stage, out of sight, and
+ * the run waited behind a VICTORY banner until it was found (2026-10-10).
  */
 export const AUTO_ENGAGE_REPLAY_HOLD_SECONDS = 2.5
 
@@ -1896,6 +1908,14 @@ export const TRAIT_SAVE_SLOT_COST_STEP_GEMS = 500
 
 /** Storing the live board in a save slot, or loading one, costs this many Trait Gems a press (§6). */
 export const TRAIT_SAVE_LOAD_COST = 100
+
+/**
+ * Auto Roll (the user's call, 2026-10-10; not in `traits.md`): Rolls back to back until a slot lands
+ * at a chosen grade or better or the Trait Gems run short, this many to a request. The client asks
+ * again until one of those stops it or the player does, so this sets how finely STOP can cut in and
+ * how many requests a long run makes. Not a price: every Roll still costs what a Roll costs.
+ */
+export const TRAIT_AUTO_ROLL_BATCH = 10 // UNTUNED ╧
 
 // ── Prestige shop stat tracks ──────────────────────  open-items.md #41
 

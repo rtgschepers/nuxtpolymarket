@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '#server/database'
 import { hqCollection, hqFights, hqHolidayClaims, hqLoadouts, hqRaidState, hqShopUpgrades, hqState, hqTraitSaveSlots, hqTraitSlots, user } from '#server/database/schema'
-import { getTraitSaves, loadTraitBoard, rollTraits, serializeTraits, setTraitLock, storeTraitBoard } from '#server/utils/hero-quest-traits'
+import { autoRollTraits, getTraitSaves, loadTraitBoard, rollTraits, serializeTraits, setTraitLock, storeTraitBoard } from '#server/utils/hero-quest-traits'
 import { engageRaid, quickClearRaid } from '#server/utils/hero-quest-raids'
 import { claimCalendar } from '#server/utils/hero-quest-calendar'
 import { claimHoliday } from '#server/utils/hero-quest-holidays'
@@ -449,6 +449,18 @@ describe.skipIf(SKIP)('hero-quest concurrency', () => {
             expect((await getTraitBoard(USER_ID)).every(slot => slot !== null)).toBe(true)
         })
 
+        it('pays for each of a burst of Auto Rolls once, and never spends past zero', async () => {
+            await ensureHqState(USER_ID)
+            // seven Rolls' worth at nothing locked; SSS is all but out of reach, so every run spends what it can
+            await giveTraitGems(35)
+
+            const result = await burst(5, () => db.transaction(tx => autoRollTraits(tx, USER_ID, 'SSS', () => 0.5)))
+
+            expect(result.ok).toBe(1)
+            expect(await traitGemsOf()).toBe(0)
+            expect((await getTraitBoard(USER_ID)).every(slot => slot?.grade === 'E')).toBe(true)
+        })
+
         it('prices a burst of Rolls by the locks and never rerolls a locked slot', async () => {
             await ensureHqState(USER_ID)
             await giveTraitGems(5)
@@ -557,6 +569,18 @@ describe.skipIf(SKIP)('hero-quest concurrency', () => {
             const level = (await getShopLevels(USER_ID)).traitSaveSlots ?? 0
             expect(level).toBe(2)
             expect(await gemsOf()).toBe(100)
+        })
+
+        it('sells the Gold offline tracks to a burst only as far as the Gold goes, each level once', async () => {
+            await ensureHqState(USER_ID)
+            // Offline Cap's first two levels, 100K + 150K, and part of the third
+            await credit(USER_ID, '300000.0000')
+
+            const result = await burst(10, () => db.transaction(tx => buyShopTrack(tx, USER_ID, 'offlineCap')))
+
+            expect(result.ok).toBe(2)
+            expect((await getShopLevels(USER_ID)).offlineCap).toBe(2)
+            expect(parseFloat(await getBalance(USER_ID))).toBe(50_000)
         })
     })
 

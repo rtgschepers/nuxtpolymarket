@@ -86,7 +86,7 @@ const poll: { users: number, timer: ReturnType<typeof setInterval> | null } = { 
 
 export const useHeroQuest = () => {
     const toast = useToast()
-    const { fetchSession } = useAuth()
+    const { fetchSession, setBalance } = useAuth()
 
     /**
      * The session (`useHqSession`), decided as each read arrives rather than in a watcher, so the
@@ -188,12 +188,12 @@ export const useHeroQuest = () => {
         url: string,
         body: Record<string, unknown>,
         successMsg: string,
-        options: { silentErrors?: boolean } = {}
+        options: { silentErrors?: boolean, refresh?: boolean } = {}
     ): Promise<T | null> {
         try {
             const res = await $fetch(url, { method: 'POST', body })
             if (successMsg) toast.add({ title: successMsg, color: 'success' })
-            await refresh()
+            if (options.refresh !== false) await refresh()
             return res as T
         } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!options.silentErrors) {
@@ -250,12 +250,14 @@ export const useHeroQuest = () => {
     }
 
     /**
-     * Buy a prestige-shop level. A Gems track (Loadout or Trait save slots) moves a platform balance
-     * the response doesn't carry, and Gems have no setter of their own, so the session is read back.
+     * Buy a shop level. A Gold track (the offline ones) carries the new balance, so it is set straight
+     * away; a Gems track (Loadout or Trait save slots) moves a platform balance the response doesn't
+     * carry, and Gems have no setter of their own, so the session is read back.
      */
     async function buyUpgrade(upgradeId: string) {
-        const res = await call<{ currency: 'voidShards' | 'gems' }>('/api/hero-quest/prestige/shop-buy', { upgradeId }, '')
-        if (res?.currency === 'gems') await fetchSession()
+        const res = await call<{ currency: 'voidShards' | 'gems' | 'gold', balance: string | null }>('/api/hero-quest/shop/buy', { upgradeId }, '')
+        if (res?.currency === 'gold' && res.balance !== null) setBalance(res.balance)
+        else if (res?.currency === 'gems') await fetchSession()
         return res
     }
 
@@ -374,12 +376,10 @@ export const useHeroQuest = () => {
 
     /**
      * Claim an open holiday's gift. Its Gold and Gems move platform balances the response doesn't
-     * carry, so the session is read back; it happens a few times a year.
+     * carry, so the caller reads the session back once the reveal is done, or the header would spoil it.
      */
     async function claimHoliday(holidayId: string) {
-        const res = await call<{ holidayId: string, year: number, gold: string, gems: number }>('/api/hero-quest/holiday/claim', { holidayId }, '')
-        await fetchSession()
-        return res
+        return call<{ holidayId: string, year: number, gold: string, gems: number, seals: { system: string, amount: number }[] }>('/api/hero-quest/holiday/claim', { holidayId }, '')
     }
 
     /**
@@ -395,6 +395,20 @@ export const useHeroQuest = () => {
     /** Roll every unlocked Trait slot, for the Trait Gems the board's locks price it at. */
     async function rollTraits() {
         return call<{ spent: number, traitGems: number }>('/api/hero-quest/trait/roll', {}, '')
+    }
+
+    /**
+     * One Auto Roll batch. The state is not read back, since a run asks for batch after batch;
+     * `refreshTraits` does that once the run is over.
+     */
+    async function autoRollTraits(minGrade: string) {
+        return call<{ rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', traitGems: number, slots: ({ grade: string } | null)[] }>(
+            '/api/hero-quest/trait/auto-roll', { minGrade }, '', { refresh: false })
+    }
+
+    /** Read the state back after an Auto Roll run. */
+    async function refreshTraits() {
+        await refresh()
     }
 
     /** Lock or unlock a Trait slot: free. */
@@ -644,6 +658,8 @@ export const useHeroQuest = () => {
         markTutorialSeen,
         resetTutorials,
         rollTraits,
+        autoRollTraits,
+        refreshTraits,
         lockTrait,
         saveTraits,
         loadTraits,

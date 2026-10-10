@@ -14,16 +14,18 @@ import type { PrestigeView } from '~/utils/hero-quest-art/prestige-scene'
 import type { ClassesView } from '~/utils/hero-quest-art/classes-scene'
 import type { SpeedView } from '~/utils/hero-quest-art/speed-scene'
 import type { SettingsTarget, SettingsView } from '~/utils/hero-quest-art/settings-scene'
-import type { CalendarGiftView, CalendarView } from '~/utils/hero-quest-art/calendar-scene'
+import type { CalendarView } from '~/utils/hero-quest-art/calendar-scene'
+import type { HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
-import type { TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
+import type { TraitRollView, TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
 import type { TraitGrade } from '~/utils/hero-quest-art/palette'
-import type { RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
+import type { RaidLoadoutOption, RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
 import type { RaidId as StageRaidId, StageArena, StagePack, StageRaid } from '~/utils/hero-quest-art/demo'
 import { RAIDS, type RaidId } from '#shared/utils/hero-quest/content/raids'
+import { TRAIT_GRADES } from '#shared/utils/hero-quest/content/traits'
 import { LOADOUT_TARGETS } from '#shared/utils/hero-quest/loadout-session'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
-import { isHqFeature, nextTutorial, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
+import { bossLossMark, featureMenuScene, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
 import { GUIDE_NAME, TUTORIAL_PAGES } from '#shared/utils/hero-quest/content/tutorials'
 import type { GuideView } from '~/utils/hero-quest-art/guide'
 import type { GachaBannerView, GachaButton, GachaCard, GachaSystemId, GachaView, PullPrice } from '~/utils/hero-quest-art/gacha-scene'
@@ -49,12 +51,12 @@ const {
     shop, voidShards, buyUpgrade, classTree, classToken, pickClass, battleSpeed, buyBattleSpeed,
     pull, freePull, settings, setSetting, raids, engageRaid, quickClearRaid, calendar, claimCalendar,
     holidays, claimHoliday, milestones, claimMilestones, ascendant, tutorials, markTutorialSeen, resetTutorials,
-    traits, rollTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot,
+    traits, rollTraits, autoRollTraits, refreshTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot,
     arena, arenaCandidates, arenaLog, arenaBoard, loadArenaCandidates, loadArenaLog,
     loadArenaBoard, refreshArenaCandidates, attackArena, buyArenaAttempt, setArenaDefense, buyArenaItem, claimArenaSeason
 } = useHeroQuest()
 const toast = useToast()
-const { user } = useAuth()
+const { user, fetchSession } = useAuth()
 
 /**
  * The Collections scene's tab, off the route, and the roster it shows, with what each entry's
@@ -397,17 +399,42 @@ function freezeShopOrder() {
 }
 
 watch(() => props.scene, (scene) => {
-    if (scene === 'prestige') freezeShopOrder()
+    if (scene === 'shop') freezeShopOrder()
 }, { immediate: true })
 
 // opened before the payload landed (a reload straight onto the scene): freeze once it arrives
 watch(shop, (tracks) => {
-    if (props.scene === 'prestige' && !shopOrder.value.length && tracks?.length) freezeShopOrder()
+    if (props.scene === 'shop' && !shopOrder.value.length && tracks?.length) freezeShopOrder()
+})
+
+/** The Shop's tab, off the route: Upgrades, or Battle Speed. */
+const shopTab = computed<HqShopTab>(() => hqShopTabOf(route.path))
+
+function onShopTab(tab: HqShopTab) {
+    void navigateTo(hqShopTabPath(tab))
+}
+
+/** The Calendar's tab, off the route: the login calendar, or the Milestones. */
+const calendarTab = computed<HqCalendarTab>(() => hqCalendarTabOf(route.path))
+
+function onCalendarTab(tab: HqCalendarTab) {
+    void navigateTo(hqCalendarTabPath(tab))
+}
+
+/**
+ * Where the player stands, as the tutorials read it: Battle Speed's and the Milestones' own
+ * tutorials play on their tabs, the scenes they had before they moved there.
+ */
+const tutorialScene = computed<string>(() => {
+    if (props.scene === 'shop' && shopTab.value === 'speed') return 'speed'
+    if (props.scene === 'calendar' && calendarTab.value === 'milestones') return 'milestones'
+    return props.scene
 })
 
 const prestigeView = computed<PrestigeView>(() => {
     const shards = D(voidShards.value ?? '0')
     const gems = user.value?.gems ?? 0
+    const gold = parseFloat(user.value?.balance ?? '0') || 0
     // a track the frozen order does not know yet goes last
     const rank = (id: string) => {
         const i = shopOrder.value.indexOf(id)
@@ -416,6 +443,7 @@ const prestigeView = computed<PrestigeView>(() => {
     return {
         voidShards: formatHq(voidShards.value ?? '0'),
         gems: formatNumber(gems),
+        gold: formatNumber(gold),
         tracks: (shop.value ?? []).map(track => ({
             id: track.id,
             name: track.name,
@@ -425,7 +453,9 @@ const prestigeView = computed<PrestigeView>(() => {
             next: track.effect.next,
             cost: track.nextCost === null ? null : formatNumber(track.nextCost),
             currency: track.currency,
-            affordable: track.nextCost !== null && (track.currency === 'gems' ? gems >= track.nextCost : shards.gte(track.nextCost))
+            affordable: track.nextCost !== null && (track.currency === 'gems'
+                ? gems >= track.nextCost
+                : track.currency === 'gold' ? gold >= track.nextCost : shards.gte(track.nextCost))
         })).sort((a, b) => rank(a.id) - rank(b.id)),
         armed: confirm.armed.value?.startsWith('shop:') ? confirm.armed.value.slice(5) : null
     }
@@ -587,7 +617,8 @@ const raidRows = computed<RaidRowView[]>(() => (raids.value ?? []).map(r => ({
     id: r.id as RaidId,
     open: r.open,
     loadout: preferredName(r.id),
-    loadoutLive: loadoutSession.value?.target === r.id,
+    loadoutSlot: preferredName(r.id) === null ? null : loadoutPreferences.value[r.id] ?? null,
+    loadoutLive: loadoutSession.value?.target === r.id && loadoutSession.value.slotIndex !== null,
     keys: r.keys,
     keyCap: r.keyCap,
     nextKeys: r.nextKeyAt === null ? null : countdown(r.nextKeyAt - raidClock.value),
@@ -602,22 +633,20 @@ function preferredName(target: string): string | null {
     return loadouts.value?.saved.find(p => p.slotIndex === slot)?.name ?? null
 }
 
-/** The saved slots a raid's picker steps through, in slot order. */
-const savedSlots = computed(() => (loadouts.value?.saved ?? []).map(p => p.slotIndex).sort((a, b) => a - b))
+/** The saved slots a raid's picker lists, in slot order. */
+const raidLoadoutOptions = computed<RaidLoadoutOption[]>(() => (loadouts.value?.saved ?? [])
+    .map(p => ({ slotIndex: p.slotIndex, name: p.name }))
+    .sort((a, b) => a.slotIndex - b.slotIndex))
 
 /**
- * The picker on a raid's screen: each press points the raid at the next saved slot, and past the
- * last at none (`loadouts.md` §4). Free; the live loadout moves on the raid's next engage.
+ * A line picked off a raid's Loadout list: the slot it now points at, or none (`loadouts.md` §4).
+ * Free; the live loadout moves on the raid's next engage.
  */
-async function onRaidLoadout(raidId: RaidId) {
-    const slots = savedSlots.value
-    if (!slots.length) return
-    const current = loadoutPreferences.value[raidId]
-    const at = current === undefined ? -1 : slots.indexOf(current)
-    const next = at + 1 < slots.length ? slots[at + 1]! : null
+async function onRaidLoadout(raidId: RaidId, slotIndex: number | null) {
+    if ((loadoutPreferences.value[raidId] ?? null) === slotIndex) return
     raidsBusy.value = true
     try {
-        await setLoadoutPreference(raidId, next)
+        await setLoadoutPreference(raidId, slotIndex)
     } catch {
         // `useHeroQuest` has already shown the error
     } finally {
@@ -660,8 +689,9 @@ function closeRaidReward() {
 }
 
 /**
- * Leaving the raid puts back the loadout its preferred one replaced (`loadouts.md` §4): not after
- * each attempt, but once the player is neither on the Raids scene nor watching a round. A reload
+ * Leaving the raid lets the run go on and puts back the loadout its preferred one replaced
+ * (`loadouts.md` §4): not after each attempt, but once the player is neither on the Raids scene
+ * nor watching a round. Every raid opens a session, so every raid is left this way. A reload
  * onto another scene leaves too, since the session is the server's. `raidReturning` covers the
  * beat between a round's popup closing and the route reaching the Raids scene again.
  */
@@ -924,29 +954,7 @@ async function onSetting(target: SettingsTarget) {
 const calendarNextDay = useHqCountdown(() => calendar.value?.nextDayAt)
 const calendarClock = useHqClock()
 
-const SEAL_NAMES: Readonly<Record<string, string>> = { gear: 'FORGE', champion: 'GUILD', skill: 'SKILL', artifact: 'EXCAVATION' }
-
-/**
- * The holiday gift the Calendar scene's title row shows: the first one open and unclaimed, else
- * one open and claimed, else the next to open, with what it pays (or when it opens) spelled out.
- */
-const calendarGift = computed<CalendarGiftView | null>(() => {
-    const h = holidays.value
-    if (!h) return null
-    const open = h.open.find(g => !g.claimed) ?? h.open[0]
-    if (open) {
-        const seals = open.seals.length === 4 && open.seals.every(x => x.amount === open.seals[0]!.amount)
-            ? [`${open.seals[0]!.amount} OF EVERY SEAL`]
-            : open.seals.map(x => `${x.amount} ${SEAL_NAMES[x.system] ?? ''} SEALS`)
-        const pays = [`${formatHq(open.gold)} GOLD`, `${open.gems} GEMS`, ...seals].join(', ')
-        return { name: open.name, state: open.claimed ? 'claimed' : 'open', detail: pays }
-    }
-    if (!h.next) return null
-    const days = Math.max(1, Math.ceil((h.next.opensAt - calendarClock.value) / 86_400_000))
-    return { name: h.next.name, state: 'next', detail: `IN ${days} DAY${days === 1 ? '' : 'S'}` }
-})
-
-/** The Calendar scene: every day's reward and state, the make-ups, the clocks, and the holiday gift. */
+/** The Calendar scene: every day's reward and state, the make-ups, and the clocks. */
 const calendarView = computed<CalendarView>(() => {
     const c = calendar.value
     return {
@@ -956,8 +964,7 @@ const calendarView = computed<CalendarView>(() => {
         makeupsPerCycle: CALENDAR_MAKEUPS_PER_CYCLE,
         makeupDay: c?.makeupDay ?? null,
         nextDayIn: (calendarNextDay.value ?? '').toUpperCase(),
-        cycleDaysLeft: c ? Math.max(1, Math.ceil((c.endsAt - calendarClock.value) / 86_400_000)) : 0,
-        gift: calendarGift.value
+        cycleDaysLeft: c ? Math.max(1, Math.ceil((c.endsAt - calendarClock.value) / 86_400_000)) : 0
     }
 })
 const calendarBusy = ref(false)
@@ -973,17 +980,53 @@ async function onClaimCalendar(makeup: boolean) {
     }
 }
 
-/** Claim the open holiday gift the Calendar scene shows. */
-async function onClaimHoliday() {
-    const gift = holidays.value?.open.find(g => !g.claimed)
-    if (!gift) return
-    calendarBusy.value = true
+const SEAL_NAMES: Readonly<Record<string, string>> = { gear: 'FORGE SEALS', champion: 'GUILD SEALS', skill: 'SKILL SEALS', artifact: 'EXCAVATION SEALS' }
+
+/** The holiday gift waiting in the battle view's corner: the earliest open one not yet claimed. */
+const holidayGift = computed<HolidayGiftIconView | null>(() => {
+    const open = holidays.value?.open.find(g => !g.claimed)
+    return open ? { id: open.id, name: open.name } : null
+})
+
+/** The gift being opened: it shows at once, and its lines land with the claim. */
+const holidayReveal = ref<HolidayRevealView | null>(null)
+let holidayRevealKey = 0
+/** A claim paid Gold or Gems the header hasn't shown yet: it reads them back once the reveal is put away. */
+let holidayPaid = false
+
+function settleHolidayBalance() {
+    if (!holidayPaid) return
+    holidayPaid = false
+    void fetchSession()
+}
+
+function onHolidayRevealClose() {
+    holidayReveal.value = null
+    settleHolidayBalance()
+}
+onUnmounted(settleHolidayBalance)
+
+/** Open the waiting gift: the reveal starts on the press, and the box bursts once the claim is in. */
+async function onHolidayOpen() {
+    const gift = holidayGift.value
+    if (!gift || holidayReveal.value) return
+    const key = ++holidayRevealKey
+    holidayReveal.value = { key, id: gift.id, name: gift.name, lines: null }
     try {
-        await claimHoliday(gift.id)
+        const res = await claimHoliday(gift.id)
+        if (!res) return
+        holidayPaid = parseFloat(res.gold) > 0 || res.gems > 0
+        // a reveal no longer showing still owes the header its balance
+        if (holidayReveal.value?.key !== key) return settleHolidayBalance()
+        const lines = [
+            { icon: 'gold', amount: parseFloat(res.gold) || 0, label: 'GOLD' },
+            { icon: 'gems', amount: res.gems, label: 'GEMS' },
+            ...res.seals.map(x => ({ icon: `seal_${x.system}`, amount: x.amount, label: SEAL_NAMES[x.system] ?? 'SEALS' }))
+        ].filter(line => line.amount > 0)
+        holidayReveal.value = { ...holidayReveal.value, lines }
     } catch {
-        // `useHeroQuest` has already shown the error
-    } finally {
-        calendarBusy.value = false
+        // `useHeroQuest` has already shown the error; the box goes with it
+        if (holidayReveal.value?.key === key) holidayReveal.value = null
     }
 }
 
@@ -1002,6 +1045,58 @@ async function onClaimMilestones(track: string | null) {
     }
 }
 
+/** The Roll being revealed: its slots spin from the press and land once the new board is in. */
+const traitRoll = ref<TraitRollView | null>(null)
+let traitRollKey = 0
+/** The grade Auto Roll stops at, or better. */
+const traitAutoGrade = ref<TraitGrade>('S')
+/** STOP was pressed: the run ends after the batch on its way. Leaving the page stops it too. */
+let traitAutoStop = false
+/** Trait Gems left as the running Auto Roll's batches report them, ahead of the state read. */
+const traitAutoGems = ref<number | null>(null)
+onUnmounted(() => { traitAutoStop = true })
+
+/**
+ * An Auto Roll run: batch after batch, the count running on the stage, until a slot lands at the
+ * grade, the Trait Gems run short, or STOP. The state is read once at the end, and a batch that
+ * fails after the first ends the run quietly, since what was rolled is already paid and kept.
+ */
+async function runAutoRoll(): Promise<string> {
+    traitAutoStop = false
+    let total = { rolls: 0, spent: 0, stoppedBy: 'cap' as 'hit' | 'gems' | 'cap', slots: [] as ({ grade: string } | null)[] }
+    try {
+        while (true) {
+            let res
+            try {
+                res = await autoRollTraits(traitAutoGrade.value)
+            } catch (e) {
+                if (total.rolls === 0) throw e
+                total = { ...total, stoppedBy: 'gems' }
+                break
+            }
+            if (!res) break
+            total = { rolls: total.rolls + res.rolls, spent: total.spent + res.spent, stoppedBy: res.stoppedBy, slots: res.slots }
+            traitAutoGems.value = res.traitGems
+            if (traitRoll.value) traitRoll.value = { ...traitRoll.value, auto: { rolls: total.rolls, spent: total.spent } }
+            if (res.stoppedBy !== 'cap' || traitAutoStop) break
+        }
+    } finally {
+        await refreshTraits()
+        traitAutoGems.value = null
+    }
+    return autoRollNote(total)
+}
+
+/** What an Auto Roll came to, for the scene's bottom line. */
+function autoRollNote(res: { rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', slots: ({ grade: string } | null)[] }): string {
+    const rolls = `${res.rolls} ROLL${res.rolls === 1 ? '' : 'S'}, ${formatNumber(res.spent)} TRAIT GEMS`
+    if (res.stoppedBy === 'hit') {
+        const best = res.slots.reduce((top, slot) => slot && TRAIT_GRADES.indexOf(slot.grade as TraitGrade) > TRAIT_GRADES.indexOf(top) ? slot.grade as TraitGrade : top, 'F' as TraitGrade)
+        return `GRADE ${best} AFTER ${rolls}!`
+    }
+    return res.stoppedBy === 'gems' ? `OUT OF TRAIT GEMS AFTER ${rolls}.` : `STOPPED AFTER ${rolls}.`
+}
+
 /**
  * The Traits scene: the live board, the Roll's price, every Set's count and tier, and the save
  * slots. Values arrive as fractions and are spelled out here; the client holds no table.
@@ -1011,10 +1106,10 @@ const traitsView = computed<TraitsView>(() => {
     const gems = user.value?.gems ?? 0
     const armed = confirm.armed.value?.startsWith('trait:') ? confirm.armed.value.slice(6) as TraitsTarget : null
     if (!t) {
-        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed }
+        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed, roll: null, autoGrade: traitAutoGrade.value, gradePickerOpen: false }
     }
     return {
-        traitGems: formatNumber(t.traitGems),
+        traitGems: formatNumber(traitAutoGems.value ?? t.traitGems),
         slots: t.slots.map(slot => slot && {
             statName: slot.statName,
             value: `+${hqPercent(slot.value)}`,
@@ -1049,7 +1144,11 @@ const traitsView = computed<TraitsView>(() => {
         saveAffordable: t.traitGems >= t.saves.cost,
         boardFull: t.slots.every(slot => slot !== null),
         gems,
-        armed
+        armed,
+        roll: traitRoll.value,
+        autoGrade: traitAutoGrade.value,
+        // the canvas holds whether the list is open
+        gradePickerOpen: false
     }
 })
 const traitsBusy = ref(false)
@@ -1061,12 +1160,34 @@ const traitsBusy = ref(false)
 async function onTraitAction(target: TraitsTarget) {
     const [kind, n] = target.split(':') as [string, string | undefined]
     const i = Number(n)
-    const asks = kind === 'load' || kind === 'buy' || (kind === 'save' && !!traitsView.value.saves[i]?.grades)
+    if (kind === 'grade') {
+        if (n) traitAutoGrade.value = n as TraitGrade
+        return
+    }
+    if (kind === 'stop') {
+        traitAutoStop = true
+        return
+    }
+    const asks = kind === 'auto' || kind === 'load' || kind === 'buy' || (kind === 'save' && !!traitsView.value.saves[i]?.grades)
     if (asks && !confirm.press(`trait:${target}`)) return
     confirm.clear()
     traitsBusy.value = true
     try {
-        if (kind === 'roll') await rollTraits()
+        if (kind === 'roll' || kind === 'auto') {
+            const slots = traitsView.value.slots.flatMap((slot, index) => slot?.locked ? [] : [index])
+            traitRoll.value = { key: ++traitRollKey, slots, landed: false, note: null, auto: kind === 'auto' ? { rolls: 0, spent: 0 } : null }
+            try {
+                if (kind === 'roll') {
+                    await rollTraits()
+                    traitRoll.value = { ...traitRoll.value, landed: true }
+                } else {
+                    traitRoll.value = { ...traitRoll.value, landed: true, note: await runAutoRoll() }
+                }
+            } catch (e) {
+                traitRoll.value = null
+                throw e
+            }
+        }
         else if (kind === 'lock') await lockTrait(i, !traitsView.value.slots[i]?.locked)
         else if (kind === 'save') await saveTraits(i)
         else if (kind === 'load') await loadTraits(i)
@@ -1078,8 +1199,11 @@ async function onTraitAction(target: TraitsTarget) {
     }
 }
 
-/** The running Battle Speed block's time left, off the server's expiry. */
-const speedLeft = useHqCountdown(() => battleSpeed.value?.expiresAt)
+/** The running Battle Speed block's time left, off the server's expiry; it stands still in a raid, as the block does. */
+const speedLeftLive = useHqCountdown(() => battleSpeed.value?.expiresAt)
+const speedLeft = computed(() => loadoutSession.value && battleSpeed.value?.expiresAt
+    ? formatHqCountdown(battleSpeed.value.remainingSeconds)
+    : speedLeftLive.value)
 
 /** The Battle Speed scene: the running block, the Gems to spend, and every block's price. */
 const speedView = computed<SpeedView>(() => {
@@ -1149,7 +1273,8 @@ async function onShopBuy(upgradeId: string) {
  * `run`/`hero` stay in scope deliberately: `liveHero` is the right thing to *show* and the wrong
  * thing to compare a payload against, so anything that needs the anchor still has it.
  */
-const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed)
+// the run holds while a raid session is open, as the server's settle does
+const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed, computed(() => loadoutSession.value !== null))
 
 /**
  * Who stands on the stage: the Hero and the Champions fielded, in party order, each on its row.
@@ -1180,14 +1305,41 @@ const unlocked = computed<readonly HqFeature[]>(() => tutorials.value?.unlocked 
 /** Closed here before the server says so, so a tutorial doesn't flash back while its write is on its way. */
 const seenLocally = ref<string[]>([])
 const seenTutorials = computed(() => [...(tutorials.value?.seen ?? []), ...seenLocally.value])
-/** The menu shows Settings and every scene open so far. */
-const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || unlocked.value.includes(s)))
-/** Opened and not visited yet: the button carries the red dot until it is. */
-const newScenes = computed(() => unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)))
+/** The open features the menu shows: with tutorials on, a feature waits for its turn behind one that opened with it. */
+const shownFeatures = computed<readonly HqFeature[]>(() => settings.value?.tutorials === false
+    ? unlocked.value
+    : revealedFeatures(unlocked.value, seenTutorials.value, tutorialScene.value))
+/** The menu shows Settings and every feature shown. */
+const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || shownFeatures.value.includes(s)))
+/** Opened and not visited yet: the button carries the red dot until it is, Battle Speed's on the Shop's. */
+const newScenes = computed(() => [...new Set(unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)).map(featureMenuScene))])
+/** Battle Speed's tab can be pressed: it is open, and its turn in the tutorials has come. */
+const speedOpen = computed(() => shownFeatures.value.includes('speed'))
+/** The Milestones' tab can be pressed: they are open, and their turn in the tutorials has come. */
+const milestonesOpen = computed(() => shownFeatures.value.includes('milestones'))
 
-// a scene not open yet, reached by a link or a reload, falls back to the battle
-watch([() => props.scene, unlocked], ([scene]) => {
-    if (tutorials.value && isHqFeature(scene) && !unlocked.value.includes(scene)) emit('scene', 'battle')
+/** The scene last opened from the menu: picked from what the menu showed, so it is never sent back. */
+let openedFromMenu: HqScene | null = null
+
+/**
+ * A scene not open yet, or waiting its turn, reached by a link or a reload falls back to the battle.
+ * Checked on arrival and when the tutorials first load, never against a scene opened from the menu:
+ * re-checking as the tutorials moved sent players out of scenes they had just opened.
+ */
+watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
+    if (scene === openedFromMenu) return
+    openedFromMenu = null
+    if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) {
+        // the Shop is open but Battle Speed's tab is not yet: the Upgrades tab instead
+        if (scene === 'shop' && shopTab.value === 'speed' && tutorials.value && !speedOpen.value) onShopTab('upgrades')
+        // and the Calendar's, with the Milestones not open yet
+        if (scene === 'calendar' && calendarTab.value === 'milestones' && tutorials.value && !milestonesOpen.value) onCalendarTab('calendar')
+        return
+    }
+    if (import.meta.dev) {
+        console.warn('[hero-quest] scene not shown, back to the battle', { scene, unlocked: unlocked.value, seen: seenTutorials.value, shown: shownFeatures.value })
+    }
+    emit('scene', 'battle')
 }, { immediate: true })
 
 /**
@@ -1196,12 +1348,12 @@ watch([() => props.scene, unlocked], ([scene]) => {
  */
 const dueTutorial = computed<TutorialId | null>(() => {
     if (!tutorials.value || settings.value?.tutorials === false || fight.value || raidRound.value) return null
-    return nextTutorial(unlocked.value, seenTutorials.value, props.scene)
+    return nextTutorial(unlocked.value, seenTutorials.value, tutorialScene.value)
 })
 const guidePage = ref(0)
 watch(dueTutorial, () => { guidePage.value = 0 })
 const guideView = computed<GuideView | null>(() => dueTutorial.value
-    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value }
+    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value, focus: unlockFocus(dueTutorial.value) }
     : null)
 
 function closeTutorial() {
@@ -1213,6 +1365,32 @@ function closeTutorial() {
     })
 }
 
+/** An unlock's menu button, the one thing a forced unlock lets the player press: Battle Speed's is the Shop's. */
+function unlockFocus(id: TutorialId): HqMenuScene | null {
+    return id.endsWith(':unlock') ? featureMenuScene(id.slice(0, -':unlock'.length) as HqFeature) as HqMenuScene : null
+}
+
+/** A menu press. Pressing the button an unlock points at is how that unlock is read. */
+function onScene(scene: HqScene) {
+    const due = dueTutorial.value
+    if (guideView.value?.focus === scene) closeTutorial()
+    openedFromMenu = scene
+    // Battle Speed's and the Milestones' unlocks open their scene on their tab, where the explanation plays
+    if (due === 'speed:unlock' && scene === 'shop') onShopTab('speed')
+    else if (due === 'milestones:unlock' && scene === 'calendar') onCalendarTab('milestones')
+    else emit('scene', scene)
+}
+
+/** A boss fight lost: counted toward the guide's one reminder, which shows once the replay is done. */
+function countBossLoss() {
+    const mark = bossLossMark(seenTutorials.value)
+    if (!mark) return
+    seenLocally.value = [...seenLocally.value, mark]
+    markTutorialSeen(mark).catch(() => {
+        // `useHeroQuest` has already shown the error; this loss just goes uncounted
+    })
+}
+
 function onGuideNext() {
     const view = guideView.value
     if (!view) return
@@ -1220,8 +1398,6 @@ function onGuideNext() {
     else closeTutorial()
 }
 const engaging = ref(false)
-/** Which of the two paths opened the replay — only an automatic one dismisses itself. */
-const fightWasAutomatic = ref(false)
 
 /**
  * The boss's name and timer, taken as the fight is engaged: the payload that lands with the
@@ -1329,10 +1505,10 @@ async function runFightAt(automatic: boolean) {
         const name = liveRun.value?.farming ? run.value?.enemyName : liveRun.value?.enemyName
         const boss = { name: name ?? 'Boss', timer: liveRun.value?.bossTimerSeconds ?? 30 }
         const result = await engageBoss({ silentErrors: automatic })
-        fightWasAutomatic.value = automatic
         fightBoss.value = boss
         fightProgress.value = { time: 0, done: false }
         fight.value = result
+        if (result && result.outcome !== 'win') countBossLoss()
     } finally {
         engaging.value = false
     }
@@ -1358,7 +1534,8 @@ useHqAutoBoss({
     lostHere: () => lostHere.value,
     secondsPerKill: () => liveRun.value?.secondsPerKill ?? null,
     engaging: () => engaging.value,
-    replayOpen: () => fight.value !== null || raidRound.value !== null || arenaRound.value !== null,
+    // a raid or Arena session holds the run, its gate included, until the player leaves it
+    replayOpen: () => fight.value !== null || raidRound.value !== null || arenaRound.value !== null || loadoutSession.value !== null,
     engage: () => runFightAt(true)
 })
 
@@ -1424,9 +1601,11 @@ const awayReport = computed(() => {
           :crossing="crossing"
           :earned="earnedShards"
           :menu-scenes="menuScenes"
+          :guide="guideView"
           @begin="beginAgain"
           @crossed="onCrossed"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
+          @guide-next="onGuideNext"
         />
         <p class="text-center text-sm text-muted">
           Begin again at World 1 for {{ formatHq(nextPrestigeReward) }} Void Shards. Your hero keeps every level.
@@ -1443,6 +1622,12 @@ const awayReport = computed(() => {
           :speed="speedNow"
           :challenge="challenge"
           :scene="scene"
+          :shop-tab="shopTab"
+          :speed-open="speedOpen"
+          :calendar-tab="calendarTab"
+          :milestones-open="milestonesOpen"
+          @calendar-tab="onCalendarTab"
+          @shop-tab="onShopTab"
           :collections="collections"
           :collections-busy="collectionsBusy"
           :loadouts="loadoutsView"
@@ -1467,8 +1652,10 @@ const awayReport = computed(() => {
           :traits-busy="traitsBusy"
           :raids="raidRows"
           :raids-busy="raidsBusy"
-          :loadouts-saved="savedSlots.length > 0"
+          :raid-loadouts="raidLoadoutOptions"
           :raid-round="raidRound"
+          :holiday-gift="holidayGift"
+          :holiday-reveal="holidayReveal"
           :raid-reward="raidReward"
           :arena="arenaView"
           :arena-round="arenaRound"
@@ -1478,7 +1665,7 @@ const awayReport = computed(() => {
           @fight-progress="fightProgress = $event"
           @pack="stagePack = $event"
           @challenge="onEngage"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
           @collection-tab="openCollectionTab"
           @collection-action="onCollectionAction"
           @loadout-action="onLoadoutAction"
@@ -1489,10 +1676,10 @@ const awayReport = computed(() => {
           @gacha-close="gachaReveal = null"
           @setting="onSetting"
           @claim-calendar="onClaimCalendar"
-          @claim-holiday="onClaimHoliday"
+          @holiday-open="onHolidayOpen"
+          @holiday-reveal-close="onHolidayRevealClose"
           @claim-milestones="onClaimMilestones"
           @guide-next="onGuideNext"
-          @guide-skip="closeTutorial"
           @trait-action="onTraitAction"
           @raid-enter="onRaidEnter"
           @raid-quick="onRaidQuick"
@@ -1506,7 +1693,7 @@ const awayReport = computed(() => {
         />
       </template>
 
-      <!-- Hidden rather than unmounted under a scene: the fight panel closes an automatic fight on its own timer. -->
+      <!-- Hidden rather than unmounted under a scene: the fight panel closes every fight on its own timer. -->
       <div
         v-show="scene === 'battle' && !showGate"
         class="space-y-6"
@@ -1519,7 +1706,7 @@ const awayReport = computed(() => {
           :boss-timer-seconds="fightBoss.timer"
           :time="fightProgress.time"
           :done="fightProgress.done"
-          :auto-close="fightWasAutomatic"
+          auto-close
           @skip="battleCanvas?.skipFight()"
           @close="fight = null"
         />

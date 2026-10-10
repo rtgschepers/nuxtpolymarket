@@ -13,7 +13,12 @@
  *
  *   bun run sim:hero-quest --report=gates --party=3         # what a starting party buys
  *
- * Flags: --class --level --world --stage --prestige --party --no-levelup --json
+ *   bun run sim:hero-quest --report=campaign --party=3 --traits=E   # field a Trait board
+ *
+ * Flags: --class --level --world --stage --prestige --party --traits --no-levelup --json
+ *
+ * `--traits` is `none` (the default), a grade for a board of that grade, or `roll:N` for one seeded
+ * Roll (`simTraitBoard`). It reaches the stage, world, campaign, Gold and stats reports.
  *
  * Crit-averaged, no per-hit rolling — a verdict is "wins on expected values", not a win
  * rate. Overrides are applied by rewriting `constants.ts` at load time and never touch the
@@ -43,7 +48,8 @@ const {
     analyzeWorld,
     compareClasses,
     gateTable,
-    makeParty,
+    makeParty: makeBareParty,
+    simTraitBoard,
     DEFAULT_CAMPAIGN_MAX_LEVEL,
     DEFAULT_CAMPAIGN_MAX_PRESTIGE,
     DEFAULT_GRIND_BUDGET_SECONDS,
@@ -81,6 +87,10 @@ const grindHours = Number(arg('grind-hours', String(DEFAULT_GRIND_BUDGET_SECONDS
 const maxLevel = Number(arg('max-level', String(DEFAULT_CAMPAIGN_MAX_LEVEL)))
 /** Total units, Hero included. 1 is a solo Hero; real parties run 3–6. */
 const party = Math.max(1, Number(arg('party', '1')))
+const traitsSpec = arg('traits', 'none')
+const traits = simTraitBoard(traitsSpec)
+/** The party every report fields, with the `--traits` board on it. */
+const makeParty = (classId: ClassId, heroLevel: number, size: number) => makeBareParty(classId, heroLevel, size, { traits })
 /** `--sweep-levels=1,20,50` — the scaling view on `--report=stats`. Empty means single-level. */
 const sweepLevels = arg('sweep-levels', '')
     .split(',').map(entry => Number(entry.trim())).filter(value => Number.isFinite(value) && value >= 1)
@@ -102,7 +112,8 @@ function pct(value: number | null): string {
 function banner() {
     const tuning = describeOverrides(overrides)
     const size = party > 1 ? `  party of ${party}` : ''
-    console.log(`\n${classId} @ level ${level} — prestige ${prestige}${size}${tuning ? `  [${tuning}]` : ''}`)
+    const board = traits.length ? `  traits ${traitsSpec} (${traits.map(t => `${t.stat.slice(6)}:${t.grade}`).join(' ')})` : ''
+    console.log(`\n${classId} @ level ${level} — prestige ${prestige}${size}${board}${tuning ? `  [${tuning}]` : ''}`)
 }
 
 // ── reports ────────────────────────────────────────────────────────────────────────────

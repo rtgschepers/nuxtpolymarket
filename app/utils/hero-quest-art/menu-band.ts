@@ -3,18 +3,16 @@
 // is what shows when every scene is closed, and an open scene's button turns into its close.
 
 import { C, CLEAR } from './palette'
-import { Surface, rect, line, poly, blit, disc, px } from './surface'
+import { Surface, rect, line, poly, disc, px } from './surface'
 import { glyph, type Glyph } from './icon-kit'
 import { ABILITY_ICON_PARTS } from './icons-abilities'
 import { CURRENCY_ICONS } from './icons-items'
-import { TAB_BACKGROUNDS } from './ui-art'
 import { textOut } from './font'
-import { SW, SH } from './scenery'
 import { HQ_MENU_SCENES, HQ_SCENE_LABELS, type HqMenuScene, type HqScene } from '../hero-quest-scenes'
 
 export const BAND_H = 22
-// twelve buttons across the 272 px stage: 20 wide, 2 apart
-const BTN_W = 20
+// up to eleven buttons across the 272 px stage at 22 wide, 2 apart (ten with the Arena, one slot kept for the Passive Skill Tree)
+const BTN_W = 22
 const BTN_H = 18
 const BTN_GAP = 2
 
@@ -77,13 +75,6 @@ const NODE_TREE: Glyph = (g, x, y) => {
     }
 }
 
-/** Fast forward: two arrowheads, the lead one lit, the way a player's clock skips ahead. */
-const FAST_FORWARD: Glyph = (g, x, y) => {
-    poly(g, [-7, -5, -1, 0, -7, 5], x, y, C.gold1)
-    poly(g, [0, -5, 6, 0, 0, 5], x, y, C.gold2)
-    line(g, x, y - 4, x + 4, y - 1, C.gold3)
-}
-
 /** A war banner: a spear-tipped pole flying a red swallowtail flag with gold crossed blades on it. */
 const RAID_BANNER: Glyph = (g, x, y) => {
     // the pole and its spearhead
@@ -126,28 +117,29 @@ const CALENDAR: Glyph = (g, x, y) => {
     rect(g, x + 1, y + 2, 2, 1, C.red2)
 }
 
-/** A trophy: a gold cup with a handle looped out either side, on a stem and a wooden plinth. */
-export const TROPHY: Glyph = (g, x, y) => {
-    // the handles, behind the cup's rim; kept within ±7, as a small glyph's buffer reaches no further right
-    for (const side of [-1, 1]) {
-        const hx = side < 0 ? x - 7 : x + 5
-        rect(g, hx, y - 6, 3, 1, C.gold1)
-        rect(g, side < 0 ? hx : hx + 2, y - 6, 1, 4, C.gold1)
-        rect(g, hx, y - 3, 3, 1, C.gold1)
+/** A market stall: a striped awning with a scalloped edge on two posts, over a counter of wares. */
+export const SHOP_STALL: Glyph = (g, x, y) => {
+    rect(g, x - 7, y - 8, 15, 1, C.red1)
+    for (let i = 0; i < 8; i++) {
+        const sx = x - 7 + i * 2
+        const stripe = i % 2 ? C.bone1 : C.red2
+        rect(g, sx, y - 7, i === 7 ? 1 : 2, 4, stripe)
+        // the scallops, one under each stripe
+        px(g, sx, y - 3, stripe)
     }
-    // the cup, narrowing to its foot, lit from the left with a shade down its right
-    rect(g, x - 4, y - 6, 9, 5, C.gold2)
-    rect(g, x - 3, y - 1, 7, 1, C.gold2)
-    rect(g, x - 2, y, 5, 1, C.gold1)
-    rect(g, x + 2, y - 6, 2, 5, C.gold1)
-    rect(g, x - 4, y - 7, 9, 1, C.gold3)
-    rect(g, x - 2, y - 5, 1, 3, C.white)
-    // the stem and the plinth
-    rect(g, x - 1, y + 1, 3, 3, C.gold1)
-    rect(g, x - 1, y + 1, 1, 3, C.gold2)
-    rect(g, x - 3, y + 4, 7, 1, C.gold2)
-    rect(g, x - 4, y + 5, 9, 2, C.brown2)
-    rect(g, x - 4, y + 5, 9, 1, C.brown3)
+    rect(g, x - 6, y - 3, 1, 7, C.brown2)
+    rect(g, x + 6, y - 3, 1, 7, C.brown2)
+    // the wares: a stack of coins and a potion
+    rect(g, x - 4, y + 1, 3, 1, C.gold2)
+    rect(g, x - 4, y, 3, 1, C.gold3)
+    rect(g, x - 3, y - 1, 3, 1, C.gold2)
+    rect(g, x + 2, y - 1, 2, 3, C.green3)
+    px(g, x + 2, y - 2, C.brown3)
+    px(g, x + 2, y - 1, C.white)
+    // the counter
+    rect(g, x - 7, y + 2, 15, 1, C.brown3)
+    rect(g, x - 7, y + 3, 15, 3, C.brown2)
+    rect(g, x - 7, y + 6, 15, 1, C.brown1)
 }
 
 const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
@@ -160,18 +152,25 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     // the Arena pays in its Medals
     arena: CURRENCY_ICONS.arena_medals!,
     classes: NODE_TREE,
-    // Void Shards are what a prestige pays out
-    prestige: CURRENCY_ICONS.void_shards!,
-    speed: FAST_FORWARD,
-    milestones: TROPHY,
+    // the Shop (the user's call, 2026-10-10: open from the World 1 boss, so no longer prestige's)
+    shop: SHOP_STALL,
     calendar: CALENDAR,
     settings: COG
 }
 
-/** Where the `i`th of `n` buttons sits on a view of the given size: the row is centred. */
-function buttonBox(w: number, h: number, i: number, n: number): { x: number, y: number } {
+/**
+ * Where the `i`th scene's button sits on a view of the given size. The full row is centred and every
+ * scene keeps its slot, so a scene opening later fills its gap rather than shifting the rest (the user's call).
+ */
+function buttonBox(w: number, h: number, i: number): { x: number, y: number } {
+    const n = HQ_MENU_SCENES.length
     const row = n * BTN_W + (n - 1) * BTN_GAP
     return { x: ((w - row) >> 1) + i * (BTN_W + BTN_GAP), y: h - BAND_H + ((BAND_H - BTN_H) >> 1) }
+}
+
+/** A scene's button on a view of the given size: what the guide leaves lit when it points there. */
+export function menuButtonRect(w: number, h: number, scene: HqMenuScene): { x: number, y: number, w: number, h: number } {
+    return { ...buttonBox(w, h, HQ_MENU_SCENES.indexOf(scene)), w: BTN_W, h: BTN_H }
 }
 
 /**
@@ -179,9 +178,11 @@ function buttonBox(w: number, h: number, i: number, n: number): { x: number, y: 
  * the buttons shown: a scene not open yet (`tutorials.ts`) has none.
  */
 export function menuItemAt(w: number, h: number, x: number, y: number, scenes: readonly HqMenuScene[] = HQ_MENU_SCENES): HqMenuScene | null {
-    for (let i = 0; i < scenes.length; i++) {
-        const b = buttonBox(w, h, i, scenes.length)
-        if (x >= b.x && x < b.x + BTN_W && y >= b.y && y < b.y + BTN_H) return scenes[i]!
+    for (let i = 0; i < HQ_MENU_SCENES.length; i++) {
+        const id = HQ_MENU_SCENES[i]!
+        if (!scenes.includes(id)) continue
+        const b = buttonBox(w, h, i)
+        if (x >= b.x && x < b.x + BTN_W && y >= b.y && y < b.y + BTN_H) return id
     }
     return null
 }
@@ -199,9 +200,11 @@ export function drawMenuBand(s: Surface, open: HqScene, hover: HqMenuScene | nul
     rect(s, 0, y0 + 1, s.w, 1, C.night1)
     // hidden, the strip stays so the frame keeps its size, with nothing on it to press
     if (hidden) return
-    for (let i = 0; i < scenes.length; i++) {
-        const id = scenes[i]!
-        const b = buttonBox(s.w, s.h, i, scenes.length)
+    for (let i = 0; i < HQ_MENU_SCENES.length; i++) {
+        const id = HQ_MENU_SCENES[i]!
+        // a scene not open yet leaves its slot empty
+        if (!scenes.includes(id)) continue
+        const b = buttonBox(s.w, s.h, i)
         const lit = hover === id
         const down = lit && pressed ? 1 : 0
         const on = open === id
@@ -241,11 +244,10 @@ export class BandedFrame {
 }
 
 /**
- * The menu scenes, drawn as their tab backgrounds (`ui-art.ts`) cut to the stage's camera, with
- * the scene's name over them. Each is a stand-in for the scene it will become.
+ * The menu scenes' ground: the plain dark every scene draws on (the user's call, 2026-10-10, over
+ * the bespoke tab backgrounds), the stage's camera in size, with the scene's name over it.
  */
 export class SceneBackdrops {
-    private readonly full = new Surface(SW, SH, 0, 0)
     private readonly view: Surface
 
     constructor(private readonly cam: { x: number, y: number, w: number, h: number }) {
@@ -253,12 +255,7 @@ export class SceneBackdrops {
     }
 
     render(scene: HqMenuScene, t: number, titled = true): Surface {
-        // a scene with no tab background of its own (Classes) stands on plain black
-        const bg = TAB_BACKGROUNDS.find(b => b.id === scene)
-        this.full.clear(C.ink)
-        bg?.draw(this.full, t)
         this.view.clear(C.ink)
-        blit(this.view, this.full, -this.cam.x, -this.cam.y)
         if (titled) textOut(this.view, HQ_SCENE_LABELS[scene].toUpperCase(), this.cam.w >> 1, 10, C.gold2, 'big', 1, 1, 1, C.ink, -1)
         return this.view
     }

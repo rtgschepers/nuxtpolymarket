@@ -119,6 +119,7 @@ import {
     battleSpeedPrice,
     battleSpeedRemainingSeconds,
     extendBattleSpeed,
+    heldBattleSpeedExpiry,
     speedBoostFor,
     type BattleSpeedDuration,
     type BattleSpeedTier,
@@ -346,6 +347,15 @@ export function battleSpeedOf(state: HqStateRow): BattleSpeedWindow {
 }
 
 /**
+ * The columns that move the run's clock to `now` over a span it held (a raid session): the block
+ * waits with the run, so its expiry is pushed out by the span rather than run down.
+ */
+export function holdClockTo(state: HqStateRow, now: number): Partial<HqStateRow> {
+    const expiry = heldBattleSpeedExpiry(battleSpeedOf(state), state.lastSettledAt.getTime(), now)
+    return { lastSettledAt: new Date(now), ...(expiry ? { speedBoostExpiresAt: expiry } : {}) }
+}
+
+/**
  * Battle Speed for the client: what runs now, when it ends, and the price of every block. The
  * client dilates its own projection and the stage's clock with `multiplier` until `expiresAt`.
  */
@@ -561,12 +571,23 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
 
     return db.transaction(async (tx) => {
         await ensureHqState(userId, tx)
-        const [state] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
-        if (!state) throw createError({ statusCode: 500, statusMessage: 'Could not initialize Hero Quest state' })
+        const [locked] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
+        if (!locked) throw createError({ statusCode: 500, statusMessage: 'Could not initialize Hero Quest state' })
 
         const now = Date.now()
-        const elapsedMs = now - state.lastSettledAt.getTime()
-        if (elapsedMs <= 0) return { state, result: null, online: true, previousLevel: state.heroLevel, elapsedSeconds: 0 }
+        const elapsedMs = now - locked.lastSettledAt.getTime()
+        if (elapsedMs <= 0) return { state: locked, result: null, online: true, previousLevel: locked.heroLevel, elapsedSeconds: 0 }
+
+        // The run holds while the player is in a raid (`loadouts.md` §4): the window is dropped, not paid, and Battle Speed waits too.
+        // A gap too long to be presence means they left without closing it, so it settles as time away.
+        let state = locked
+        if (locked.preRaidSnapshot !== null) {
+            if (elapsedMs <= ONLINE_THRESHOLD_MS) {
+                const [held] = await tx.update(hqState).set(holdClockTo(locked, now)).where(eq(hqState.userId, userId)).returning()
+                return { state: held ?? locked, result: null, online: true, previousLevel: locked.heroLevel, elapsedSeconds: 0 }
+            }
+            state = await restoreLoadoutSession(tx, userId, locked, now)
+        }
 
         // Presence is demonstrated by the request pattern, never asserted by the client. A
         // closed app is indistinguishable from a dead network — which degrades to offline
@@ -698,12 +719,12 @@ export function prestigeResetValues(state: HqStateRow) {
 }
 
 /**
- * The open preferred-Loadout session on a row: the loadout columns it puts back, and its target and
- * slot where they still read (null otherwise). Null when none is open. A snapshot whose columns
- * don't read is refused outright: putting it back is impossible and clearing it would lose the
- * player's own loadout, so nothing that would overwrite it may run.
+ * The open raid session on a row: the loadout columns it puts back (null when it applied none), and
+ * its target and slot where they still read (null otherwise). Null when none is open. A snapshot
+ * whose columns don't read is refused outright: putting it back is impossible and clearing it would
+ * lose the player's own loadout, so nothing that would overwrite it may run.
  */
-export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadoutColumns, target: LoadoutTarget | null, slotIndex: number | null } | null {
+export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadoutColumns | null, target: LoadoutTarget | null, slotIndex: number | null } | null {
     const read = readLoadoutSnapshot(state.preRaidSnapshot)
     if (read.kind === 'none') return null
     if (read.kind === 'unreadable') throw createError({ statusCode: 500, statusMessage: 'The loadout saved before your last raid could not be read' })
@@ -711,9 +732,13 @@ export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadout
 }
 
 /**
- * Close an open preferred-Loadout session (`loadouts.md` §4): put the live loadout back as it was
- * before the raid's first engage, and clear the snapshot. Returns the row as it now stands (the
- * same row when no session is open).
+ * Close an open raid session (`loadouts.md` §4): put the live loadout back as it was before the
+ * raid's first engage, if a preferred one was applied, and clear the snapshot. Returns the row as
+ * it now stands (the same row when no session is open).
+ *
+ * The run held while the session was open, so the time since the last settle is dropped (the clock
+ * moves to `now`, and a Battle Speed block with it) while the player was still present. A gap longer than `ONLINE_THRESHOLD_MS` is
+ * left for the settle that follows, as time away on the player's own loadout.
  *
  * Call it with `state` read under the `hqState` row lock, inside that transaction: the snapshot is
  * read and cleared in one locked step, so two closes never both write it back. Every route that
@@ -721,11 +746,12 @@ export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadout
  * closed (a tab shut mid-raid) ends on the player's next action elsewhere. The snapshot is written
  * back as stored: it was the live loadout, and nothing in this game is ever un-owned.
  */
-export async function restoreLoadoutSession(tx: DbExecutor, userId: string, state: HqStateRow): Promise<HqStateRow> {
+export async function restoreLoadoutSession(tx: DbExecutor, userId: string, state: HqStateRow, now = Date.now()): Promise<HqStateRow> {
     const session = openLoadoutSnapshotOf(state)
     if (!session) return state
+    const present = now - state.lastSettledAt.getTime() <= ONLINE_THRESHOLD_MS
     const [updated] = await tx.update(hqState)
-        .set({ ...session.columns, preRaidSnapshot: null })
+        .set({ ...(session.columns ?? {}), preRaidSnapshot: null, ...(present ? holdClockTo(state, now) : {}) })
         .where(eq(hqState.userId, userId))
         .returning()
     return updated ?? state
@@ -1869,8 +1895,12 @@ export async function buyShopTrack(tx: DbExecutor, userId: string, upgradeId: Sh
         throw createError({ statusCode: 409, statusMessage: 'That upgrade is already being bought, try again' })
     }
 
+    let balance: string | null = null
     if (track.currency === 'voidShards') {
         await tx.update(hqState).set({ voidShards: remaining! }).where(eq(hqState.userId, userId))
+    } else if (track.currency === 'gold') {
+        // `debit` guards the balance in its own WHERE and throws 400 when short, on this tx for the lock
+        balance = await debit(userId, cost.toFixed(4), 'hero-quest:shop', tx)
     } else {
         // `debitGems` guards `gems >= cost` in its own WHERE and throws 400 otherwise, so the
         // check and the spend are one statement. The tx is threaded because this transaction
@@ -1885,6 +1915,8 @@ export async function buyShopTrack(tx: DbExecutor, userId: string, upgradeId: Sh
         spent: cost,
         currency: track.currency,
         voidShards: remaining ?? state.voidShards,
+        /** The Gold balance after a Gold purchase, for the header; null otherwise. */
+        balance,
         nextCost: shopTrackCost(upgradeId, claimed.level)
     }
 }

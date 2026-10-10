@@ -5,6 +5,7 @@ import {
     battleSpeedRemainingSeconds,
     dilatedSeconds,
     extendBattleSpeed,
+    heldBattleSpeedExpiry,
     speedBoostFor
 } from '#shared/utils/hero-quest/battle-speed'
 import { BATTLE_SPEED_DURATIONS_MINUTES, BATTLE_SPEED_TIERS, MAX_BATTLE_SPEED } from '#shared/utils/hero-quest/constants'
@@ -56,6 +57,15 @@ describe('battle speed', () => {
             expect(dilatedSeconds(900, 3, 600)).toBe(600 * 3 + 300)
             expect(dilatedSeconds(300, 3, 600)).toBe(900)
             expect(dilatedSeconds(300, 3, 0)).toBe(300)
+        })
+
+        it('waits out a held span: pushed out by all of it, or untouched with no block running', () => {
+            expect(heldBattleSpeedExpiry(running, NOW, NOW + 4 * MINUTE)).toEqual(new Date(NOW + 14 * MINUTE))
+            // a block that ends inside the span still gets the whole span back
+            expect(heldBattleSpeedExpiry(running, NOW + 8 * MINUTE, NOW + 12 * MINUTE)).toEqual(new Date(NOW + 14 * MINUTE))
+            expect(heldBattleSpeedExpiry(running, NOW + 10 * MINUTE, NOW + 12 * MINUTE)).toBeNull()
+            expect(heldBattleSpeedExpiry({ multiplier: null, expiresAt: null }, NOW, NOW + MINUTE)).toBeNull()
+            expect(heldBattleSpeedExpiry(running, NOW, NOW)).toBeNull()
         })
     })
 

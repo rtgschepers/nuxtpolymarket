@@ -1,13 +1,13 @@
 # Holiday Events
 
-Status: **Locked** — decisions confirmed for the "simple gift" phase, idea backlog item 6. Gameplay-event content (limited-time modes/mechanics) is explicitly **deferred, not designed here** — matches the backlog's own "starts simple, leaves room for later" framing, and your call to stop this doc's scope at the gift mechanic.
+Status: **Locked** — decisions confirmed for the "simple gift" phase, idea backlog item 6. Gameplay-event content (limited-time modes/mechanics) is **not being built** (2026-10-10, the user's call, `build-log.md` #9): holidays are gifts only.
 
 ## Structure recap
 
 - Real-world calendar holidays trigger a claimable gift, once per holiday per year.
 - The gift is a **mixed bundle** (Gold, Gems, optionally themed Seals) that varies per holiday — content-authored per holiday, not computed from one shared formula.
 - **Claim-then-reward**, the same server-authoritative pattern already used for every other currency mutation in this project.
-- Out of scope here: actual gameplay events (limited-time modes/content). This doc only locks the gift mechanic.
+- Not built: actual gameplay events (limited-time modes/content). Holidays are gifts only (2026-10-10).
 
 ---
 
@@ -19,6 +19,8 @@ Status: **Locked** — decisions confirmed for the "simple gift" phase, idea bac
 | Lunar New Year | Varies — needs a lookup table | Shifts year to year on the Gregorian calendar |
 | Halloween | Oct 31 | Fixed date |
 | Christmas / Winter Holiday | Dec 25 | Fixed date |
+| Valentine's Day | Feb 14 | Fixed date. Added 2026-10-10 (the user's call) |
+| Easter | Varies — computed | Western Easter Sunday, the Gregorian computus, so no table. Added 2026-10-10 (the user's call) |
 
 Starting with the most broadly-recognized, commercially-safe set for a global free-to-play audience — same "first pass, not final" spirit as every other content roster in this project (Champion names, Artifact effects, etc.). Adding more holidays later (Easter, a regional holiday, the game's own launch-anniversary) is a config-table addition, not a system redesign — extensibility was a design goal from the start.
 
@@ -31,7 +33,7 @@ Starting with the most broadly-recognized, commercially-safe set for a global fr
 - **Resolved in UTC**, not the player's local timezone — avoids timezone-based double-claim exploits or disputes about "which day it is" for a given player, consistent with this project's server-authoritative principle (`tech-architecture.md` structure recap).
 - **Claim window: the holiday date plus a few following days** (e.g. a 3-day window), not a single exact-day requirement — matches the forgiving spirit already used for the daily Seal grant's bankable cap (`economy-and-currencies.md` §5), so missing the exact date doesn't simply forfeit the gift.
 - **No retroactive catch-up.** A player who starts playing after a holiday's window has closed doesn't receive it later, same as missing the window while already playing. Once per year, not banked indefinitely.
-- **Claim-then-reward**, mirroring the existing `seals/claim-daily.post.ts` pattern (`tech-architecture.md` §5) — an explicit claim action, not a silent auto-grant, so the client always has a clear "gift waiting" state to surface.
+- **Claim-then-reward**, mirroring the login calendar's `calendar/claim.post.ts` (`tech-architecture.md` §5; this first named `seals/claim-daily.post.ts`, which `open-items.md` #29 retired) — an explicit claim action, not a silent auto-grant, so the client always has a clear "gift waiting" state to surface.
 
 ---
 
@@ -64,8 +66,10 @@ What the build had to settle that this doc leaves open, none of it a rule change
 - **The window is three UTC days, the holiday counted** (`HOLIDAY_CLAIM_WINDOW_DAYS`, `UNTUNED ╧`): §2's "e.g." taken as the whole window.
 - **A gift belongs to the year its holiday fell in**, the claim's key with the holiday's ID, so a window running past New Year's Eve claims the earlier year's gift.
 - **Lunar New Year's table** (`LUNAR_NEW_YEAR_DATES`) runs 2024 to 2050, each the date in China taken as that UTC day.
-- **The claim is modelled on the login calendar** (`build-log.md` #47): §2's `seals/claim-daily.post.ts` was retired by `open-items.md` #29.
-- **The gift is claimed in the Calendar scene**, the "gift waiting" state §2 asks for: its title row shows the open gift's button, or which comes next.
+- **The claim is modelled on the login calendar** (`build-log.md` #47), as §2 now says.
+- **The gift is claimed from its own icon, not the Calendar** (2026-10-10, the user's call), the "gift waiting" state §2 asks for: a gift box in the holiday's colours wiggles in the battle view's top-right corner while one is open and unclaimed. Pressed, it opens a reveal over the stage: the box drops in and shakes while the claim is on its way, bursts open in gold with confetti, and each reward pops out with its count running up.
+- **No feature gate** (2026-10-10, the user's call): with no catch-up, gating the claim behind an unlock would cost a new player the gift outright.
+- **Valentine's Day and Easter joined the roster** (2026-10-10, the user's call), as §1 foresaw: a row each and a gift each, no system change. Easter is computed rather than tabled.
 
 ---
 

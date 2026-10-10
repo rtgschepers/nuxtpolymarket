@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The milestones' route, drawn on the stage as the Milestones scene, which is where they are
- * claimed (`shared/utils/hero-quest/milestones.ts`).
+ * The Calendar's main tab, the login calendar, drawn on the stage, which is where days are
+ * claimed (`shared/utils/hero-quest/calendar.ts`).
  */
 const { initialized } = useHeroQuest()
 </script>

@@ -123,9 +123,9 @@ export class MilestonesScene {
 
     /** `hover` is what the pointer is over; `busy` holds every claim while one is on its way. */
     render(t: number, view: MilestonesView, hover: MilestonesTarget | null, pressed: boolean, busy: boolean): Surface {
-        const s = this.backdrops.render('milestones', t, false)
+        // a tab in the Calendar: the tabs stand where a title would (`scene-tabs.ts`), drawn over by the canvas
+        const s = this.backdrops.render('calendar', t, false)
         const ready = view.rows.filter(r => r.claimable.length > 0).length
-        drawText(s, 'MILESTONES', 6, 4, C.gold2, { shadow: 1 })
         if (ready) drawText(s, `${ready} READY`, s.w - 6, 4, C.gold3, { align: 2, shadow: 1 })
 
         const pulse = Math.floor(t * 3) % 2 === 0

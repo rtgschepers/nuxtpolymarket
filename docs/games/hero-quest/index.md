@@ -133,6 +133,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Gems source/sinks | `economy-and-currencies.md` | §4 |
 | Seal earn sources (milestone / daily / raid) | `economy-and-currencies.md` | §5 |
 | Milestones: tracks, formulas, claim | `build-log.md` #48, `open-items.md` #48 | |
+| Tutorials, the guide, feature unlocks | `build-log.md` #50 | |
 | Essence source/sink | `economy-and-currencies.md` | §6 |
 | Trait Gems | `economy-and-currencies.md` | §8 |
 | Raid Keys (×5) | `economy-and-currencies.md` §9, `raid-system.md` §3 | |
@@ -164,7 +165,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | Trait stat values by grade | `traits.md` | §4 |
 | Trait Sets (5) | `traits.md` | §5 |
 | Trait save slots (Gems 250/750/1250) | `traits.md` | §6 |
-| Traits as built: scopes, Set readings, evasion in the fight, schema, routes, scene | `build-log.md` #51, `traits.md` | *As built* |
+| Traits as built: scopes, Set readings, evasion in the fight, schema, routes, scene | `build-log.md` #52, `traits.md` | *As built* |
 | Loadout contents (5 components) | `loadouts.md` | §1 |
 | Loadout slots 2→10, Gems | `loadouts.md` | §3 |
 | Per-raid loadout auto-apply | `loadouts.md` | §4 |
@@ -280,7 +281,7 @@ Not design docs — they describe the *state* of the project rather than the gam
 | **World & enemy design** (10 worlds, names, art, enemy rosters, boss identities, enemy kits) | The single biggest remaining greenfield pass. No longer blocks Gold (`gold-economy.md` §3a) |
 | **Passive Skill Tree** | `idea-backlog.md` item 3 — unchecked, no raid assigned |
 | ~~**Alternative enemy-scaling formula**~~ | Applied — the continuous `b^n` curve (`open-items.md` #10) |
-| **Holiday gameplay events** (limited-time modes) | Explicitly deferred in `holiday-events.md` |
+| ~~**Holiday gameplay events**~~ (limited-time modes) | Not built — holidays are gifts only (`build-log.md` #9, 2026-10-10) |
 | **Per-raid mechanic content** | Fight types locked, specifics deferred |
 | **Remaining tuning** | Combat/progression tuned (#22); 95 `// UNTUNED ╧` constants remain (2026-10-09), mostly gacha, shop, economy, raid, boss-special, milestone, holiday and ability magnitudes — see `open-items.md`, "Standing numeric tuning" |
 | **Gold decisions** | First-week income, lost calendar anchors, stale Seal ladder — `open-items.md` #23 |

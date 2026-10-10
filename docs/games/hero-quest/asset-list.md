@@ -198,7 +198,7 @@ Unchanged from the previous pass — nothing here was in the fidelity decision s
 |---|---|---|
 | World backgrounds | 10 | One per world, drawn from the same theme line as that world's roster (§1.4 has the table) — Thornwick Vale through **The Void**. The background and the enemies standing on it are a matched set; a world is the only place the run's progress is visible, since the stat curve is continuous and the pool never re-themes between prestiges. Art direction owed (`open-items.md` #6) |
 | Stage-select / world map UI | 1 | |
-| Tab backgrounds | **10** | **Corrected 2026-09-17.** This row used to name Forge, Guild, Training Grounds and Dig-site — the four tabs `open-items.md` #20 collapsed into Gacha + Collections — plus "Encyclopedia", which shipped as Wiki. Commissioning from the old list bought four backgrounds for pages that do not exist and missed four that do. **Built, from `app/pages/hero-quest.vue`: Battle, Gacha, Collections, Loadouts, Prestige, Wiki** (6). **Phase 4, not yet built: Raids, Traits, Arena, Leaderboard** (4). The Dev tab is development-only and needs no art |
+| Tab backgrounds | **0** | **Dropped 2026-10-10** (the user's call): the menu scenes draw on the plain dark ground. **Corrected 2026-09-17.** This row used to name Forge, Guild, Training Grounds and Dig-site — the four tabs `open-items.md` #20 collapsed into Gacha + Collections — plus "Encyclopedia", which shipped as Wiki. Commissioning from the old list bought four backgrounds for pages that do not exist and missed four that do. **Built, from `app/pages/hero-quest.vue`: Battle, Gacha, Collections, Loadouts, Prestige, Wiki** (6). **Phase 4, not yet built: Raids, Traits, Arena, Leaderboard** (4). The Dev tab is development-only and needs no art |
 | ~~Training Grounds recruitment art (3 states)~~ | 0–3 | **On hold, not locked.** `trainingGroundsArt` (Barracks / Archery Range / Wizard Tower, `skills-gacha.md` §1) dressed a page that #20 removed; the server still serializes it and nothing renders it. Either the Gacha card grows a per-system art treatment and these three are needed, or the field goes. Decide during the Pixi pass — **do not commission until then** |
 | Gacha pull screen / reveal VFX | **Locked: one shared flash, recolored per rarity tier** | 1 base animation × 6 rarity recolors, not a bespoke cinematic per tier — cheap, reused everywhere |
 
@@ -213,7 +213,7 @@ Unchanged, listed for completeness:
 - Trait slot UI (5 fixed slots, roll/lock states)
 - Arena candidate cards, battle log, Rating leaderboard
 - Encyclopedia list + detail views (168 collectibles + 16 class nodes)
-- Holiday claim banner + gift-box icon (4 holidays)
+- Holiday gift-box icon (6 holidays) + the gift reveal
 
 ---
 

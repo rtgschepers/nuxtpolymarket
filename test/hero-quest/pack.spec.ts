@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+    bossMinionStats,
     effectiveStreams,
     enemyPackAt,
     enemyStatsAt,
@@ -103,10 +104,12 @@ describe('enemy packs', () => {
     })
 
     describe('pack size by stage archetype', () => {
-        it('gives a boss exactly one boss plus its escort', () => {
+        it('gives a boss exactly one boss plus its escort, which is none', () => {
             for (const stage of [BOSS_STAGE, SUPER_BOSS_STAGE]) {
                 expect(packSizeFor(stage)).toBe(BOSS_MINION_COUNT + 1)
             }
+            // a boss fight is the boss alone (the user's call, 2026-10-09)
+            expect(BOSS_MINION_COUNT).toBe(0)
         })
 
         it('packs wave and elite stages', () => {
@@ -135,22 +138,15 @@ describe('enemy packs', () => {
     describe('boss encounters', () => {
         const bossPos = at(2, BOSS_STAGE)
 
-        it('puts the escort first and the boss last, so adds die before the boss', () => {
+        it('stands the boss alone, with no escort', () => {
             const members = enemyPackAt(bossPos).members
-            const boss = enemyStatsAt(bossPos)
-
-            expect(members).toHaveLength(BOSS_MINION_COUNT + 1)
-            expect(members.at(-1)!.hp.eq(boss.hp)).toBe(true)
-            // Order is load-bearing: `rawSecondsPerPack` sums members in this order and
-            // `runFight` focuses them in this order, which is what keeps the projection and
-            // the fight agreeing about how long an encounter takes.
-            for (const minion of members.slice(0, BOSS_MINION_COUNT)) {
-                expect(minion.hp.lt(boss.hp)).toBe(true)
-            }
+            expect(members).toHaveLength(1)
+            expect(members[0]!.hp.eq(enemyStatsAt(bossPos).hp)).toBe(true)
         })
 
-        it('makes minions trash-tier at the stage depth, not scaled-down bosses', () => {
-            const minion = enemyPackAt(bossPos).members[0]!
+        // An escort is one number away (`BOSS_MINION_COUNT`), so its minion stays specified.
+        it('would make minions trash-tier at the stage depth, not scaled-down bosses', () => {
+            const minion = bossMinionStats(bossPos)
             // Same curve index, wave stat layer — exactly an ordinary mob of that depth.
             const trash = enemyStatsAt(at(2, 1))
             const ratio = minion.hp.div(trash.hp).toNumber()
@@ -160,11 +156,6 @@ describe('enemy packs', () => {
             // against a single hero stat). The claim under test is unchanged: a minion is an
             // ordinary mob of the boss's own depth.
             expect(ratio).toBeCloseTo(Math.pow(ENEMY_STEP_BASE, 4 * ENEMY_HP_STEP_EXPONENT), 6)
-        })
-
-        it('is a genuinely mixed pack — the first in the game', () => {
-            const members = enemyPackAt(bossPos).members
-            expect(new Set(members.map(member => member.hp.toString())).size).toBeGreaterThan(1)
         })
     })
 

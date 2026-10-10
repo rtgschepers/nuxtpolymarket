@@ -3,7 +3,7 @@ import { db } from '#server/database'
 import { hqLoadouts, hqState } from '#server/database/schema'
 import { requireUserId } from '#server/utils/auth'
 import { requireFeature } from '#server/utils/hero-quest-tutorials'
-import { getShopLevels, loadoutSlots, restoreLoadoutSession } from '#server/utils/hero-quest'
+import { getShopLevels, loadoutSlots, restoreLoadoutSession, settleHq } from '#server/utils/hero-quest'
 import { validateLiveLoadout } from '#server/utils/hero-quest-loadout'
 
 /**
@@ -28,6 +28,8 @@ import { validateLiveLoadout } from '#server/utils/hero-quest-loadout'
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
     await requireFeature(userId, 'loadouts')
+    // settle first, so the window before this pays at the rate it ran at, not the new one
+    await settleHq(userId)
     const body = await readBody<{ slotIndex?: number }>(event)
 
     const slotIndex = Math.floor(Number(body?.slotIndex))

@@ -3,7 +3,7 @@ import { db } from '#server/database'
 import { hqState } from '#server/database/schema'
 import { requireUserId } from '#server/utils/auth'
 import { requireFeature } from '#server/utils/hero-quest-tutorials'
-import { classPickWrites } from '#server/utils/hero-quest'
+import { classPickWrites, settleHq } from '#server/utils/hero-quest'
 import { getClass } from '#shared/utils/hero-quest/content/classes'
 import type { ClassId } from '#shared/utils/hero-quest/types'
 
@@ -22,6 +22,8 @@ import type { ClassId } from '#shared/utils/hero-quest/types'
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
     await requireFeature(userId, 'classes')
+    // settle first, so the window before this pays at the rate it ran at, not the new one
+    await settleHq(userId)
     const body = await readBody<{ classId?: string }>(event)
     const requested = body?.classId
 
