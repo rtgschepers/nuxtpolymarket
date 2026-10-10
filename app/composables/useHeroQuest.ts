@@ -84,6 +84,8 @@ export const useHeroQuest = () => {
     const raids = computed(() => state.value?.raids ?? [])
     /** The login calendar: every day's reward as of now, which are claimed, and the make-ups. */
     const calendar = computed(() => state.value?.calendar ?? null)
+    /** The holiday gifts open now (claimed or not, and what each pays) and the next to open. */
+    const holidays = computed(() => state.value?.holidays ?? null)
     /** Every milestone track: its feat now, the steps claimed, the next step, and what's waiting. */
     const milestones = computed(() => state.value?.milestones ?? [])
     /** The features open, in the order they opened, and the guide's tutorials seen; null before the first read. */
@@ -101,6 +103,10 @@ export const useHeroQuest = () => {
     const training = computed(() => state.value?.training ?? null)
     const digSite = computed(() => state.value?.digSite ?? null)
     const loadouts = computed(() => state.value?.loadouts ?? null)
+    /** Raid (or `arena`) → the saved slot it applies on a fresh engage (`loadouts.md` §4). */
+    const loadoutPreferences = computed<Partial<Record<string, number>>>(() => state.value?.loadoutPreferences ?? {})
+    /** The open preferred-Loadout session: which raid's Loadout is live now, and its slot; null when none. */
+    const loadoutSession = computed(() => state.value?.loadoutSession ?? null)
     const atBossGate = computed(() => run.value?.atBossGate ?? false)
     const walled = computed(() => run.value?.walled ?? false)
     const canPrestige = computed(() => state.value?.run?.runCleared ?? false)
@@ -234,6 +240,16 @@ export const useHeroQuest = () => {
     }
 
     /**
+     * Claim an open holiday's gift. Its Gold and Gems move platform balances the response doesn't
+     * carry, so the session is read back; it happens a few times a year.
+     */
+    async function claimHoliday(holidayId: string) {
+        const res = await call<{ holidayId: string, year: number, gold: string, gems: number }>('/api/hero-quest/holiday/claim', { holidayId }, '')
+        await fetchSession()
+        return res
+    }
+
+    /**
      * Claim every milestone step waiting: on one track, or on all of them without one. Gems move a
      * platform balance the response doesn't carry, so the session is read back when any were paid.
      */
@@ -344,6 +360,19 @@ export const useHeroQuest = () => {
         return call('/api/hero-quest/loadout/apply', { slotIndex }, '')
     }
 
+    /**
+     * Point a raid at a saved slot, or with null at none (`loadouts.md` §4). Free; only the
+     * pointer moves, so the live loadout changes on the raid's next engage.
+     */
+    async function setLoadoutPreference(target: string, slotIndex: number | null) {
+        return call('/api/hero-quest/loadout/set-raid-preference', { target, slotIndex }, '')
+    }
+
+    /** Leave the raid: the loadout that was live before its first engage goes back, if one was applied. */
+    async function leaveRaid() {
+        return call<{ restored: boolean }>('/api/hero-quest/raid/leave', {}, '')
+    }
+
     /** Rename a saved slot, leaving what it holds alone. */
     async function renameLoadout(slotIndex: number, name: string) {
         return call('/api/hero-quest/loadout/rename', { slotIndex, name }, '')
@@ -420,12 +449,15 @@ export const useHeroQuest = () => {
         training,
         digSite,
         loadouts,
+        loadoutPreferences,
+        loadoutSession,
         classTree,
         ascendant,
         classToken,
         battleSpeed,
         raids,
         calendar,
+        holidays,
         milestones,
         tutorials,
         settings,
@@ -444,6 +476,7 @@ export const useHeroQuest = () => {
         buyBattleSpeed,
         setSetting,
         claimCalendar,
+        claimHoliday,
         claimMilestones,
         markTutorialSeen,
         resetTutorials,
@@ -457,6 +490,8 @@ export const useHeroQuest = () => {
         saveLoadout,
         applyLoadout,
         renameLoadout,
+        setLoadoutPreference,
+        leaveRaid,
         devMode,
         dev
     }

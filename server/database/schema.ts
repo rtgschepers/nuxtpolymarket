@@ -20,6 +20,7 @@ import type { RateTemplate } from '#shared/utils/tcg/rate-fitter'
 import type { TownEventData } from '#shared/utils/gamelogic/town-events'
 import type { TcgGradeResult } from '#shared/utils/tcg/grading-model-types'
 import type { HqSettings } from '#shared/utils/hero-quest/settings'
+import type { LoadoutSession } from '#shared/utils/hero-quest/loadout-session'
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -1193,6 +1194,22 @@ export const hqState = pgTable('hq_state', {
    */
   equippedGear: jsonb('equipped_gear').$type<Record<string, string>>().notNull().default({}),
 
+  /**
+   * Preferred Loadouts (`loadouts.md` §4): target → saved slot index, for each raid and the
+   * Arena's attack (`LoadoutTarget`). A pointer, not storage; assigning one is free. A target
+   * absent has none, and its fights run on whatever is live.
+   */
+  raidLoadoutPreferences: jsonb('raid_loadout_preferences').$type<Partial<Record<string, number>>>().notNull().default({}),
+
+  /**
+   * The open preferred-Loadout session (`LoadoutSession`): the live loadout (all six components) as it was before a
+   * raid's fresh engage applied its preferred one, which target opened it and which slot it
+   * applied. Put back, and cleared, when the player leaves the raid; null when none is open.
+   * Stored rather than held by the client, so a reload keeps it and a tab shut mid-raid is put
+   * back by the next read (`loadout-session.ts`).
+   */
+  preRaidSnapshot: jsonb('pre_raid_snapshot').$type<LoadoutSession | null>(),
+
   // ── Gacha currencies (`tech-architecture.md` §3) ─────────────────────────────────
   //
   // Plain integers, not Decimal: Seal and Essence balances are bounded by real spending, not
@@ -1360,6 +1377,24 @@ export const hqRaidState = pgTable('hq_raid_state', {
 }, t => [
   uniqueIndex('hq_raid_state_user_raid_idx').on(t.userId, t.raidId),
   index('hq_raid_state_userId_idx').on(t.userId)
+])
+
+/**
+ * One row per holiday gift claimed (`holiday-events.md` §2): the unique key **is** the
+ * once-per-holiday-per-year rule, so a claim is an insert and a conflict is the refusal. `year`
+ * is the year the holiday fell in, not the day it was claimed. No row is ever written for a
+ * window missed: a closed window never opens again.
+ */
+export const hqHolidayClaims = pgTable('hq_holiday_claims', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  /** A `HolidayId` from `content/holidays.ts`. */
+  holidayId: text('holiday_id').notNull(),
+  year: integer('year').notNull(),
+  claimedAt: timestamp('claimed_at').defaultNow().notNull()
+}, t => [
+  uniqueIndex('hq_holiday_claims_user_holiday_year_idx').on(t.userId, t.holidayId, t.year),
+  index('hq_holiday_claims_userId_idx').on(t.userId)
 ])
 
 export const chatMessages = pgTable('chat_messages', {

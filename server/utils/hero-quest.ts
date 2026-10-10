@@ -12,7 +12,7 @@
 
 import { eq, sql } from 'drizzle-orm'
 import { db, type DbExecutor } from '#server/database'
-import { hqCollection, hqFights, hqLoadouts, hqShopUpgrades, hqState } from '#server/database/schema'
+import { hqCollection, hqFights, hqLoadouts, hqShopUpgrades, hqState, user } from '#server/database/schema'
 import { credit, debit, debitGems, getBalance } from '#server/utils/balance'
 import {
     ASCENDANT_KIT_SIZE,
@@ -124,6 +124,7 @@ import {
     type BattleSpeedWindow
 } from '#shared/utils/hero-quest/battle-speed'
 import type { StatsExplanation } from '#shared/utils/hero-quest/explain'
+import { readLoadoutSnapshot, type LiveLoadoutColumns, type LoadoutTarget } from '#shared/utils/hero-quest/loadout-session'
 import { D, ZERO, decPow, fromStore, toStore } from '#shared/utils/hero-quest/numbers'
 import { ASCENDANT_ID, ASCENDANT_PICKABLE, CLASS_NODES, MASTER_IDS, childrenOf, classOfSkill, getClass, kitFor } from '#shared/utils/hero-quest/content/classes'
 import { SHOP_TRACKS, maxLevelFor, shopStatLevels, shopTrackCost, type ShopTrackId } from '#shared/utils/hero-quest/content/shop'
@@ -150,6 +151,16 @@ export async function getHqState(userId: string) {
 /** Founding is explicit (`init.post.ts`); the conflict clause is what makes a double-init a no-op. */
 export async function ensureHqState(userId: string, tx: DbExecutor = db) {
     await tx.insert(hqState).values({ userId }).onConflictDoNothing()
+}
+
+/**
+ * The player's banked Gold as a number, read on `executor` (a plain read, no lock): the input the
+ * Gambler's Strike family's wealth factor takes. A grant sized off the run's Gold rate reads it the
+ * way `state.get.ts` does, after the settle, so the amount paid is the amount shown.
+ */
+export async function bankedGoldOf(executor: DbExecutor, userId: string): Promise<number> {
+    const [row] = await executor.select({ balance: user.balance }).from(user).where(eq(user.id, userId))
+    return parseFloat(row?.balance ?? '0') || 0
 }
 
 export async function getShopLevels(userId: string, tx: DbExecutor = db): Promise<Record<string, number>> {
@@ -631,6 +642,51 @@ export function prestigeResetValues(state: HqStateRow) {
 }
 
 /**
+ * The open preferred-Loadout session on a row: the loadout columns it puts back, and its target and
+ * slot where they still read (null otherwise). Null when none is open. A snapshot whose columns
+ * don't read is refused outright: putting it back is impossible and clearing it would lose the
+ * player's own loadout, so nothing that would overwrite it may run.
+ */
+export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadoutColumns, target: LoadoutTarget | null, slotIndex: number | null } | null {
+    const read = readLoadoutSnapshot(state.preRaidSnapshot)
+    if (read.kind === 'none') return null
+    if (read.kind === 'unreadable') throw createError({ statusCode: 500, statusMessage: 'The loadout saved before your last raid could not be read' })
+    return read
+}
+
+/**
+ * Close an open preferred-Loadout session (`loadouts.md` §4): put the live loadout back as it was
+ * before the raid's first engage, and clear the snapshot. Returns the row as it now stands (the
+ * same row when no session is open).
+ *
+ * Call it with `state` read under the `hqState` row lock, inside that transaction: the snapshot is
+ * read and cleared in one locked step, so two closes never both write it back. Every route that
+ * fights outside the raid or changes the live loadout calls it first, so a session the client never
+ * closed (a tab shut mid-raid) ends on the player's next action elsewhere. The snapshot is written
+ * back as stored: it was the live loadout, and nothing in this game is ever un-owned.
+ */
+export async function restoreLoadoutSession(tx: DbExecutor, userId: string, state: HqStateRow): Promise<HqStateRow> {
+    const session = openLoadoutSnapshotOf(state)
+    if (!session) return state
+    const [updated] = await tx.update(hqState)
+        .set({ ...session.columns, preRaidSnapshot: null })
+        .where(eq(hqState.userId, userId))
+        .returning()
+    return updated ?? state
+}
+
+/**
+ * The `hqState` row locked, with any open preferred-Loadout session put back: the live loadout a
+ * change to it must apply on top of. For writes that only sometimes touch the loadout (Gear's
+ * first-piece auto-equip on a pull or a craft) and hold no lock of their own yet.
+ */
+export async function lockLiveLoadout(tx: DbExecutor, userId: string): Promise<HqStateRow> {
+    const [locked] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
+    if (!locked) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run' })
+    return restoreLoadoutSession(tx, userId, locked)
+}
+
+/**
  * Resolve a boss or super-boss fight and apply its outcome, under the `hqState` row lock.
  *
  * Lives here rather than in `boss/engage.post.ts` so the race is testable against a real lock
@@ -650,8 +706,10 @@ export function prestigeResetValues(state: HqStateRow) {
  *   request, since the lock serializes them but none of them moves the run.
  */
 export async function resolveBossEngage(tx: DbExecutor, userId: string, bankedGold: number) {
-    const [state] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
-    if (!state) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run to play' })
+    const [locked] = await tx.select().from(hqState).where(eq(hqState.userId, userId)).for('update')
+    if (!locked) throw createError({ statusCode: 400, statusMessage: 'No Hero Quest run to play' })
+    // the run's boss is fought on the run's loadout: a raid's preferred one left live goes back first
+    const state = await restoreLoadoutSession(tx, userId, locked)
 
     const position = positionOf(state)
     if (!isBossStage(position.stage)) {
