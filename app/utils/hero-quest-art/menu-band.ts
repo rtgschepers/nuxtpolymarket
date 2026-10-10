@@ -75,13 +75,6 @@ const NODE_TREE: Glyph = (g, x, y) => {
     }
 }
 
-/** Fast forward: two arrowheads, the lead one lit, the way a player's clock skips ahead. */
-const FAST_FORWARD: Glyph = (g, x, y) => {
-    poly(g, [-7, -5, -1, 0, -7, 5], x, y, C.gold1)
-    poly(g, [0, -5, 6, 0, 0, 5], x, y, C.gold2)
-    line(g, x, y - 4, x + 4, y - 1, C.gold3)
-}
-
 /** A war banner: a spear-tipped pole flying a red swallowtail flag with gold crossed blades on it. */
 const RAID_BANNER: Glyph = (g, x, y) => {
     // the pole and its spearhead
@@ -182,8 +175,7 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     raids: RAID_BANNER,
     classes: NODE_TREE,
     // the Shop (the user's call, 2026-10-10: open from the World 1 boss, so no longer prestige's)
-    prestige: SHOP_STALL,
-    speed: FAST_FORWARD,
+    shop: SHOP_STALL,
     milestones: TROPHY,
     calendar: CALENDAR,
     settings: COG

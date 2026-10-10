@@ -151,8 +151,8 @@ export class PrestigeScene {
      * or a pager button; `busy` holds every Buy button.
      */
     render(t: number, view: PrestigeView, page: number, hover: number | 'prev' | 'next' | null, pressed: boolean, busy: boolean): Surface {
-        const s = this.backdrops.render('prestige', t, false)
-        drawText(s, 'SHOP', 6, 4, C.gold2, { shadow: 1 })
+        // the Shop's tabs stand where a title would (`shop-tabs.ts`), drawn over by the canvas
+        const s = this.backdrops.render('shop', t, false)
         const pages = Math.max(1, Math.ceil(view.tracks.length / SHOP_PAGE_SIZE))
         if (pages > 1) this.drawPager(s, page, pages, hover, pressed)
         // the three balances the shop spends, right-aligned: Void Shards, Gems, then Gold
