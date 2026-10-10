@@ -54,6 +54,8 @@ const MAKEUP: Box = { x: 6, y: 124, w: 76, h: 13 }
 
 const MAKEUP_PLATE = [C.blue0, C.blue1, C.blue2] as const
 
+/** The info line's right end: what a day's state means for it. */
+const DAY_STATE_LINE: Readonly<Record<CalendarDayState, string>> = { today: 'PRESS TO CLAIM', claimed: 'CLAIMED', missed: 'MISSED', upcoming: 'COMING UP' }
 const SEAL_NAME: Readonly<Record<string, string>> = { gear: 'FORGE SEALS', champion: 'GUILD SEALS', skill: 'SKILL SEALS', artifact: 'EXCAVATION SEALS' }
 
 function cellBox(w: number, i: number): Box {
@@ -152,9 +154,7 @@ export class CalendarScene {
         const at = hover === 'claim' ? view.today : hover?.startsWith('day:') ? Number(hover.slice(4)) : hover === 'makeup' ? view.makeupDay : null
         const shown = view.days[at ?? view.today]
         if (shown) {
-            const why = shown.state === 'today' ? 'PRESS TO CLAIM'
-                : shown.state === 'claimed' ? 'CLAIMED'
-                    : shown.state === 'missed' ? 'MISSED' : 'COMING UP'
+            const why = DAY_STATE_LINE[shown.state]
             drawText(s, `DAY ${shown.day}: ${calendarRewardLabel(shown)}`, 6, INFO_Y, C.bone1, { shadow: 1 })
             drawText(s, why, s.w - 6, INFO_Y, shown.state === 'today' ? C.gold3 : shown.state === 'missed' ? C.red2 : C.stone3, { align: 2, shadow: 1 })
         }
