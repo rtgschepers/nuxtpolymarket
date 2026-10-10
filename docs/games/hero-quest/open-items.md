@@ -110,17 +110,33 @@ fixed cooldown, with damage and a status or a drain. What it left open:
    pool, so only the Skills Unbreakable Will and Immortal Vanguard grant it. Worth a look when
    the Artifact effects are re-cut (`CLAUDE.md` §6).
 
-### 52. Traits — built; what the sims don't see, and two slips in `traits.md`
+### 52. Traits — built; Deep Impact breaks the pacing, and two slips in `traits.md`
 
 Full record: `build-log.md` #52. Five slots, Rolls, locks, Sets, save slots, and evasion live in
 combat and GPN. What it left open:
 
-1. **Pacing is unmeasured.** The campaign walk and the balance script field no Traits, so they read
-   exactly as before. The doc's magnitudes are large beside every other source they sum with: ATK
-   and Hero Skill DMG reach +600% at SSS, Deep Impact +1200% IMP, and a 5-piece Vital Reflex board
-   doubles effective HP through evasion alone. ATK and Champion ATK stack on one stat (`traits.md`
-   §0 already flags it). Measure once the sim can roll a board; none of these is `UNTUNED ╧`,
-   since the doc locks them, so moving one is a design call.
+1. **⚠ Deep Impact collapses the mid-game — needs your call.** Measured 2026-10-10 with the
+   campaign walk's new `--traits` flag (party of 3, Worlds 5–10 of the first run, since Traits open
+   at 4 Worlds cleared):
+
+   | Board | Worlds 5–10 | First prestige |
+   |---|---|---|
+   | None (as tuned) | 9d 12h | not in the grind budget |
+   | Three F slots, no live Set | 8d 8h | not in budget |
+   | One E ATK slot | 9d 16h | yes, just |
+   | One F slot, Vital Reflex or Divine Blessing 1pc | 9d 5h | not in budget |
+   | **One F slot, Deep Impact 1pc (+400% IMP)** | **1d 13h** | yes |
+   | Deep Impact 2pc / 3pc | 15h 49m / 9h 3m | yes |
+   | `--traits=E` (every 1-piece Set live) | 1d 0h | yes |
+   | `--traits=A` | 10h 14m | yes |
+
+   The grades barely matter; Deep Impact's one-piece +400% IMP does nearly all of it, and two
+   boards in three roll at least one piece. The week-long first run (`core-progression-and-prestige.md`
+   §1) shrinks to about two days the moment Traits open. The other magnitudes look sized right
+   (+25% ATK, the most common grade, is worth hours, not days). `traits.md` locks every number, so
+   none is `UNTUNED ╧` and moving one is a design decision; likeliest fix is Deep Impact's tiers
+   (+400/800/1200%): one piece is worth more than an SS IMP roll (+300%), on two boards in three. Nothing changed
+   yet. ATK and Champion ATK still stack on one stat (`traits.md` §0).
 2. **Two contradictions inside `traits.md`, taken the owning text's way rather than reconciled:**
    - The *Implementation Note* still says Champion ATK is "scoped to non-Tank Champions' PWR",
      while §4's table and the same note's revision say **all four archetypes, Tank included**.
@@ -129,10 +145,10 @@ combat and GPN. What it left open:
      5-piece Vital Reflex board (+50%)". It sits above it, ten points of headroom, which is what
      the same bullet goes on to argue and what `classes-and-combat.md` §7 says. Built at 0.60;
      only the wording is wrong.
-3. **A Roll or a load does not settle first**, as a Loadout equip doesn't: the window since the
-   last read is paid at the new board's rate. Every poll settles, so the window is short, but an
-   offline player whose first act on return is a request other than the state read would be paid
-   the new rate for the time away. The same exposure equips already have; decide for both together.
+3. ~~A Roll or a load does not settle first~~ — fixed 2026-10-10 (the user's call): every route
+   that moves the idle rate settles first (`trait/roll`, `trait/load`, `loadout/set`,
+   `loadout/apply`, `prestige/pick-class`, `prestige/shop-buy`), so a window is always paid at the
+   rate it ran at.
 
 ### 47. The login calendar — built; its Gold and Gem days are placeholders
 
