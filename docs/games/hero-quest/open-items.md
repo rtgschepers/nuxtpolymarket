@@ -368,7 +368,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `SEAL_LADDER_GROWTH[]` | `gold-economy.md` §7 | Set, but calibrated against the superseded Gold anchors — see #23.2 |
 | `LOADOUT_SLOT_BASE_COST_GEMS` (4-level doubling, #40) | `loadouts.md` §3 | Built. §3 flags the first pairing of the doubling short track with Gems as a genuine unknown; at 4 levels the top step is 8× the base. Now checkable against real Gem flows: the login calendar (#47) and prestige milestones (#48) pay Gems, and Battle Speed (#44) is the only other Gem sink built so far. Traits and the Arena add more when they land |
 | `ONLINE_THRESHOLD_MS`, `HQ_REFRESH_INTERVAL_MS` | `tech-architecture.md` §9 | |
-| `TRAIT_AUTO_ROLL_MAX_ROLLS` | — (Auto Roll, `build-log.md` #52) | Rolls one Auto Roll press may run, 1000: a bound on a request's work, not a price. Raise it if a press often stops on the cap short of an SSS (about 670 Rolls on average) |
+| `TRAIT_AUTO_ROLL_BATCH` | — (Auto Roll, `build-log.md` #52) | Rolls an Auto Roll does per request, 10: how finely STOP cuts in, against how many requests a long run makes (an SSS takes about 670 Rolls, so about 67 requests). Not a price |
 | `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness. Live since Traits (#52): Vital Reflex reaches 0.50 |
 | `OVERFLOW_CONVERSION_RATE` | `classes-and-combat.md` §7 | The only crit constant still untuned. Rarely reachable: with LCK off the level curve only a deliberately built crit Hero passes 100% |
 | `SEAL_GRANT_PER_BOSS` | `economy-and-currencies.md` §5 | A boss's batch, paid on the win. Doc gives only the shape and defers the values to the world/enemy pass (#6). Built and paying out |
