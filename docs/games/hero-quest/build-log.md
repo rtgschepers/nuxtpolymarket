@@ -858,6 +858,14 @@ The user's calls, to free a menu button for the Passive Skill Tree (`open-items.
 - **`prestige` → `shop`** wherever it meant the store: the scene and feature ID, the page (`/hero-quest/shop`), and the buy route (`shop/buy.post.ts`, was `prestige/shop-buy.post.ts`). Migration `0063` renames `prestige:unlock` and `prestige:visit` to `shop:*` in every `tutorials_seen`, so nobody sees the Shop's tutorial twice. The prestige action keeps its name (`prestige/execute`, `prestige/pick-class`), and `execute` lost its feature gate: `runCleared` was always the real one. `/hero-quest/prestige` and `/hero-quest/speed` are gone, with no redirect (the user's call). The art modules keep their names (`prestige-scene.ts`, `speed-scene.ts`).
 - **Specs:** every feature maps to a menu button, Battle Speed's to the Shop's (`tutorials.spec.ts`).
 
+### 57. The Milestones move into the Calendar — **landed 2026-10-10**
+
+The user's call, for a second free menu button: the Passive Skill Tree needs one and the Arena another.
+
+- **The Calendar has two tabs**, Calendar (the main page, `/hero-quest/calendar`) and Milestones (`/hero-quest/calendar/milestones`), on the tab strip the Shop uses (`scene-tabs.ts`, generalised out of #56's `shop-tabs.ts`). Each tab carries its own red dot (today's reward waiting; a milestone step waiting), and either one dots the menu button. The Milestones keep their unlock (one World cleared, with the Calendar); until then their tab is dim and a link to it lands on the Calendar. The menu is nine buttons, so two slots are free.
+- **The Calendar is announced first now**, then the Milestones: `FEATURE_UNLOCKS` swapped the two, which open at the same checkpoint. The Milestones' unlock points at the Calendar's button (`featureMenuScene`) and opens it on their tab, where their explanation plays.
+- `/hero-quest/milestones` is gone, with no redirect, as `/hero-quest/speed` went. The trophy glyph the Milestones' button wore is gone with it.
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
