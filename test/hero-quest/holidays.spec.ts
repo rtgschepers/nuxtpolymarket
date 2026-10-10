@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HOLIDAYS, LUNAR_NEW_YEAR_DATES, isHolidayId, type HolidayDef } from '#shared/utils/hero-quest/content/holidays'
-import { holidayDayIn, holidayGift, holidayGiftGold, nextHolidayWindow, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
+import { easterSunday, holidayDayIn, holidayGift, holidayGiftGold, nextHolidayWindow, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
 import { HOLIDAY_CLAIM_WINDOW_DAYS, HOLIDAY_GIFTS } from '#shared/utils/hero-quest/constants'
 import { GACHA_SYSTEMS } from '#shared/utils/hero-quest/gacha'
 
@@ -9,11 +9,12 @@ const DAY = 86_400_000
 const at = (year: number, month: number, day: number, hour = 12) => Date.UTC(year, month - 1, day, hour)
 
 describe('hero-quest holiday gifts', () => {
-    it('has the first-pass roster with stable, unique IDs, and a gift for each', () => {
-        expect(HOLIDAYS.map(h => h.id)).toEqual(['holiday_new_year', 'holiday_lunar_new_year', 'holiday_halloween', 'holiday_christmas'])
+    it('has the roster with stable, unique IDs, and a gift for each', () => {
+        expect(HOLIDAYS.map(h => h.id)).toEqual(['holiday_new_year', 'holiday_lunar_new_year', 'holiday_valentines', 'holiday_easter', 'holiday_halloween', 'holiday_christmas'])
+        expect(new Set(HOLIDAYS.map(h => h.id)).size).toBe(HOLIDAYS.length)
         expect(Object.keys(HOLIDAY_GIFTS).sort()).toEqual(HOLIDAYS.map(h => h.id).sort())
-        expect(isHolidayId('holiday_halloween')).toBe(true)
-        expect(isHolidayId('holiday_easter')).toBe(false)
+        expect(isHolidayId('holiday_easter')).toBe(true)
+        expect(isHolidayId('holiday_diwali')).toBe(false)
     })
 
     it('authors a mixed bundle per holiday: Gold and Gems on each, Seals only of real gachas', () => {
@@ -69,6 +70,27 @@ describe('hero-quest holiday gifts', () => {
                 expect(day).toBeGreaterThanOrEqual(Math.floor(at(year, 1, 21, 0) / DAY))
                 expect(day).toBeLessThanOrEqual(Math.floor(at(year, 2, 20, 0) / DAY))
             }
+        })
+
+        it('computes Easter Sunday for any year, the Gregorian way', () => {
+            const known: [number, number, number][] = [[2024, 3, 31], [2025, 4, 20], [2026, 4, 5], [2027, 3, 28], [2028, 4, 16], [2038, 4, 25], [2049, 4, 18], [2100, 3, 28]]
+            for (const [year, month, day] of known) expect(easterSunday(year)).toEqual({ month, day })
+            // always between March 22 and April 25
+            for (let year = 2024; year <= 2200; year++) {
+                const { month, day } = easterSunday(year)
+                expect(month * 100 + day).toBeGreaterThanOrEqual(322)
+                expect(month * 100 + day).toBeLessThanOrEqual(425)
+            }
+            expect(openHolidayWindow('holiday_easter', at(2026, 4, 5))?.year).toBe(2026)
+            expect(openHolidayWindow('holiday_easter', at(2026, 4, 4))).toBeNull()
+            expect(openHolidayWindow('holiday_easter', at(2027, 3, 28))?.year).toBe(2027)
+        })
+
+        it('opens Valentine\'s Day on February 14, beside a Lunar New Year that falls in its window', () => {
+            expect(openHolidayWindow('holiday_valentines', at(2026, 2, 14, 0))?.year).toBe(2026)
+            expect(openHolidayWindow('holiday_valentines', at(2026, 2, 13, 23))).toBeNull()
+            // 2029: Lunar New Year on the 13th, so both gifts are open on the 14th and 15th
+            expect(openHolidayWindows(at(2029, 2, 14)).map(w => w.holiday.id)).toEqual(['holiday_lunar_new_year', 'holiday_valentines'])
         })
 
         it('has no Lunar New Year gift in a year past its table', () => {

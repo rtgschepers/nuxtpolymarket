@@ -1228,13 +1228,15 @@ export interface HolidayGift {
 
 /**
  * Each holiday's gift, authored per holiday rather than computed (§3): Christmas richest, Halloween
- * the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
+ * and Valentine's Day the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
  * platform-wide currency, so these reach past Hero Quest; size them with the calendar's Gem days
  * and the milestones' (`open-items.md` #47, #48).
  */
 export const HOLIDAY_GIFTS: Readonly<Record<HolidayId, HolidayGift>> = { // UNTUNED ╧
     holiday_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 3, gear: 3, skill: 3, artifact: 3 } },
     holiday_lunar_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 5 } },
+    holiday_valentines: { goldMinutes: 30, gems: 25, seals: { champion: 3 } },
+    holiday_easter: { goldMinutes: 45, gems: 40, seals: { skill: 5 } },
     holiday_halloween: { goldMinutes: 30, gems: 25, seals: { artifact: 5 } },
     holiday_christmas: { goldMinutes: 120, gems: 100, seals: { champion: 5, gear: 5, skill: 5, artifact: 5 } }
 }
