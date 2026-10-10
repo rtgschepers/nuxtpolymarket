@@ -404,6 +404,7 @@ watch(shop, (tracks) => {
 const prestigeView = computed<PrestigeView>(() => {
     const shards = D(voidShards.value ?? '0')
     const gems = user.value?.gems ?? 0
+    const gold = parseFloat(user.value?.balance ?? '0') || 0
     // a track the frozen order does not know yet goes last
     const rank = (id: string) => {
         const i = shopOrder.value.indexOf(id)
@@ -412,6 +413,7 @@ const prestigeView = computed<PrestigeView>(() => {
     return {
         voidShards: formatHq(voidShards.value ?? '0'),
         gems: formatNumber(gems),
+        gold: formatNumber(gold),
         tracks: (shop.value ?? []).map(track => ({
             id: track.id,
             name: track.name,
@@ -421,7 +423,9 @@ const prestigeView = computed<PrestigeView>(() => {
             next: track.effect.next,
             cost: track.nextCost === null ? null : formatNumber(track.nextCost),
             currency: track.currency,
-            affordable: track.nextCost !== null && (track.currency === 'gems' ? gems >= track.nextCost : shards.gte(track.nextCost))
+            affordable: track.nextCost !== null && (track.currency === 'gems'
+                ? gems >= track.nextCost
+                : track.currency === 'gold' ? gold >= track.nextCost : shards.gte(track.nextCost))
         })).sort((a, b) => rank(a.id) - rank(b.id)),
         armed: confirm.armed.value?.startsWith('shop:') ? confirm.armed.value.slice(5) : null
     }

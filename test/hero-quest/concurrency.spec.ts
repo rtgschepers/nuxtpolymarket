@@ -570,6 +570,18 @@ describe.skipIf(SKIP)('hero-quest concurrency', () => {
             expect(level).toBe(2)
             expect(await gemsOf()).toBe(100)
         })
+
+        it('sells the Gold offline tracks to a burst only as far as the Gold goes, each level once', async () => {
+            await ensureHqState(USER_ID)
+            // Offline Cap's first two levels, 100K + 150K, and part of the third
+            await credit(USER_ID, '300000.0000')
+
+            const result = await burst(10, () => db.transaction(tx => buyShopTrack(tx, USER_ID, 'offlineCap')))
+
+            expect(result.ok).toBe(2)
+            expect((await getShopLevels(USER_ID)).offlineCap).toBe(2)
+            expect(parseFloat(await getBalance(USER_ID))).toBe(50_000)
+        })
     })
 
     describe('battle speed', () => {

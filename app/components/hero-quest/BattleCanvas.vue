@@ -971,7 +971,7 @@ onMounted(async () => {
                     : scene === 'classes'
                         ? classesScene!.render(t, classesView.value, classHover.value, !!props.classesBusy, pressed.value)
                         : scene === 'prestige'
-                            ? prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
+                            ? prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0', gold: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
                             : scene === 'gacha'
                                 ? gachaScene!.render(t, props.gacha ?? { banners: [], gold: '0', reveal: null, armed: null }, gachaHover.value, pressed.value, !!props.gachaBusy)
                                 : scene === 'raids'

@@ -86,17 +86,19 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Save a good board to come back to. Even I write the best ones down.'
     ],
 
-    'prestige:unlock': ['You beat the Void. I\'ve seen this moment before. Prestige is now available.'],
+    'prestige:unlock': ['Your first boss down! A merchant has set up shop. The Shop is now available.'],
     'prestige:visit': [
-        'The secret of the Chronicle: the Void is never gone. It folds the world back up.',
-        'Prestige walks you back to Thornwick Vale, on a harder road. The Void pays in Shards.',
-        'Your Hero keeps every level. Spend the Shards in the shop here.',
-        'Each prestige grants a class token, too.',
-        'The Void forgets every run. I don\'t. A snail carries everything it owns.'
+        'The Shop sells upgrades that last through everything, even the Void.',
+        'Offline Efficiency is the best buy here: it raises what you earn while you\'re away.',
+        'Take it from a snail, the time away adds up. Offline Cap keeps it counting longer.',
+        'The rest is paid in Void Shards, and only the Void pays those.'
     ],
 
-    'classes:unlock': ['Your first class token! Classes are now available. The Chronicle loves a new costume.'],
+    'classes:unlock': ['You beat the Void, and here is your first class token! Classes are now available.'],
     'classes:visit': [
+        'The secret of the Chronicle: the Void is never gone. It folds the world back up, on a harder road.',
+        'Your Hero keeps every level, and the Void pays in Shards. Spend them in the Shop.',
+        'The Void forgets every run. I don\'t. A snail carries everything it owns.',
         'A token takes your class one step deeper down the tree.',
         'Switching back to a class you\'ve had is always free.',
         'Prestige once as every master, and something waits at the end. Even I\'ve only heard of it.'

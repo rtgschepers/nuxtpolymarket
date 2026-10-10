@@ -41,6 +41,7 @@ export function checkpointReached(at: FeatureCheckpoint, p: UnlockProgress): boo
         // boss counts too, since a wall is when the party needs what opens there (the user's call)
         case 'boss': return p.prestige > 0 || p.world > at.world
             || (p.world === at.world && (p.stage > BOSS_STAGE || (p.stage === BOSS_STAGE && p.bossLost)))
+        case 'boss_beaten': return p.prestige > 0 || p.world > at.world || (p.world === at.world && p.stage > BOSS_STAGE)
         case 'worlds': return worldsClearedOf(p.prestige, p.world, p.runCleared) >= at.count
         case 'run_cleared': return p.runCleared || p.prestige > 0
         case 'prestiges': return p.prestige >= at.count
@@ -64,6 +65,7 @@ export function featureCheckpoint(feature: HqFeature): FeatureCheckpoint {
 export function checkpointLabel(at: FeatureCheckpoint): string {
     switch (at.kind) {
         case 'boss': return `fight the World ${at.world} boss`
+        case 'boss_beaten': return `beat the World ${at.world} boss`
         case 'worlds': return at.count === 1 ? 'clear a World' : `clear ${at.count} Worlds`
         case 'run_cleared': return 'clear the run'
         case 'prestiges': return at.count === 1 ? 'prestige once' : `prestige ${at.count} times`
@@ -123,8 +125,13 @@ export function nextTutorial(unlocked: readonly HqFeature[], seen: readonly stri
     return scene === 'battle' ? `${f}:unlock` : null
 }
 
+/**
+ * Whether two checkpoints open as one group. A boss fought and the same boss beaten are one: the
+ * Shop, which takes the win, comes out after the Gacha and Collections when one fight opens all three.
+ */
 function sameCheckpoint(a: FeatureCheckpoint, b: FeatureCheckpoint): boolean {
-    return JSON.stringify(a) === JSON.stringify(b)
+    const group = (c: FeatureCheckpoint) => c.kind === 'boss_beaten' ? { kind: 'boss', world: c.world } : c
+    return JSON.stringify(group(a)) === JSON.stringify(group(b))
 }
 
 /**
