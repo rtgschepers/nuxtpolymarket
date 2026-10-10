@@ -13,7 +13,7 @@ import type { SettingsScene, SettingsTarget, SettingsView } from '~/utils/hero-q
 import type { CalendarScene, CalendarTarget, CalendarView } from '~/utils/hero-quest-art/calendar-scene'
 import type { MilestonesScene, MilestonesTarget, MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
 import type { GuideTarget, GuideView } from '~/utils/hero-quest-art/guide'
-import type { RaidRewardView, RaidRowView, RaidsHover, RaidsScene, RaidsView } from '~/utils/hero-quest-art/raids-scene'
+import type { RaidLoadoutOption, RaidRewardView, RaidRowView, RaidsHover, RaidsScene, RaidsView } from '~/utils/hero-quest-art/raids-scene'
 import type { GiftReveal, HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import { LOADOUT_NAME_MAX_LENGTH } from '#shared/utils/hero-quest/constants'
@@ -102,8 +102,8 @@ const props = defineProps<{
     raids?: readonly RaidRowView[]
     /** A raid round or quick-clear is on its way. */
     raidsBusy?: boolean
-    /** Any Loadout is saved, for the Raids scene's preferred-Loadout picker. */
-    loadoutsSaved?: boolean
+    /** The saved Loadouts, for the Raids scene's preferred-Loadout picker. */
+    raidLoadouts?: readonly RaidLoadoutOption[]
     /** A holiday gift waiting to be opened, for the battle view's corner; null with none. */
     holidayGift?: HolidayGiftIconView | null
     /** The holiday gift being opened, over everything; null when none is. */
@@ -166,8 +166,8 @@ const emit = defineEmits<{
     /** A raid's enter or quick-clear button was pressed. */
     raidEnter: [raidId: RaidId]
     raidQuick: [raidId: RaidId]
-    /** A raid's preferred-Loadout picker was pressed. */
-    raidLoadout: [raidId: RaidId]
+    /** A line of a raid's preferred-Loadout list was pressed: the slot to point at, or null for none. */
+    raidLoadout: [raidId: RaidId, slotIndex: number | null]
     /** The reward popup's button was pressed. */
     raidRewardClose: []
     /** Today's calendar cell, or the make-up button, was pressed. */
@@ -377,7 +377,7 @@ defineExpose({ skipFight, closeIris })
  */
 type Target = 'challenge' | 'gift' | 'gift:ok' | 'gift:skip' | HqMenuScene | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
     | `card:${number}` | `loadout:${LoadoutButton}` | `buy:${number}` | 'shop:prev' | 'shop:next' | `class:${string}` | KitTarget | `speed:${number}:${number}`
-    | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${RaidId | 'enter' | 'quick' | 'loadout'}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
+    | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${Exclude<RaidsHover, null>}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
 
 const DETAIL_BUTTONS: readonly DetailButton[] = ['equip', 'front', 'back', 'bench', 'craft']
 const isDetailButton = (t: Target): t is DetailButton => DETAIL_BUTTONS.includes(t as DetailButton)
@@ -520,10 +520,11 @@ function targetAt(e: PointerEvent): Target | null {
         return i !== null && track?.affordable && track.cost !== null && !props.prestigeBusy ? `buy:${first + i}` : null
     }
     if (openScene.value === 'raids' && raidsHit) {
-        const at = raidsHit.raidsHoverAt(x, y)
+        const at = raidsHit.raidsHoverAt(raidsView.value, x, y)
         // the enter button waits for the fights; until then only the rows are pressed
         if (at === 'enter' || at === 'quick') return raidsHit.raidButtonEnabled(raidsView.value, at) ? `raid:${at}` : null
-        if (at === 'loadout') return raidsHit.raidLoadoutEnabled(raidsView.value) ? 'raid:loadout' : null
+        if (at === 'loadout') return raidsHit.raidLoadoutEnabled(raidsView.value) || raidPicker.value ? 'raid:loadout' : null
+        if (at?.startsWith('pick:') && props.raidsBusy) return null
         return at ? `raid:${at}` : null
     }
     if (openScene.value === 'settings' && settingsHit && props.settings) {
@@ -689,11 +690,17 @@ function onPointerUp(e: PointerEvent) {
         if (row?.claimable.length && !props.milestonesBusy) emit('claimMilestones', row.id)
     }
     else if (hit.startsWith('raid:')) {
-        const id = hit.slice(5) as RaidId | 'enter' | 'quick' | 'loadout'
+        const id = hit.slice(5) as Exclude<RaidsHover, null>
         if (id === 'enter') emit('raidEnter', raidSelected.value)
         else if (id === 'quick') emit('raidQuick', raidSelected.value)
-        else if (id === 'loadout') emit('raidLoadout', raidSelected.value)
-        else raidSelected.value = id
+        else if (id === 'loadout') raidPicker.value = !raidPicker.value
+        else if (id === 'shut') raidPicker.value = false
+        else if (id.startsWith('pick:')) {
+            const key = id.slice(5)
+            raidPicker.value = false
+            emit('raidLoadout', raidSelected.value, key === 'none' ? null : Number(key))
+        }
+        else raidSelected.value = id as RaidId
     }
     else if (hit === 'reveal') {
         // a press while the cards deal turns them all over; once they have, it puts the board away
@@ -790,7 +797,16 @@ const gachaHover = computed<GachaHover>(() => {
 })
 /** The raid shown in the Raids scene; it keeps its place while the scene is closed and reopened. */
 const raidSelected = ref<RaidId>('raid_training_grounds')
-const raidsView = computed<RaidsView>(() => ({ selected: raidSelected.value, raids: props.raids ?? [], busy: !!props.raidsBusy, loadoutsSaved: !!props.loadoutsSaved }))
+/** The preferred-Loadout list is down; leaving the scene puts it away. */
+const raidPicker = ref(false)
+watch(openScene, () => { raidPicker.value = false })
+const raidsView = computed<RaidsView>(() => ({
+    selected: raidSelected.value,
+    raids: props.raids ?? [],
+    busy: !!props.raidsBusy,
+    loadouts: props.raidLoadouts ?? [],
+    pickerOpen: raidPicker.value
+}))
 const raidsHover = computed<RaidsHover>(() => hover.value?.startsWith('raid:') ? hover.value.slice(5) as RaidsHover : null)
 const settingsHover = computed<SettingsTarget | null>(() => hover.value?.startsWith('setting:') ? hover.value.slice(8) as SettingsTarget : null)
 const calendarHover = computed<CalendarTarget | null>(() => hover.value?.startsWith('cal:') ? hover.value.slice(4) as CalendarTarget : null)

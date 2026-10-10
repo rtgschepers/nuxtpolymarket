@@ -15,7 +15,7 @@ import type { SettingsTarget, SettingsView } from '~/utils/hero-quest-art/settin
 import type { CalendarView } from '~/utils/hero-quest-art/calendar-scene'
 import type { HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
-import type { RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
+import type { RaidLoadoutOption, RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
 import type { RaidId as StageRaidId, StageRaid } from '~/utils/hero-quest-art/demo'
 import { RAIDS, type RaidId } from '#shared/utils/hero-quest/content/raids'
 import { LOADOUT_TARGETS } from '#shared/utils/hero-quest/loadout-session'
@@ -580,6 +580,7 @@ const raidRows = computed<RaidRowView[]>(() => (raids.value ?? []).map(r => ({
     id: r.id as RaidId,
     open: r.open,
     loadout: preferredName(r.id),
+    loadoutSlot: preferredName(r.id) === null ? null : loadoutPreferences.value[r.id] ?? null,
     loadoutLive: loadoutSession.value?.target === r.id && loadoutSession.value.slotIndex !== null,
     keys: r.keys,
     keyCap: r.keyCap,
@@ -595,22 +596,20 @@ function preferredName(target: string): string | null {
     return loadouts.value?.saved.find(p => p.slotIndex === slot)?.name ?? null
 }
 
-/** The saved slots a raid's picker steps through, in slot order. */
-const savedSlots = computed(() => (loadouts.value?.saved ?? []).map(p => p.slotIndex).sort((a, b) => a - b))
+/** The saved slots a raid's picker lists, in slot order. */
+const raidLoadoutOptions = computed<RaidLoadoutOption[]>(() => (loadouts.value?.saved ?? [])
+    .map(p => ({ slotIndex: p.slotIndex, name: p.name }))
+    .sort((a, b) => a.slotIndex - b.slotIndex))
 
 /**
- * The picker on a raid's screen: each press points the raid at the next saved slot, and past the
- * last at none (`loadouts.md` §4). Free; the live loadout moves on the raid's next engage.
+ * A line picked off a raid's Loadout list: the slot it now points at, or none (`loadouts.md` §4).
+ * Free; the live loadout moves on the raid's next engage.
  */
-async function onRaidLoadout(raidId: RaidId) {
-    const slots = savedSlots.value
-    if (!slots.length) return
-    const current = loadoutPreferences.value[raidId]
-    const at = current === undefined ? -1 : slots.indexOf(current)
-    const next = at + 1 < slots.length ? slots[at + 1]! : null
+async function onRaidLoadout(raidId: RaidId, slotIndex: number | null) {
+    if ((loadoutPreferences.value[raidId] ?? null) === slotIndex) return
     raidsBusy.value = true
     try {
-        await setLoadoutPreference(raidId, next)
+        await setLoadoutPreference(raidId, slotIndex)
     } catch {
         // `useHeroQuest` has already shown the error
     } finally {
@@ -1210,7 +1209,7 @@ const awayReport = computed(() => {
           :milestones-busy="milestonesBusy"
           :raids="raidRows"
           :raids-busy="raidsBusy"
-          :loadouts-saved="savedSlots.length > 0"
+          :raid-loadouts="raidLoadoutOptions"
           :raid-round="raidRound"
           :holiday-gift="holidayGift"
           :holiday-reveal="holidayReveal"
