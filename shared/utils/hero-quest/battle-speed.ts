@@ -8,7 +8,8 @@
  * is the one exclusion, once it exists.
  *
  * The block runs down in real time whether or not anyone is watching, so the only state is the
- * multiplier and the instant it expires.
+ * multiplier and the instant it expires. The one pause is a raid: while the run holds, the expiry
+ * is pushed out by the time held (`heldBattleSpeedExpiry`).
  */
 
 import {

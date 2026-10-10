@@ -44,7 +44,7 @@ Mostly already decided by other locked docs; stated here as the single reference
 
 **Naming note:** referred to here as **Battle Speed** rather than "speed-up," specifically to avoid collision with the SPD stat (`classes-and-combat.md` §2–3) — the two are unrelated mechanics that happen to share a word. SPD is a per-unit stat that shortens *cooldown length*; Battle Speed is a session-wide clock multiplier. Flagging the naming choice in case you'd rather call it something else in-game.
 
-- **Purchased in fixed-duration blocks with Gems** (the platform's premium currency, `core-progression-and-prestige.md` §4). The purchased window is **pure wall-clock** — it runs down in real time whether the app is open or not, so there's no ambiguity about "was it still running when I closed the app": it was.
+- **Purchased in fixed-duration blocks with Gems** (the platform's premium currency, `core-progression-and-prestige.md` §4). The purchased window is **pure wall-clock** — it runs down in real time whether the app is open or not, so there's no ambiguity about "was it still running when I closed the app": it was. *(Overridden for raids, 2026-10-10: the block waits while the run holds in a raid session, `open-items.md` precedence row #54.)*
 - **Revised — Battle Speed does apply offline.** (Supersedes this doc's earlier "live-session only, offline always runs at 1x" rule.) The multiplier applies to **wave-stage kill accrual** (Stages 1–4 and 6–9) both online and offline: the settle function multiplies the boosted portion of elapsed time before offline efficiency is applied. See Section 4 for exactly where it enters the formula, and `tech-architecture.md` §4b for the settle-side mechanics.
 - **Scope, stated in full:**
 

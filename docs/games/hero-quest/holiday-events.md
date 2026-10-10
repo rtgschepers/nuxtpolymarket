@@ -33,7 +33,7 @@ Starting with the most broadly-recognized, commercially-safe set for a global fr
 - **Resolved in UTC**, not the player's local timezone — avoids timezone-based double-claim exploits or disputes about "which day it is" for a given player, consistent with this project's server-authoritative principle (`tech-architecture.md` structure recap).
 - **Claim window: the holiday date plus a few following days** (e.g. a 3-day window), not a single exact-day requirement — matches the forgiving spirit already used for the daily Seal grant's bankable cap (`economy-and-currencies.md` §5), so missing the exact date doesn't simply forfeit the gift.
 - **No retroactive catch-up.** A player who starts playing after a holiday's window has closed doesn't receive it later, same as missing the window while already playing. Once per year, not banked indefinitely.
-- **Claim-then-reward**, mirroring the existing `seals/claim-daily.post.ts` pattern (`tech-architecture.md` §5) — an explicit claim action, not a silent auto-grant, so the client always has a clear "gift waiting" state to surface.
+- **Claim-then-reward**, mirroring the login calendar's `calendar/claim.post.ts` (`tech-architecture.md` §5; this first named `seals/claim-daily.post.ts`, which `open-items.md` #29 retired) — an explicit claim action, not a silent auto-grant, so the client always has a clear "gift waiting" state to surface.
 
 ---
 
@@ -66,7 +66,7 @@ What the build had to settle that this doc leaves open, none of it a rule change
 - **The window is three UTC days, the holiday counted** (`HOLIDAY_CLAIM_WINDOW_DAYS`, `UNTUNED ╧`): §2's "e.g." taken as the whole window.
 - **A gift belongs to the year its holiday fell in**, the claim's key with the holiday's ID, so a window running past New Year's Eve claims the earlier year's gift.
 - **Lunar New Year's table** (`LUNAR_NEW_YEAR_DATES`) runs 2024 to 2050, each the date in China taken as that UTC day.
-- **The claim is modelled on the login calendar** (`build-log.md` #47): §2's `seals/claim-daily.post.ts` was retired by `open-items.md` #29.
+- **The claim is modelled on the login calendar** (`build-log.md` #47), as §2 now says.
 - **The gift is claimed from its own icon, not the Calendar** (2026-10-10, the user's call), the "gift waiting" state §2 asks for: a gift box in the holiday's colours wiggles in the battle view's top-right corner while one is open and unclaimed. Pressed, it opens a reveal over the stage: the box drops in and shakes while the claim is on its way, bursts open in gold with confetti, and each reward pops out with its count running up.
 - **No feature gate** (2026-10-10, the user's call): with no catch-up, gating the claim behind an unlock would cost a new player the gift outright.
 - **Valentine's Day and Easter joined the roster** (2026-10-10, the user's call), as §1 foresaw: a row each and a gift each, no system change. Easter is computed rather than tabled.
