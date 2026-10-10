@@ -14,7 +14,7 @@ import type { SettingsTarget, SettingsView } from '~/utils/hero-quest-art/settin
 import type { CalendarView } from '~/utils/hero-quest-art/calendar-scene'
 import type { HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
-import type { TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
+import type { TraitRollView, TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
 import type { TraitGrade } from '~/utils/hero-quest-art/palette'
 import type { RaidLoadoutOption, RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
 import type { RaidId as StageRaidId, StagePack, StageRaid } from '~/utils/hero-quest-art/demo'
@@ -839,6 +839,10 @@ async function onClaimMilestones(track: string | null) {
     }
 }
 
+/** The Roll being revealed: its slots spin from the press and land once the new board is in. */
+const traitRoll = ref<TraitRollView | null>(null)
+let traitRollKey = 0
+
 /**
  * The Traits scene: the live board, the Roll's price, every Set's count and tier, and the save
  * slots. Values arrive as fractions and are spelled out here; the client holds no table.
@@ -848,7 +852,7 @@ const traitsView = computed<TraitsView>(() => {
     const gems = user.value?.gems ?? 0
     const armed = confirm.armed.value?.startsWith('trait:') ? confirm.armed.value.slice(6) as TraitsTarget : null
     if (!t) {
-        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed }
+        return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed, roll: null }
     }
     return {
         traitGems: formatNumber(t.traitGems),
@@ -886,7 +890,8 @@ const traitsView = computed<TraitsView>(() => {
         saveAffordable: t.traitGems >= t.saves.cost,
         boardFull: t.slots.every(slot => slot !== null),
         gems,
-        armed
+        armed,
+        roll: traitRoll.value
     }
 })
 const traitsBusy = ref(false)
@@ -903,7 +908,17 @@ async function onTraitAction(target: TraitsTarget) {
     confirm.clear()
     traitsBusy.value = true
     try {
-        if (kind === 'roll') await rollTraits()
+        if (kind === 'roll') {
+            const slots = traitsView.value.slots.flatMap((slot, index) => slot?.locked ? [] : [index])
+            traitRoll.value = { key: ++traitRollKey, slots, landed: false }
+            try {
+                await rollTraits()
+                traitRoll.value = { ...traitRoll.value, landed: true }
+            } catch (e) {
+                traitRoll.value = null
+                throw e
+            }
+        }
         else if (kind === 'lock') await lockTrait(i, !traitsView.value.slots[i]?.locked)
         else if (kind === 'save') await saveTraits(i)
         else if (kind === 'load') await loadTraits(i)

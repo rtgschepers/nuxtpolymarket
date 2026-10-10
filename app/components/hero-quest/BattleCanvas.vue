@@ -205,7 +205,7 @@ const INK = PALETTE[C.ink]!
 /** What the Traits scene draws before its payload lands. */
 const EMPTY_TRAITS: TraitsView = {
     traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [],
-    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null
+    saveCost: 0, saveAffordable: false, boardFull: false, gems: 0, armed: null, roll: null
 }
 /** The smallest move in the pack's HP share worth a re-render of the readout: half a percent. */
 const PACK_REPORT_STEP = 0.005
@@ -566,6 +566,8 @@ function targetAt(e: PointerEvent): Target | null {
         return at ? `ms:${at}` : null
     }
     if (openScene.value === 'traits' && traitsHit && props.traits) {
+        // a Roll still spinning or landing takes every press, to show it all
+        if (traitsScene?.rollRevealing(props.traits, sceneTime)) return 'trait:skip'
         // anything on the board is pointed at for what it is; only what can be pressed is pressed
         const at = traitsHit.traitsTargetAt(props.traits, presenter.w, x, y)
         return at ? `trait:${at}` : null
@@ -707,7 +709,10 @@ function onPointerUp(e: PointerEvent) {
     else if (hit === 'guide:next') emit('guideNext')
     else if (hit.startsWith('trait:')) {
         const target = hit.slice(6) as TraitsTarget
-        if (traitsHit && props.traits && traitsHit.traitsTargetEnabled(props.traits, target, !!props.traitsBusy)) emit('traitAction', target)
+        if (target === 'skip') {
+            if (props.traits) traitsScene?.skipRoll(props.traits)
+        }
+        else if (traitsHit && props.traits && traitsHit.traitsTargetEnabled(props.traits, target, !!props.traitsBusy)) emit('traitAction', target)
     }
     else if (hit === 'ms:all') emit('claimMilestones', null)
     else if (hit.startsWith('ms:row:')) {
