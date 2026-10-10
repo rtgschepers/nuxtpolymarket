@@ -84,10 +84,12 @@ export interface TraitRollView {
     landed: boolean
     /** What an Auto Roll came to, spelled out, for the bottom line once it lands; null for a single Roll. */
     note: string | null
+    /** An Auto Roll's running count while it goes; null for a single Roll. */
+    auto: { rolls: number, spent: number } | null
 }
 
 /** What the pointer can be over. */
-export type TraitsTarget = 'roll' | 'auto' | 'grade' | `grade:${TraitGrade}` | 'shut' | 'skip' | `slot:${number}` | `lock:${number}` | `set:${number}` | `save:${number}` | `load:${number}` | `buy:${number}`
+export type TraitsTarget = 'roll' | 'auto' | 'stop' | 'grade' | `grade:${TraitGrade}` | 'shut' | 'skip' | `slot:${number}` | `lock:${number}` | `set:${number}` | `save:${number}` | `load:${number}` | `buy:${number}`
 
 const LEFT_X = 6
 const ROWS_Y = 14
@@ -117,6 +119,7 @@ const INFO_Y = 145
 
 const ROLL_PLATE = [C.purple0, C.purple1, C.purple2] as const
 const AUTO_PLATE = [C.teal0, C.teal1, C.teal2] as const
+const STOP_PLATE = [C.red0, C.red1, C.red2] as const
 const SAVE_PLATE = [C.blue0, C.blue1, C.blue2] as const
 const LOAD_PLATE = [C.green0, C.green1, C.green2] as const
 const BUY_PLATE = [C.green0, C.green1, C.green2] as const
@@ -184,7 +187,14 @@ function fit(text: string, w: number): string {
 }
 
 /** What a point on the view is over. */
+/** An Auto Roll is going: its slots spin until the player stops it or it stops itself. */
+export function autoRolling(view: TraitsView): boolean {
+    return !!view.roll?.auto && !view.roll.landed
+}
+
 export function traitsTargetAt(view: TraitsView, w: number, x: number, y: number): TraitsTarget | null {
+    // while an Auto Roll goes, its button is STOP and nothing else answers
+    if (autoRolling(view)) return inside(AUTO, x, y) ? 'stop' : null
     // with the grade list open, only it and its chip answer; anywhere else puts it away
     if (view.gradePickerOpen) {
         if (inside(GRADE, x, y)) return 'grade'
@@ -213,7 +223,7 @@ export function traitsTargetAt(view: TraitsView, w: number, x: number, y: number
 
 /** Whether pressing a target does anything now; the rest are only pointed at. */
 export function traitsTargetEnabled(view: TraitsView, target: TraitsTarget, busy: boolean): boolean {
-    if (target === 'skip' || target === 'shut') return true
+    if (target === 'skip' || target === 'shut' || target === 'stop') return true
     if (busy) return false
     if (target === 'roll' || target === 'auto') return view.rerolls > 0 && view.affordable
     if (target === 'grade' || target.startsWith('grade:')) return true
@@ -358,7 +368,9 @@ export class TraitsScene {
         if (view.gradePickerOpen) this.drawGradeList(s, view, hover)
 
         const best = this.rollNote(view, t) ?? this.rollBest(view, t)
-        if (revealing && !best) drawText(s, 'ROLLING...', LEFT_X, INFO_Y, C.stone3, { shadow: 1 })
+        const auto = autoRolling(view) ? view.roll!.auto! : null
+        if (auto) drawText(s, fit(`AUTO ROLLING: ${auto.rolls} ROLLS, ${auto.spent} TRAIT GEMS. STOP ENDS IT.`, s.w - 12), LEFT_X, INFO_Y, C.bone1, { shadow: 1 })
+        else if (revealing && !best) drawText(s, 'ROLLING...', LEFT_X, INFO_Y, C.stone3, { shadow: 1 })
         else if (best && !hover) drawText(s, fit(best, s.w - 12), LEFT_X, INFO_Y, C.gold3, { shadow: 1 })
         else drawText(s, fit(this.info(view, hover), s.w - 12), LEFT_X, INFO_Y, hover ? C.bone1 : C.stone2, { shadow: 1 })
         return s
@@ -449,7 +461,8 @@ export class TraitsScene {
         if (view.rerolls > 0) glyph(s, CURRENCY_ICONS.trait_gems!, x0 + lw - 4, ROLL.y + 6 + sink, true)
 
         const armed = view.armed === 'auto'
-        plateButton(s, AUTO, armed ? 'SURE?' : 'AUTO', armed ? CONFIRM_PLATE : AUTO_PLATE, traitsTargetEnabled(view, 'auto', busy), hover === 'auto' || armed, pressed)
+        if (autoRolling(view)) plateButton(s, AUTO, 'STOP', STOP_PLATE, true, hover === 'stop', pressed)
+        else plateButton(s, AUTO, armed ? 'SURE?' : 'AUTO', armed ? CONFIRM_PLATE : AUTO_PLATE, traitsTargetEnabled(view, 'auto', busy), hover === 'auto' || armed, pressed)
         // the grade it stops at, in that grade's colours
         plateButton(s, GRADE, `${view.autoGrade}+`, TRAIT_GRADE_COLORS[view.autoGrade], !busy, hover === 'grade' || view.gradePickerOpen, pressed && hover === 'grade')
     }

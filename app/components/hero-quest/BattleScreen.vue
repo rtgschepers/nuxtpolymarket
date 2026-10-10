@@ -48,7 +48,7 @@ const {
     shop, voidShards, buyUpgrade, classTree, classToken, pickClass, battleSpeed, buyBattleSpeed,
     pull, freePull, settings, setSetting, raids, engageRaid, quickClearRaid, calendar, claimCalendar,
     holidays, claimHoliday, milestones, claimMilestones, ascendant, tutorials, markTutorialSeen, resetTutorials,
-    traits, rollTraits, autoRollTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot
+    traits, rollTraits, autoRollTraits, refreshTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot
 } = useHeroQuest()
 const { user, fetchSession } = useAuth()
 
@@ -845,6 +845,42 @@ const traitRoll = ref<TraitRollView | null>(null)
 let traitRollKey = 0
 /** The grade Auto Roll stops at, or better. */
 const traitAutoGrade = ref<TraitGrade>('S')
+/** STOP was pressed: the run ends after the batch on its way. Leaving the page stops it too. */
+let traitAutoStop = false
+/** Trait Gems left as the running Auto Roll's batches report them, ahead of the state read. */
+const traitAutoGems = ref<number | null>(null)
+onUnmounted(() => { traitAutoStop = true })
+
+/**
+ * An Auto Roll run: batch after batch, the count running on the stage, until a slot lands at the
+ * grade, the Trait Gems run short, or STOP. The state is read once at the end, and a batch that
+ * fails after the first ends the run quietly, since what was rolled is already paid and kept.
+ */
+async function runAutoRoll(): Promise<string> {
+    traitAutoStop = false
+    let total = { rolls: 0, spent: 0, stoppedBy: 'cap' as 'hit' | 'gems' | 'cap', slots: [] as ({ grade: string } | null)[] }
+    try {
+        while (true) {
+            let res
+            try {
+                res = await autoRollTraits(traitAutoGrade.value)
+            } catch (e) {
+                if (total.rolls === 0) throw e
+                total = { ...total, stoppedBy: 'gems' }
+                break
+            }
+            if (!res) break
+            total = { rolls: total.rolls + res.rolls, spent: total.spent + res.spent, stoppedBy: res.stoppedBy, slots: res.slots }
+            traitAutoGems.value = res.traitGems
+            if (traitRoll.value) traitRoll.value = { ...traitRoll.value, auto: { rolls: total.rolls, spent: total.spent } }
+            if (res.stoppedBy !== 'cap' || traitAutoStop) break
+        }
+    } finally {
+        await refreshTraits()
+        traitAutoGems.value = null
+    }
+    return autoRollNote(total)
+}
 
 /** What an Auto Roll came to, for the scene's bottom line. */
 function autoRollNote(res: { rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', slots: ({ grade: string } | null)[] }): string {
@@ -853,7 +889,7 @@ function autoRollNote(res: { rolls: number, spent: number, stoppedBy: 'hit' | 'g
         const best = res.slots.reduce((top, slot) => slot && TRAIT_GRADES.indexOf(slot.grade as TraitGrade) > TRAIT_GRADES.indexOf(top) ? slot.grade as TraitGrade : top, 'F' as TraitGrade)
         return `GRADE ${best} AFTER ${rolls}!`
     }
-    return res.stoppedBy === 'gems' ? `OUT OF TRAIT GEMS AFTER ${rolls}.` : `STOPPED AFTER ${rolls}. AUTO AGAIN TO GO ON.`
+    return res.stoppedBy === 'gems' ? `OUT OF TRAIT GEMS AFTER ${rolls}.` : `STOPPED AFTER ${rolls}.`
 }
 
 /**
@@ -868,7 +904,7 @@ const traitsView = computed<TraitsView>(() => {
         return { traitGems: '0', slots: [], rollCost: 0, rerolls: 0, affordable: false, sets: [], saves: [], saveCost: 0, saveAffordable: false, boardFull: false, gems, armed, roll: null, autoGrade: traitAutoGrade.value, gradePickerOpen: false }
     }
     return {
-        traitGems: formatNumber(t.traitGems),
+        traitGems: formatNumber(traitAutoGems.value ?? t.traitGems),
         slots: t.slots.map(slot => slot && {
             statName: slot.statName,
             value: `+${hqPercent(slot.value)}`,
@@ -923,6 +959,10 @@ async function onTraitAction(target: TraitsTarget) {
         if (n) traitAutoGrade.value = n as TraitGrade
         return
     }
+    if (kind === 'stop') {
+        traitAutoStop = true
+        return
+    }
     const asks = kind === 'auto' || kind === 'load' || kind === 'buy' || (kind === 'save' && !!traitsView.value.saves[i]?.grades)
     if (asks && !confirm.press(`trait:${target}`)) return
     confirm.clear()
@@ -930,14 +970,13 @@ async function onTraitAction(target: TraitsTarget) {
     try {
         if (kind === 'roll' || kind === 'auto') {
             const slots = traitsView.value.slots.flatMap((slot, index) => slot?.locked ? [] : [index])
-            traitRoll.value = { key: ++traitRollKey, slots, landed: false, note: null }
+            traitRoll.value = { key: ++traitRollKey, slots, landed: false, note: null, auto: kind === 'auto' ? { rolls: 0, spent: 0 } : null }
             try {
                 if (kind === 'roll') {
                     await rollTraits()
                     traitRoll.value = { ...traitRoll.value, landed: true }
                 } else {
-                    const res = await autoRollTraits(traitAutoGrade.value)
-                    traitRoll.value = { ...traitRoll.value, landed: true, note: res ? autoRollNote(res) : null }
+                    traitRoll.value = { ...traitRoll.value, landed: true, note: await runAutoRoll() }
                 }
             } catch (e) {
                 traitRoll.value = null

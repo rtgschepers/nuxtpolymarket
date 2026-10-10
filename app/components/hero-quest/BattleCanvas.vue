@@ -567,7 +567,11 @@ function targetAt(e: PointerEvent): Target | null {
         return at ? `ms:${at}` : null
     }
     if (openScene.value === 'traits' && traitsHit && traitsView.value) {
-        // a Roll still spinning or landing takes every press, to show it all
+        // an Auto Roll going answers only STOP; a Roll still spinning or landing takes every press, to show it all
+        if (traitsHit.autoRolling(traitsView.value)) {
+            const at = traitsHit.traitsTargetAt(traitsView.value, presenter.w, x, y)
+            return at ? `trait:${at}` : null
+        }
         if (traitsScene?.rollRevealing(traitsView.value, sceneTime)) return 'trait:skip'
         // anything on the board is pointed at for what it is; only what can be pressed is pressed
         const at = traitsHit.traitsTargetAt(traitsView.value, presenter.w, x, y)
