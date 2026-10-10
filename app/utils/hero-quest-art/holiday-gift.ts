@@ -5,7 +5,7 @@
 // out a line at a time, each count running up to what was paid.
 
 import { C } from './palette'
-import { Surface, rect, px, disc, dither, blit, hash2 } from './surface'
+import { Surface, rect, px, dither, blit, hash2 } from './surface'
 import { drawRevealAura, drawRevealBase, REVEAL_LUT, REVEAL_SIZE } from './feedback'
 import { drawSkillBanner } from './presentation'
 import { drawText, textWidth } from './font'
@@ -83,11 +83,12 @@ interface GiftDims {
     lidW: number
     lidH: number
     ribbon: number
+    /** Each bow loop's length, in pixels. */
     bow: number
 }
 
-const ICON_DIMS: GiftDims = { w: 14, h: 10, lidW: 16, lidH: 4, ribbon: 2, bow: 2.5 }
-const BIG_DIMS: GiftDims = { w: 26, h: 19, lidW: 30, lidH: 7, ribbon: 4, bow: 4.5 }
+const ICON_DIMS: GiftDims = { w: 14, h: 10, lidW: 16, lidH: 4, ribbon: 2, bow: 4 }
+const BIG_DIMS: GiftDims = { w: 26, h: 19, lidW: 30, lidH: 7, ribbon: 4, bow: 8 }
 
 /** Where the lid is: lifted off the box by `dy` (up is negative), pushed `dx`, or gone. */
 interface LidPose {
@@ -105,16 +106,51 @@ function drawLid(s: Surface, cx: number, by: number, theme: GiftTheme, d: GiftDi
     rect(s, x + 1, y + 1, d.lidW - 2, d.lidH - 2, mid)
     rect(s, x + 1, y + 1, d.lidW - 2, 1, light)
     rect(s, cx - (d.ribbon >> 1), y + 1, d.ribbon, d.lidH - 2, theme.ribbon)
-    // the bow: two loops either side of a knot
-    const r = d.bow
-    const off = Math.ceil(r)
-    disc(s, cx - off, y - r + 1, r + 1, C.ink)
-    disc(s, cx + off, y - r + 1, r + 1, C.ink)
-    disc(s, cx - off, y - r + 1, r, theme.ribbon)
-    disc(s, cx + off, y - r + 1, r, theme.ribbon)
-    rect(s, cx - 1, y - 2, 2, 3, C.ink)
-    px(s, cx - off, y - Math.round(r), C.white)
-    px(s, cx + off - 1, y - Math.round(r), C.white)
+    drawBow(s, cx, y, theme, d)
+}
+
+/**
+ * The bow on a lid whose top row is `y`: a knot the ribbon's width sitting on the lid, two rounded
+ * loops flaring out and a little up from it, each with a hole, and on the big box two tails.
+ */
+function drawBow(s: Surface, cx: number, y: number, theme: GiftTheme, d: GiftDims): void {
+    const big = d.bow > 5
+    const k0 = cx - (d.ribbon >> 1)
+    const k1 = k0 + d.ribbon - 1
+    const knotH = big ? 3 : 2
+    const ky = y - knotH + 1
+    // per column out from the knot: the loop's half-height and how far it tilts up
+    const half = big ? [0, 1, 1, 2, 2, 2, 1, 0] : [0, 1, 1, 0]
+    const tilt = big ? [0, 0, 1, 1, 1, 2, 2, 2] : [0, 1, 1, 1]
+    const holes = big ? [3, 4, 5] : []
+    if (big) {
+        // tails falling out and down over the lid, cut in a notch
+        for (const side of [-1, 1]) {
+            const x0 = side < 0 ? k0 : k1
+            for (let j = 1; j <= 3; j++) {
+                const tx = x0 + side * j
+                rect(s, Math.min(tx, tx + side), y + j, 2, 1, theme.ribbon)
+                px(s, tx + side * 2, y + j, C.ink)
+                px(s, tx - side, y + j + 1, C.ink)
+            }
+            px(s, x0 + side * 3, y + 4, C.ink)
+        }
+    }
+    for (const side of [-1, 1]) {
+        for (let i = 0; i < half.length; i++) {
+            const x = (side < 0 ? k0 - 1 : k1 + 1) + side * i
+            const end = i === half.length - 1
+            const top = ky - half[i]! - tilt[i]!
+            const bot = ky + knotH - 1 + half[i]! - tilt[i]!
+            for (let yy = top; yy <= bot; yy++) px(s, x, yy, end || yy === top || yy === bot ? C.ink : theme.ribbon)
+            if (holes.includes(i)) px(s, x, ky - tilt[i]! + (big ? 1 : 0), C.ink)
+            if (big && i === 4) px(s, x, ky - tilt[i]!, C.ink)
+            if (i === 1) px(s, x, top + 1, C.white)
+        }
+    }
+    rect(s, k0 - 1, ky - 1, d.ribbon + 2, knotH + 2, C.ink)
+    rect(s, k0, ky, d.ribbon, knotH, theme.ribbon)
+    px(s, k0, ky, C.white)
 }
 
 /** The box: its body standing on `by` (its bottom row), and the lid where `lid` puts it. */
@@ -213,8 +249,9 @@ export function drawGiftIconIn(s: Surface, b: Box, t: number, view: HolidayGiftI
     const tick = Math.floor(t * 10)
     for (let i = 0; i < 3; i++) {
         if ((tick + i * 5) % 14 >= 4 && !hover) continue
-        const gx = b.x + Math.round(hash2(31, i) * (b.w - 2)) + 1
-        const gy = b.y + Math.round(hash2(32, i) * 8)
+        // either side of the box, clear of the bow
+        const gx = i % 2 ? b.x + b.w - 1 : b.x
+        const gy = b.y + 2 + Math.round(hash2(32, i) * 10)
         px(s, gx, gy, C.white)
         px(s, gx - 1, gy, C.gold3); px(s, gx + 1, gy, C.gold3); px(s, gx, gy - 1, C.gold3); px(s, gx, gy + 1, C.gold3)
     }
@@ -232,6 +269,8 @@ const MIN_SHAKE = 0.5
 /** After the burst, the first line pops out this late, and each next one this much later. */
 const LINES_AFTER = 0.55
 const LINE_GAP = 0.3
+/** Rows between reward lines, in pixels. */
+const LINE_STEP = 15
 /** Each line's count runs up this long. */
 const COUNT_FOR = 0.6
 const FLASH_FOR = 1.4
@@ -363,7 +402,7 @@ export class GiftReveal {
             const col = cols === 2 ? i % 2 : 0
             const row = cols === 2 ? i >> 1 : i
             const x0 = cols === 2 ? p.x + 8 + col * colW : cx - (colW >> 1) + 16
-            const y0 = top + row * 11 + Math.round((1 - ease(clamp01(out / 0.15))) * 4)
+            const y0 = top + row * LINE_STEP + Math.round((1 - ease(clamp01(out / 0.15))) * 4)
             const counted = Math.floor(line.amount * ease(clamp01(out / COUNT_FOR)))
             const text = `+${formatHq(counted).toUpperCase()} ${line.label}`
             glyph(s, CURRENCY_ICONS[line.icon] ?? CURRENCY_ICONS.gold!, x0 + 4, y0 + 2, true)
