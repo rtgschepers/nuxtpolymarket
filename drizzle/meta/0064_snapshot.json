@@ -1,5 +1,5 @@
 {
-  "id": "8d6c4097-b0a6-4154-aa7c-d8b1ff8a76f7",
+  "id": "d6c5e963-ef9a-4c9d-9b5a-89c93c28b2de",
   "prevId": "4db479e6-31cd-4b1b-ae62-3709edfd09d7",
   "version": "7",
   "dialect": "postgresql",
@@ -4053,12 +4053,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "defense_gpn_log": {
-          "name": "defense_gpn_log",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
         "arena_rating": {
           "name": "arena_rating",
           "type": "integer",
@@ -4107,6 +4101,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "arena_refreshes_today": {
+          "name": "arena_refreshes_today",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "arena_refresh_date": {
+          "name": "arena_refresh_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "arena_candidates": {
           "name": "arena_candidates",
           "type": "jsonb",
@@ -4121,21 +4128,6 @@
           "columns": [
             {
               "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "hq_state_defense_gpn_log_idx": {
-          "name": "hq_state_defense_gpn_log_idx",
-          "columns": [
-            {
-              "expression": "defense_gpn_log",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

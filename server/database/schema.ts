@@ -1285,13 +1285,11 @@ export const hqState = pgTable('hq_state', {
    */
   defenseLoadout: jsonb('defense_loadout').$type<ArenaDefenseLoadout>(),
   /**
-   * Defense GPN (§2): the GPN of the party `defenseLoadout` fields, Decimal as text, and its log10,
-   * which is what the matchmaking band is searched on (a Decimal can outgrow a double; its log
-   * can't). Written when the defence is saved, and only then, per the locked docs; the defender's
-   * level and collection move it between saves (`open-items.md` #52).
+   * Defense GPN (§2): the GPN of the party `defenseLoadout` fields, Decimal as text, for show.
+   * Written when the defence is saved, and only then: a defence that falls behind is the player's
+   * to set again (the user's call, 2026-10-10). Matchmaking reads the Rating, not this.
    */
   defenseGpn: text('defense_gpn'),
-  defenseGpnLog: doublePrecision('defense_gpn_log'),
   /**
    * Rating (§4) and matches fought for `arenaSeasonId`, the season they belong to (0: never). A row
    * from an earlier season is rolled to the current one, back to the start, the first time anything
@@ -1309,14 +1307,16 @@ export const hqState = pgTable('hq_state', {
   arenaAttemptsUsedToday: integer('arena_attempts_used_today').notNull().default(0),
   arenaExtraAttemptsPurchasedToday: integer('arena_extra_attempts_purchased_today').notNull().default(0),
   arenaAttemptDate: text('arena_attempt_date'),
+  /** Today's list redraws (two free, then Gems) and the UTC day they count for, as the attacks are. */
+  arenaRefreshesToday: integer('arena_refreshes_today').notNull().default(0),
+  arenaRefreshDate: text('arena_refresh_date'),
   /**
    * The opponent list (§2): a user ID per slot, null for a Training Dummy. Empty until first drawn;
-   * redrawn by a paid refresh and after every attack.
+   * redrawn by a refresh and after every attack.
    */
   arenaCandidates: jsonb('arena_candidates').$type<(string | null)[]>().notNull().default([])
 }, t => [
   index('hq_state_userId_idx').on(t.userId),
-  index('hq_state_defense_gpn_log_idx').on(t.defenseGpnLog),
   index('hq_state_arena_rating_idx').on(t.arenaSeasonId, t.arenaRating)
 ])
 

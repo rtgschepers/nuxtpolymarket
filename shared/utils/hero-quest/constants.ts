@@ -1110,17 +1110,22 @@ export const RAID_RAMPAGE_CAP_SECONDS = 300
 /** Opponents on the list at once (§2). */
 export const ARENA_CANDIDATE_COUNT = 3
 /**
- * How close a defender's Defense GPN must be to the attacker's live GPN to be drawn as a real
- * candidate (§2, `open-items.md` #2): within ±this share of it, taken on GPN's root form. A flat
- * `GPN_DISPLAY_SCALE` cancels in the ratio, so the band means the same before and after it. A
- * slot the band can't fill gets a Training Dummy (§2a) rather than a wider band.
- *
- * ±20% on the root is about −36% / +44% on the old product form. A placeholder: the width is still
- * an open design question (#2), to be set against a real population.
+ * How close a defender's Rating must be to the attacker's to be drawn as a real candidate (§2,
+ * `open-items.md` #2): within ±this many points, this season's Rating, a row not yet in it counting
+ * as `ARENA_RATING_START` (the user's call, 2026-10-10: Rating, not GPN, so a loadout swap can't move
+ * a player's band; early in a season strong and weak players meet, and a few matches part them). A
+ * slot the band can't fill gets a Training Dummy (§2a) rather than a wider band. Checked only when
+ * the list is drawn. A placeholder: the width wants a real population.
  */
-export const ARENA_MATCH_BAND_PCT = 0.2 // UNTUNED ╧
-/** Gems to draw a fresh list of candidates (§2). Doc-specified. */
-export const ARENA_REFRESH_GEMS = 10
+export const ARENA_MATCH_BAND_RATING = 200 // UNTUNED ╧
+/**
+ * Redrawing the opponent list (§2; the user's call, 2026-10-10): free this many times a UTC day, then
+ * Gems, 5 and doubling: 5, 10, 20, … The ladder starts over each day. A list is also redrawn free after
+ * every attack, so the same three can't be farmed.
+ */
+export const ARENA_FREE_REFRESHES_PER_DAY = 2
+export const ARENA_REFRESH_BASE_GEMS = 5
+export const ARENA_REFRESH_GROWTH = 2
 
 /** Free attacks a day, reset at UTC midnight and never banked (§3). Doc-specified. */
 export const ARENA_FREE_ATTEMPTS_PER_DAY = 5

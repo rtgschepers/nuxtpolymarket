@@ -14,7 +14,10 @@ import {
     ARENA_EXTRA_ATTEMPT_BASE_GEMS,
     ARENA_EXTRA_ATTEMPT_GROWTH,
     ARENA_FREE_ATTEMPTS_PER_DAY,
-    ARENA_MATCH_BAND_PCT,
+    ARENA_FREE_REFRESHES_PER_DAY,
+    ARENA_MATCH_BAND_RATING,
+    ARENA_REFRESH_BASE_GEMS,
+    ARENA_REFRESH_GROWTH,
     ARENA_RATING_FLOOR,
     ARENA_RATING_START,
     ARENA_SEASON_DAYS,
@@ -31,7 +34,6 @@ import {
     MEDAL_BASE_WIN,
     MEDAL_UPSET_BONUS
 } from './constants'
-import { D, type DecimalSource } from './numbers'
 import { RAIDS, type RaidId } from './content/raids'
 import type { GachaSystem } from './gacha'
 import type { FormationRow } from './types'
@@ -135,6 +137,23 @@ export function attemptsLeft(today: ArenaAttempts): number {
     return Math.max(0, ARENA_FREE_ATTEMPTS_PER_DAY + today.purchased - today.used)
 }
 
+/** Today's list redraws as stored: the UTC day they count for, and how many were made. */
+export interface ArenaRefreshes {
+    date: string | null
+    used: number
+}
+
+/** Today's redraws: as stored on the same UTC day, back to none on a new one. */
+export function refreshesOn(stored: ArenaRefreshes, today: string): ArenaRefreshes {
+    return stored.date === today ? stored : { date: today, used: 0 }
+}
+
+/** The next redraw's Gem price after `usedToday` today: free for the first two, then 5, 10, 20, … */
+export function refreshPrice(usedToday: number): number {
+    const paid = Math.max(0, Math.floor(usedToday)) - ARENA_FREE_REFRESHES_PER_DAY
+    return paid < 0 ? 0 : Math.round(ARENA_REFRESH_BASE_GEMS * ARENA_REFRESH_GROWTH ** paid)
+}
+
 /** The price of the next extra attack, after `purchasedToday` bought today: 10, 20, 40, … Gems (§3). */
 export function extraAttemptPrice(purchasedToday: number): number {
     return Math.round(ARENA_EXTRA_ATTEMPT_BASE_GEMS * ARENA_EXTRA_ATTEMPT_GROWTH ** Math.max(0, Math.floor(purchasedToday)))
@@ -193,33 +212,14 @@ export function medalsFor(won: boolean, expectedAttacker: number | null): number
 
 // ── Matchmaking ────────────────────────────────────────────────────────────────────
 
-/**
- * A GPN on the log10 scale the band is searched on: Decimal GPNs outgrow a double deep into the
- * curve, but their logarithm never does, and a ±% band is a fixed width in log space. Null for no
- * power at all, which no band holds.
- */
-export function gpnLog10(gpn: DecimalSource): number | null {
-    const value = D(gpn)
-    if (!value.gt(0)) return null
-    const log = value.log10().toNumber()
-    return Number.isFinite(log) ? log : null
+/** The Rating band around an attacker's Rating a defender's must fall in (§2): ±`ARENA_MATCH_BAND_RATING`. */
+export function matchBand(attackerRating: number, width = ARENA_MATCH_BAND_RATING): { lo: number, hi: number } {
+    return { lo: attackerRating - width, hi: attackerRating + width }
 }
 
-/**
- * The band around the attacker's live GPN a defender's Defense GPN must fall in (§2), as log10
- * bounds: `[gpn × (1 − pct), gpn × (1 + pct)]`.
- */
-export function matchBand(attackerGpn: DecimalSource, pct = ARENA_MATCH_BAND_PCT): { lo: number, hi: number } | null {
-    const log = gpnLog10(attackerGpn)
-    if (log === null) return null
-    const below = Math.max(1e-9, 1 - pct)
-    return { lo: log + Math.log10(below), hi: log + Math.log10(1 + pct) }
-}
-
-export function inMatchBand(attackerGpn: DecimalSource, defenderGpn: DecimalSource, pct = ARENA_MATCH_BAND_PCT): boolean {
-    const band = matchBand(attackerGpn, pct)
-    const log = gpnLog10(defenderGpn)
-    return band !== null && log !== null && log >= band.lo && log <= band.hi
+export function inMatchBand(attackerRating: number, defenderRating: number, width = ARENA_MATCH_BAND_RATING): boolean {
+    const band = matchBand(attackerRating, width)
+    return defenderRating >= band.lo && defenderRating <= band.hi
 }
 
 /**

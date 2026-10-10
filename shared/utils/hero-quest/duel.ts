@@ -58,6 +58,8 @@ export interface DuelInput {
 export interface DuelResult extends FightResult {
     /** The attacker's units' max HP, in `unitIndex` order, for the replay's frames. */
     partyMaxHps: string[]
+    /** Whether the attacker won: a win, or a timeout with more of its max HP left than the defender. */
+    attackerWon: boolean
 }
 
 type SideIndex = 0 | 1
@@ -364,6 +366,13 @@ export function runDuel(input: DuelInput): DuelResult {
         }
     }
 
+    /** A side's HP left, as a share of its max. */
+    const share = (side: SideIndex): Decimal => {
+        const total = sides[side].reduce((sum, f) => sum.add(f.stats.maxHp), ZERO)
+        const left = sides[side].reduce((sum, f) => sum.add(decMaxZero(f.hp)), ZERO)
+        return total.lte(0) ? ZERO : left.div(total)
+    }
+
     const finish = (outcome: DuelResult['outcome'], at: number): DuelResult => {
         const defenders = sides[1]
         const maxHps = defenders.map(f => f.stats.maxHp)
@@ -372,6 +381,8 @@ export function runDuel(input: DuelInput): DuelResult {
         const dealt = total.lte(0) ? 1 : ONE.sub(left.div(total)).toNumber()
         return {
             outcome,
+            // a timeout goes against the side with less of its max HP left, a dead heat to the defender (the user's call, 2026-10-10)
+            attackerWon: outcome === 'win' || (outcome === 'timeout' && share(0).gt(share(1))),
             secondsElapsed: at,
             events,
             enemyHpRemaining: left.toString(),
@@ -422,5 +433,6 @@ export function runArenaDummy(hero: HeroSnapshot, position: RunPosition, seed: n
         seed,
         encounter: { pack: { members: [{ hp, pwr: ZERO, def: ZERO }] }, seconds: ARENA_FIGHT_SECONDS, passive: true }
     })
-    return { ...fight, partyMaxHps: units.map(unit => unit.maxHp.toString()) }
+    // the dummy always falls (§2a)
+    return { ...fight, partyMaxHps: units.map(unit => unit.maxHp.toString()), attackerWon: true }
 }

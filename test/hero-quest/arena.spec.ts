@@ -12,9 +12,10 @@ import {
     eloUpdate,
     expectedScore,
     extraAttemptPrice,
-    gpnLog10,
     inMatchBand,
     matchBand,
+    refreshPrice,
+    refreshesOn,
     medalsFor,
     rankStandings,
     ratingIn,
@@ -28,7 +29,8 @@ import {
     ARENA_EXTRA_ATTEMPT_BASE_GEMS,
     ARENA_FIGHT_SECONDS,
     ARENA_FREE_ATTEMPTS_PER_DAY,
-    ARENA_MATCH_BAND_PCT,
+    ARENA_FREE_REFRESHES_PER_DAY,
+    ARENA_MATCH_BAND_RATING,
     ARENA_RATING_FLOOR,
     ARENA_RATING_START,
     ARENA_SEASON_DAYS,
@@ -36,13 +38,12 @@ import {
     ARENA_SEASON_REWARDS,
     ARENA_SHOP_GEM_PRICE,
     BATTLE_SPEED_ANCHOR_GEMS,
-    GPN_DISPLAY_SCALE,
     K_ATTACK,
     K_DEFEND,
     MEDAL_BASE_LOSS,
     MEDAL_BASE_WIN
 } from '#shared/utils/hero-quest/constants'
-import { D, ZERO } from '#shared/utils/hero-quest/numbers'
+import { ZERO } from '#shared/utils/hero-quest/numbers'
 import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { RARITY_STAT_MULTIPLIER, getChampion } from '#shared/utils/hero-quest/content/champions'
 import { RAIDS } from '#shared/utils/hero-quest/content/raids'
@@ -120,29 +121,20 @@ describe('hero-quest arena', () => {
     })
 
     describe('the matchmaking band (§2, #2)', () => {
-        it('takes ±ARENA_MATCH_BAND_PCT around the attacker', () => {
-            const band = matchBand(1000)!
-            expect(10 ** band.lo).toBeCloseTo(1000 * (1 - ARENA_MATCH_BAND_PCT), 6)
-            expect(10 ** band.hi).toBeCloseTo(1000 * (1 + ARENA_MATCH_BAND_PCT), 6)
-            expect(inMatchBand(1000, 1000 * (1 + ARENA_MATCH_BAND_PCT * 0.99))).toBe(true)
-            expect(inMatchBand(1000, 1000 * (1 + ARENA_MATCH_BAND_PCT * 1.01))).toBe(false)
-            expect(inMatchBand(1000, 1000 * (1 - ARENA_MATCH_BAND_PCT * 1.01))).toBe(false)
+        it('takes ±ARENA_MATCH_BAND_RATING Rating around the attacker, ends included', () => {
+            expect(matchBand(1000)).toEqual({ lo: 1000 - ARENA_MATCH_BAND_RATING, hi: 1000 + ARENA_MATCH_BAND_RATING })
+            expect(inMatchBand(1000, 1000 + ARENA_MATCH_BAND_RATING)).toBe(true)
+            expect(inMatchBand(1000, 1000 + ARENA_MATCH_BAND_RATING + 1)).toBe(false)
+            expect(inMatchBand(1000, 1000 - ARENA_MATCH_BAND_RATING - 1)).toBe(false)
         })
+    })
 
-        it('is a ratio, so GPN_DISPLAY_SCALE cancels out of it', () => {
-            const pairs = [[1000, 1150], [1000, 1250], [5e12, 4.2e12], [3e40, 3.7e40]] as const
-            for (const [a, d] of pairs) {
-                expect(inMatchBand(D(a).mul(GPN_DISPLAY_SCALE), D(d).mul(GPN_DISPLAY_SCALE))).toBe(inMatchBand(a, d))
-            }
-        })
-
-        it('holds Decimal GPNs far past a double', () => {
-            const huge = D('1e5000')
-            expect(gpnLog10(huge)).toBeCloseTo(5000, 6)
-            expect(inMatchBand(huge, huge.mul(1.1))).toBe(true)
-            expect(inMatchBand(huge, huge.mul(3))).toBe(false)
-            expect(gpnLog10(0)).toBeNull()
-            expect(matchBand(0)).toBeNull()
+    describe('refreshes', () => {
+        it('gives two free a day, then 5 Gems doubling, starting over each UTC day', () => {
+            expect([0, 1, 2, 3, 4, 5].map(refreshPrice)).toEqual([0, 0, 5, 10, 20, 40])
+            expect(ARENA_FREE_REFRESHES_PER_DAY).toBe(2)
+            expect(refreshesOn({ date: '2026-10-10', used: 4 }, '2026-10-10')).toEqual({ date: '2026-10-10', used: 4 })
+            expect(refreshesOn({ date: '2026-10-09', used: 4 }, '2026-10-10')).toEqual({ date: '2026-10-10', used: 0 })
         })
     })
 
@@ -261,6 +253,20 @@ describe('hero-quest arena', () => {
             expect(fight.enemyHpRemaining).toBe('0')
             expect(fight.secondsElapsed).toBeLessThan(ARENA_FIGHT_SECONDS)
             expect(fight.events.some(e => e.kind === 'enemy_down')).toBe(true)
+        })
+
+        it('gives a timeout to the side with more of its max HP left, a dead heat to the defender', () => {
+            // a clock too short for either side to finish: the shares decide
+            const ahead = runDuel({ attacker: hero(60), defender: hero(50), seed: 3, seconds: 2 })
+            expect(ahead.outcome).toBe('timeout')
+            expect(ahead.attackerWon).toBe(true)
+            const behind = runDuel({ attacker: hero(50), defender: hero(60), seed: 3, seconds: 2 })
+            expect(behind.outcome).toBe('timeout')
+            expect(behind.attackerWon).toBe(false)
+            // no time at all: both untouched, and the defence holds
+            const even = runDuel({ attacker: strong, defender: strong, seed: 3, seconds: 0 })
+            expect(even.outcome).toBe('timeout')
+            expect(even.attackerWon).toBe(false)
         })
 
         it('loses an attack the defence outclasses', () => {

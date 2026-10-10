@@ -26,10 +26,10 @@
 
 import { and, desc, eq, gt, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db, type DbExecutor } from '#server/database'
-import { hqArenaLog, hqArenaSeasonResults, hqArenaSeasons, hqFights, hqLoadouts, hqRaidState, hqState, user } from '#server/database/schema'
+import { hqArenaLog, hqArenaSeasonResults, hqArenaSeasons, hqFights, hqRaidState, hqState, user } from '#server/database/schema'
 import { credit, creditGems, debitGems } from '#server/utils/balance'
-import { defenseGpnOf, getCollections, getShopLevels, getTraitBoard, heroSnapshotOf, loadoutSlots, positionOf, sealGrant, tenureDaysOf, withDefenseLoadout, type HqCollections, type HqStateRow } from '#server/utils/hero-quest'
-import { validateLiveLoadout, type LoadoutInput } from '#server/utils/hero-quest-loadout'
+import { defenseGpnOf, getCollections, getShopLevels, getTraitBoard, heroSnapshotOf, positionOf, restoreLoadoutSession, sealGrant, tenureDaysOf, withDefenseLoadout, type HqCollections, type HqStateRow } from '#server/utils/hero-quest'
+import { engageLoadout, validateLiveLoadout, type LoadoutInput } from '#server/utils/hero-quest-loadout'
 import { lockRaid } from '#server/utils/hero-quest-raids'
 import {
     ARENA_DUMMY_ID,
@@ -44,35 +44,42 @@ import {
     matchBand,
     medalsFor,
     rankStandings,
+    ratingIn,
+    refreshPrice,
+    refreshesOn,
     rollStanding,
     seasonRewardFor,
     type ArenaAttempts,
+    type ArenaRefreshes,
     type ArenaDefenseLoadout,
     type ArenaStanding
 } from '#shared/utils/hero-quest/arena'
 import { runArenaDummy, runDuel, type DuelResult } from '#shared/utils/hero-quest/duel'
-import { globalPower } from '#shared/utils/hero-quest/power'
 import { partyUnitStats } from '#shared/utils/hero-quest/stats'
 import { goldPerHourAt } from '#shared/utils/hero-quest/settle'
 import { ladderDateKey } from '#shared/utils/hero-quest/gacha'
 import { getRaid } from '#shared/utils/hero-quest/content/raids'
 import {
     ARENA_FREE_ATTEMPTS_PER_DAY,
+    ARENA_FREE_REFRESHES_PER_DAY,
     ARENA_LEADERBOARD_NEIGHBORS,
     ARENA_LEADERBOARD_TOP,
     ARENA_LOG_SIZE,
-    ARENA_REFRESH_GEMS,
+    ARENA_RATING_START,
     ARENA_SHOP_MAX_QUANTITY
 } from '#shared/utils/hero-quest/constants'
 import { randomInt } from '#shared/utils/random'
 import type { HeroSnapshot } from '#shared/utils/hero-quest/types'
 import type { TraitBoard } from '#shared/utils/hero-quest/traits'
-import type { Decimal } from '#shared/utils/hero-quest/numbers'
 
 // ── Standing, attempts, defence ────────────────────────────────────────────────────
 
 export function standingOf(state: HqStateRow): ArenaStanding {
     return { season: state.arenaSeasonId, rating: state.arenaRating, matches: state.arenaSeasonMatches }
+}
+
+function refreshesOf(state: HqStateRow): ArenaRefreshes {
+    return { date: state.arenaRefreshDate, used: state.arenaRefreshesToday }
 }
 
 function attemptsOf(state: HqStateRow): ArenaAttempts {
@@ -184,44 +191,29 @@ export async function claimSeasonRewards(tx: DbExecutor, userId: string) {
 
 // ── The opponent list ──────────────────────────────────────────────────────────────
 
-/** Everyone with a defence whose Defense GPN is in band of `gpn` (§2), the attacker left out. */
-async function candidatePool(executor: DbExecutor, userId: string, gpn: Decimal): Promise<string[]> {
-    const band = matchBand(gpn)
-    if (!band) return []
+/**
+ * The players a list is drawn from (§2): everyone else with a defence whose Rating this season is
+ * within `ARENA_MATCH_BAND_RATING` of the attacker's, a row not yet rolled into the season counting
+ * at `ARENA_RATING_START` (the user's call, 2026-10-10: the band is on Rating, not GPN). The band is
+ * held only here, when the list is drawn: whoever is on it stays attackable until it is redrawn.
+ */
+async function candidatePool(executor: DbExecutor, userId: string, rating: number, season: number): Promise<string[]> {
+    const band = matchBand(rating)
+    const current = sql`case when ${hqState.arenaSeasonId} = ${season} then ${hqState.arenaRating} else ${ARENA_RATING_START} end`
     const rows = await executor.select({ userId: hqState.userId })
         .from(hqState)
         .where(and(
             ne(hqState.userId, userId),
             isNotNull(hqState.defenseLoadout),
-            sql`${hqState.defenseGpnLog} between ${band.lo} and ${band.hi}`
+            sql`${current} between ${band.lo} and ${band.hi}`
         ))
     return rows.map(row => row.userId)
 }
 
-/**
- * Whether every real opponent on `candidates` still fields a defence in band of `hero` (§2). The
- * band is the one `candidatePool` draws with, on the same stored Defense GPN.
- */
-async function listInBand(executor: DbExecutor, candidates: readonly (string | null)[], hero: HeroSnapshot): Promise<boolean> {
-    const ids = candidates.filter((id): id is string => id !== null)
-    if (ids.length === 0) return true
-    const band = matchBand(globalPower(hero).gpn)
-    if (!band) return false
-    const rows = await executor.select({ log: hqState.defenseGpnLog })
-        .from(hqState)
-        .where(and(inArray(hqState.userId, ids), isNotNull(hqState.defenseLoadout)))
-    return rows.length === ids.length && rows.every(row => row.log !== null && row.log >= band.lo && row.log <= band.hi)
-}
-
-/** A fresh list for the attacker whose live party is `hero`: in-band players at random, dummies for the rest (§2a). */
-async function drawFor(executor: DbExecutor, userId: string, hero: HeroSnapshot): Promise<(string | null)[]> {
-    const pool = await candidatePool(executor, userId, globalPower(hero).gpn)
+/** A fresh list for the attacker at `rating`: in-band players at random, dummies for the rest (§2a). */
+async function drawFor(executor: DbExecutor, userId: string, rating: number, season: number): Promise<(string | null)[]> {
+    const pool = await candidatePool(executor, userId, rating, season)
     return drawCandidates(pool, n => randomInt(0, n - 1))
-}
-
-function liveHeroOf(executor: DbExecutor, state: HqStateRow, bankedGold?: number): Promise<HeroSnapshot> {
-    return Promise.all([getShopLevels(state.userId, executor), getCollections(state.userId, executor), getTraitBoard(state.userId, executor)])
-        .then(([shop, collections, traits]) => heroSnapshotOf(state, shop, collections, bankedGold, traits))
 }
 
 export interface ArenaCandidate {
@@ -278,27 +270,37 @@ export async function serializeCandidates(executor: DbExecutor, candidates: read
  * the party has left a listed opponent's band (an attack refuses one out of band). Call after a
  * settle, so the attacker's GPN is the run's as it stands.
  */
+/** The list as it stands, drawn free the first time it is read; a list once drawn is kept until a refresh or an attack. */
 export async function getCandidates(userId: string, now: number) {
     return db.transaction(async (tx) => {
         const state = await lockOwn(tx, userId)
+        const season = arenaSeasonAt(now)
         let candidates = state.arenaCandidates
-        const hero = await liveHeroOf(tx, state)
-        if (candidates.length === 0 || !(await listInBand(tx, candidates, hero))) {
-            candidates = await drawFor(tx, userId, hero)
+        if (candidates.length === 0) {
+            candidates = await drawFor(tx, userId, ratingIn(standingOf(state), season), season)
             await tx.update(hqState).set({ arenaCandidates: candidates }).where(eq(hqState.userId, userId))
         }
-        return serializeCandidates(tx, candidates, arenaSeasonAt(now))
+        return serializeCandidates(tx, candidates, season)
     })
 }
 
-/** Pay `ARENA_REFRESH_GEMS` for a new list (§2). Each refresh pays for its own draw. */
+/**
+ * Redraw the list (§2): free `ARENA_FREE_REFRESHES_PER_DAY` times a UTC day, then 5, 10, 20, … Gems
+ * (the user's call, 2026-10-10). The day's count is read and written under the row lock, so a burst
+ * prices each redraw at its own rung.
+ */
 export async function refreshCandidates(userId: string, now: number) {
     return db.transaction(async (tx) => {
         const state = await lockOwn(tx, userId)
-        await debitGems(userId, ARENA_REFRESH_GEMS, tx)
-        const candidates = await drawFor(tx, userId, await liveHeroOf(tx, state))
-        await tx.update(hqState).set({ arenaCandidates: candidates }).where(eq(hqState.userId, userId))
-        return { gemsSpent: ARENA_REFRESH_GEMS, candidates: await serializeCandidates(tx, candidates, arenaSeasonAt(now)) }
+        const today = refreshesOn(refreshesOf(state), ladderDateKey(now))
+        const price = refreshPrice(today.used)
+        if (price > 0) await debitGems(userId, price, tx)
+        const season = arenaSeasonAt(now)
+        const candidates = await drawFor(tx, userId, ratingIn(standingOf(state), season), season)
+        await tx.update(hqState)
+            .set({ arenaCandidates: candidates, arenaRefreshDate: today.date, arenaRefreshesToday: today.used + 1 })
+            .where(eq(hqState.userId, userId))
+        return { gemsSpent: price, nextPrice: refreshPrice(today.used + 1), candidates: await serializeCandidates(tx, candidates, season) }
     })
 }
 
@@ -319,38 +321,17 @@ export async function buyAttempt(tx: DbExecutor, userId: string, now: number) {
 
 // ── The defence ────────────────────────────────────────────────────────────────────
 
-export type DefenseSource = { source: 'live' } | { source: 'loadout', slotIndex: number } | ({ source: 'custom' } & LoadoutInput)
-
 /**
- * Save the defence (§1): a copy of the live loadout, of a saved Loadout, or five components named
- * outright, checked against ownership and slot counts exactly as an equip is. Free, and never
- * touches the live loadout. Defense GPN is recomputed with it.
+ * "Set current loadout as defence" (§1; the user's call, 2026-10-10: the one way a defence is set,
+ * kept apart from the saved Loadout slots). The player's own loadout: a raid's or the Arena's
+ * preferred Loadout still live is put back first. Checked against ownership and slot counts as an
+ * equip is, free, and never touches the live loadout. Defense GPN is recomputed with it, and only
+ * here: a defence that falls behind the player is theirs to set again.
  */
-export async function setDefense(tx: DbExecutor, userId: string, request: DefenseSource) {
-    const state = await lockOwn(tx, userId)
+export async function setDefense(tx: DbExecutor, userId: string) {
+    const state = await restoreLoadoutSession(tx, userId, await lockOwn(tx, userId))
     const shopLevels = await getShopLevels(userId, tx)
-
-    let input: LoadoutInput
-    if (request.source === 'live') {
-        input = { championIds: state.partyChampionIds, formation: state.formation, skillIds: state.equippedSkillIds, artifactIds: state.equippedArtifactIds, gear: state.equippedGear }
-    } else if (request.source === 'loadout') {
-        if (!Number.isInteger(request.slotIndex) || request.slotIndex < 0 || request.slotIndex >= loadoutSlots(shopLevels)) {
-            throw createError({ statusCode: 400, statusMessage: 'That loadout slot is locked' })
-        }
-        const [preset] = await tx.select().from(hqLoadouts)
-            .where(and(eq(hqLoadouts.userId, userId), eq(hqLoadouts.slotIndex, request.slotIndex)))
-        if (!preset) throw createError({ statusCode: 400, statusMessage: 'Nothing saved in that slot' })
-        input = { championIds: preset.partyChampionIds, formation: preset.formation, skillIds: preset.equippedSkillIds, artifactIds: preset.equippedArtifactIds, gear: preset.equippedGear }
-    } else {
-        // every component, so nothing falls back to the live loadout's
-        input = {
-            championIds: request.championIds ?? [],
-            formation: request.formation ?? {},
-            skillIds: request.skillIds ?? [],
-            artifactIds: request.artifactIds ?? [],
-            gear: request.gear ?? {}
-        }
-    }
+    const input: LoadoutInput = { championIds: state.partyChampionIds, formation: state.formation, skillIds: state.equippedSkillIds, artifactIds: state.equippedArtifactIds, gear: state.equippedGear }
 
     const writes = await validateLiveLoadout(tx, userId, state, input, shopLevels)
     const defense: ArenaDefenseLoadout = {
@@ -414,19 +395,12 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
     if (attemptsLeft(attempts) < 1) throw createError({ statusCode: 400, statusMessage: 'No attacks left today' })
 
     // ── The attacker's party. ──
-    // The live loadout, exactly as it stands: this is the seam for the preferred-Loadout
-    // auto-apply (`loadouts.md` §4, `arena.md` §1). When the Arena has a preferred Loadout, it is
-    // applied to the live state here, before the snapshot below is taken and before the fight runs,
-    // and reverted on leaving the Arena; the attempt is spent only after, so the swap always lands
-    // before the cost. Built by the generic per-raid/Arena auto-apply, not by this module.
+    // The Arena's preferred Loadout goes on first, exactly as a raid's does (`loadouts.md` §4, the
+    // user's call 2026-10-10): snapshot and apply on a fresh session, kept across attacks, put back on
+    // leaving the Arena. Before the snapshot below and before the attempt is spent.
+    const fielded = (await engageLoadout(tx, userId, 'arena')).state
     const [attackerShop, attackerCollections, attackerTraits] = await Promise.all([getShopLevels(userId, tx), getCollections(userId, tx), getTraitBoard(userId, tx)])
-    const hero = heroSnapshotOf(attacker, attackerShop, attackerCollections, bankedGold, attackerTraits)
-    // the band is held here, under the lock, against the party about to fight: a list drawn on a
-    // weaker loadout, or a defender who has since saved a weaker defence, can't be punched down on
-    const banded = heroSnapshotOf(attacker, attackerShop, attackerCollections, undefined, attackerTraits)
-    if (!dummy && !(await listInBand(tx, [listed], banded))) {
-        throw createError({ statusCode: 409, statusMessage: 'That opponent is out of your range now; pick again' })
-    }
+    const hero = heroSnapshotOf(fielded, attackerShop, attackerCollections, bankedGold, attackerTraits)
 
     const seed = randomInt(1, 0x7FFFFFFF)
     let fight: DuelResult
@@ -443,13 +417,14 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
             champions: (defenderHero.champions ?? []).map(c => ({ id: c.championId, row: c.row }))
         }
     }
-    // the dummy always falls (§2a); its log is the show, sized to end well inside the clock
-    const won = dummy || fight.outcome === 'win'
+    // the dummy always falls (§2a); a timeout goes against the side with less of its max HP left
+    const won = dummy || fight.attackerWon
 
     const attackerStanding = rollStanding(standingOf(attacker), season)
     const elo = dummy ? null : eloUpdate(attackerStanding.rating, rollStanding(standingOf(defender!), season).rating, won)
     const medals = medalsFor(won, elo?.expectedAttacker ?? null)
-    const candidates = await drawFor(tx, userId, banded)
+    // a fresh list after every attack, drawn on the Rating it ends at, so the same three can't be farmed
+    const candidates = await drawFor(tx, userId, (elo?.attacker.after ?? attackerStanding.rating), season)
 
     // a dummy fight never touches the ladder, and is no match for the season's standings
     const attackerAfter: ArenaStanding = elo
@@ -683,7 +658,10 @@ export function serializeArena(state: HqStateRow, unclaimed: Awaited<ReturnType<
             left: attemptsLeft(today),
             nextPrice: extraAttemptPrice(today.purchased)
         },
-        refreshGems: ARENA_REFRESH_GEMS,
+        refreshes: (() => {
+            const t = refreshesOn(refreshesOf(state), ladderDateKey(now))
+            return { free: ARENA_FREE_REFRESHES_PER_DAY, used: t.used, nextPrice: refreshPrice(t.used) }
+        })(),
         defense: state.defenseLoadout
             ? { ...state.defenseLoadout, gpn: state.defenseGpn }
             : null,

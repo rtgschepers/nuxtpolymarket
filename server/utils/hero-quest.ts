@@ -113,7 +113,6 @@ import { randomInt } from '#shared/utils/random'
 import { championPassiveBonus, economyBonuses, partyUnitStats } from '#shared/utils/hero-quest/stats'
 import type { ModifierKind } from '#shared/utils/hero-quest/modifiers'
 import { globalPower } from '#shared/utils/hero-quest/power'
-import { gpnLog10 } from '#shared/utils/hero-quest/arena'
 import {
     battleSpeedAt,
     battleSpeedPrice,
@@ -674,12 +673,11 @@ export function withDefenseLoadout(state: HqStateRow): HqStateRow | null {
     }
 }
 
-/** Defense GPN (`arena.md` §2), as the two columns it is kept in: the Decimal, and the log10 the match band searches. */
+/** Defense GPN (`arena.md` §2), for show: written when the defence is set, and only then. */
 export function defenseGpnOf(state: HqStateRow, shopLevels: Record<string, number>, collections: HqCollections, traits?: TraitBoard) {
     const defended = withDefenseLoadout(state)
-    if (!defended) return { defenseGpn: null, defenseGpnLog: null }
-    const gpn = globalPower(heroSnapshotOf(defended, shopLevels, collections, undefined, traits)).gpn
-    return { defenseGpn: gpn.toString(), defenseGpnLog: gpnLog10(gpn) }
+    if (!defended) return { defenseGpn: null }
+    return { defenseGpn: globalPower(heroSnapshotOf(defended, shopLevels, collections, undefined, traits)).gpn.toString() }
 }
 
 /**

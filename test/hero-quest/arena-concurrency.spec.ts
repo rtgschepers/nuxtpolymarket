@@ -25,14 +25,14 @@ import {
     refreshCandidates,
     setDefense
 } from '#server/utils/hero-quest-arena'
-import { ARENA_DUMMY_ID, arenaSeasonAt, arenaSeasonStartsAt, extraAttemptPrice, seasonRewardFor } from '#shared/utils/hero-quest/arena'
+import { ARENA_DUMMY_ID, arenaSeasonAt, arenaSeasonStartsAt, extraAttemptPrice, refreshPrice, seasonRewardFor } from '#shared/utils/hero-quest/arena'
 import { globalPower } from '#shared/utils/hero-quest/power'
 import { ladderDateKey } from '#shared/utils/hero-quest/gacha'
 import {
     ARENA_FREE_ATTEMPTS_PER_DAY,
     ARENA_LOG_SIZE,
     ARENA_RATING_START,
-    ARENA_REFRESH_GEMS,
+    ARENA_MATCH_BAND_RATING,
     ARENA_SHOP_KEY_PRICE,
     ARENA_SHOP_SEAL_PRICE,
     MEDAL_BASE_WIN,
@@ -40,6 +40,7 @@ import {
 } from '#shared/utils/hero-quest/constants'
 import { RAID_KEY_CAP } from '#shared/utils/hero-quest/raids'
 import { quickClearRaid } from '#server/utils/hero-quest-raids'
+import { engageLoadout } from '#server/utils/hero-quest-loadout'
 import { SKIP, burst, cleanupUser, seedUser } from '../setup/db-helpers'
 
 const DAY = 86_400_000
@@ -90,19 +91,26 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
     describe('the defence', () => {
         it('stores a copy of the live loadout and its Defense GPN, and leaves the live one alone', async () => {
             await found(DEFENDER)
-            const saved = await db.transaction(tx => setDefense(tx, DEFENDER, { source: 'live' }))
+            const saved = await db.transaction(tx => setDefense(tx, DEFENDER))
             const state = await stateOf(DEFENDER)
             const hero = heroSnapshotOf(state, await getShopLevels(DEFENDER), await getCollections(DEFENDER))
 
             expect(state.defenseLoadout).toEqual(saved.defense)
             expect(state.defenseGpn).toBe(globalPower(hero).gpn.toString())
-            expect(state.defenseGpnLog).toBeCloseTo(globalPower(hero).gpn.log10().toNumber(), 6)
         })
 
-        it('refuses a defence fielding a Champion the player does not own', async () => {
+        it('sets the player\'s own loadout, putting the Arena\'s preferred Loadout back first', async () => {
             await found(DEFENDER)
-            await expect(db.transaction(tx => setDefense(tx, DEFENDER, { source: 'custom', championIds: ['champ_borin'] }))).rejects.toThrow()
-            expect((await stateOf(DEFENDER)).defenseLoadout).toBeNull()
+            const own = (await stateOf(DEFENDER)).formation
+            await db.insert(hqLoadouts).values({ userId: DEFENDER, slotIndex: 0, name: 'Arena', partyChampionIds: [], equippedGear: {}, formation: { hero: own.hero === 'back' ? 'front' : 'back' } })
+            await db.update(hqState).set({ raidLoadoutPreferences: { arena: 0 } }).where(eq(hqState.userId, DEFENDER))
+            await db.transaction(tx => engageLoadout(tx, DEFENDER, 'arena'))
+            expect((await stateOf(DEFENDER)).formation).not.toEqual(own)
+
+            const saved = await db.transaction(tx => setDefense(tx, DEFENDER))
+
+            expect(saved.defense.formation).toEqual(own)
+            expect((await stateOf(DEFENDER)).preRaidSnapshot).toBeNull()
         })
     })
 
@@ -130,7 +138,7 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
             await found(ATTACKER)
             await found(SECOND)
             await found(DEFENDER)
-            await db.transaction(tx => setDefense(tx, DEFENDER, { source: 'live' }))
+            await db.transaction(tx => setDefense(tx, DEFENDER))
             await getCandidates(ATTACKER, Date.now())
             await getCandidates(SECOND, Date.now())
             expect((await stateOf(ATTACKER)).arenaCandidates[0]).toBe(DEFENDER)
@@ -159,8 +167,8 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
         it('lets two players attack each other at once without a deadlock', async () => {
             await found(ATTACKER)
             await found(SECOND)
-            await db.transaction(tx => setDefense(tx, ATTACKER, { source: 'live' }))
-            await db.transaction(tx => setDefense(tx, SECOND, { source: 'live' }))
+            await db.transaction(tx => setDefense(tx, ATTACKER))
+            await db.transaction(tx => setDefense(tx, SECOND))
             await getCandidates(ATTACKER, Date.now())
             await getCandidates(SECOND, Date.now())
 
@@ -183,22 +191,36 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
             expect((await stateOf(ATTACKER)).arenaAttemptsUsedToday).toBe(0)
         })
 
-        it('refuses a listed opponent who has left the band, and redraws the list on its next read', async () => {
+        it('draws on Rating, a row from an earlier season counting at the start, and keeps a drawn list', async () => {
             await found(ATTACKER)
             await found(DEFENDER)
-            await db.transaction(tx => setDefense(tx, DEFENDER, { source: 'live' }))
+            await db.transaction(tx => setDefense(tx, DEFENDER))
+            const season = arenaSeasonAt(Date.now())
+            // far above the band this season: not drawn
+            await db.update(hqState).set({ arenaSeasonId: season, arenaRating: 1000 + 3 * ARENA_MATCH_BAND_RATING }).where(eq(hqState.userId, DEFENDER))
+            expect((await getCandidates(ATTACKER, Date.now())).every(c => c.dummy)).toBe(true)
+            // the same Rating from an earlier season counts as the start, so in band
+            await db.update(hqState).set({ arenaSeasonId: season - 1, arenaCandidates: [] }).where(eq(hqState.userId, DEFENDER))
+            await db.update(hqState).set({ arenaCandidates: [] }).where(eq(hqState.userId, ATTACKER))
+            expect((await getCandidates(ATTACKER, Date.now()))[0]!.id).toBe(DEFENDER)
+            // a drawn list is kept: the defender drifting out of band moves nothing until a refresh or an attack
+            await db.update(hqState).set({ arenaSeasonId: season, arenaRating: 1000 + 3 * ARENA_MATCH_BAND_RATING }).where(eq(hqState.userId, DEFENDER))
+            expect((await getCandidates(ATTACKER, Date.now()))[0]!.id).toBe(DEFENDER)
+            const fight = await attack(ATTACKER, DEFENDER)
+            expect(fight.dummy).toBe(false)
+        })
+
+        it('fights an attack on the Arena\'s preferred Loadout, and holds the session after it', async () => {
+            await found(ATTACKER)
+            await found(DEFENDER)
+            await db.transaction(tx => setDefense(tx, DEFENDER))
             await getCandidates(ATTACKER, Date.now())
-            expect((await stateOf(ATTACKER)).arenaCandidates[0]).toBe(DEFENDER)
-            // the defender drops far below the attacker after the list was drawn: no punching down
-            const { defenseGpnLog } = await stateOf(DEFENDER)
-            await db.update(hqState).set({ defenseGpnLog: defenseGpnLog! - 3 }).where(eq(hqState.userId, DEFENDER))
+            await db.insert(hqLoadouts).values({ userId: ATTACKER, slotIndex: 0, name: 'Arena', partyChampionIds: [], equippedGear: {}, formation: {} })
+            await db.update(hqState).set({ raidLoadoutPreferences: { arena: 0 } }).where(eq(hqState.userId, ATTACKER))
 
-            await expect(attack(ATTACKER, DEFENDER)).rejects.toMatchObject({ statusCode: 409 })
+            await attack(ATTACKER, DEFENDER)
 
-            expect((await stateOf(ATTACKER)).arenaAttemptsUsedToday).toBe(0)
-            expect((await stateOf(DEFENDER)).arenaSeasonMatches).toBe(0)
-            const list = await getCandidates(ATTACKER, Date.now())
-            expect(list.every(c => c.dummy)).toBe(true)
+            expect((await stateOf(ATTACKER)).preRaidSnapshot).toMatchObject({ target: 'arena', slotIndex: 0 })
         })
 
         it('keeps the newest battle log entries only', async () => {
@@ -225,13 +247,15 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
             expect((await stateOf(ATTACKER)).arenaExtraAttemptsPurchasedToday).toBe(2)
         })
 
-        it('charges every refresh, and never past the Gems held', async () => {
-            await found(ATTACKER, 2 * ARENA_REFRESH_GEMS + 5)
+        it('gives two refreshes free, then charges each at its own rung, never past the Gems held', async () => {
+            // the two free ones, then 5 and 10, and 4 over
+            await found(ATTACKER, refreshPrice(2) + refreshPrice(3) + 4)
 
-            const result = await burst(6, () => refreshCandidates(ATTACKER, Date.now()))
+            const result = await burst(8, () => refreshCandidates(ATTACKER, Date.now()))
 
-            expect(result.ok).toBe(2)
-            expect(await gemsOf(ATTACKER)).toBe(5)
+            expect(result.ok).toBe(4)
+            expect(await gemsOf(ATTACKER)).toBe(4)
+            expect((await stateOf(ATTACKER)).arenaRefreshesToday).toBe(4)
         })
 
         it('never spends more Medals than there are, in a burst of purchases', async () => {
