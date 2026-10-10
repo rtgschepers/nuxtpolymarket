@@ -160,8 +160,8 @@ export async function rollTraits(tx: DbExecutor, userId: string, rng: () => numb
 }
 
 /**
- * Auto Roll: Roll until a rerolled slot lands at `minGrade` or better, the Trait Gems run short, or
- * `TRAIT_AUTO_ROLL_MAX_ROLLS` have gone. Every Roll is priced as a single one. The whole run is
+ * One Auto Roll batch: Roll until a rerolled slot lands at `minGrade` or better, the Trait Gems run
+ * short, or `TRAIT_AUTO_ROLL_BATCH` have gone, when the client asks for the next. Every Roll is priced as a single one. The whole run is
  * worked out under the `hq_state` lock against the balance read inside it, then paid in one guarded
  * decrement and written once, so a burst queues and each pays for its own run. Call it inside a
  * transaction.

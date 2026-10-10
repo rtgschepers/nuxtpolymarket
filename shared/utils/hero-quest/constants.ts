@@ -1787,10 +1787,11 @@ export const TRAIT_SAVE_LOAD_COST = 100
 
 /**
  * Auto Roll (the user's call, 2026-10-10; not in `traits.md`): Rolls back to back until a slot lands
- * at a chosen grade or better, the Trait Gems run short, or this many Rolls have gone in one press.
- * A bound on one request's work, not a price: every Roll still costs what a Roll costs.
+ * at a chosen grade or better or the Trait Gems run short, this many to a request. The client asks
+ * again until one of those stops it or the player does, so this sets how finely STOP can cut in and
+ * how many requests a long run makes. Not a price: every Roll still costs what a Roll costs.
  */
-export const TRAIT_AUTO_ROLL_MAX_ROLLS = 1000 // UNTUNED ╧
+export const TRAIT_AUTO_ROLL_BATCH = 10 // UNTUNED ╧
 
 // ── Prestige shop stat tracks ──────────────────────  open-items.md #41
 

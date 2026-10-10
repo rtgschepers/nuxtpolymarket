@@ -13,7 +13,7 @@
  */
 
 import {
-    TRAIT_AUTO_ROLL_MAX_ROLLS,
+    TRAIT_AUTO_ROLL_BATCH,
     TRAIT_GRADE_RATES,
     TRAIT_ROLL_BASE_COST,
     TRAIT_ROLL_COST_PER_LOCK,
@@ -116,7 +116,7 @@ export function rerollTraitBoard(board: TraitBoard, rng: () => number = randomFl
     })
 }
 
-/** Why an Auto Roll stopped: a slot landed at the grade, the Trait Gems ran short, or the per-press cap. */
+/** Why an Auto Roll batch stopped: a slot landed at the grade, the Trait Gems ran short, or the batch is done (go on). */
 export type TraitAutoRollStop = 'hit' | 'gems' | 'cap'
 
 export interface TraitAutoRollResult {
@@ -133,16 +133,16 @@ export function traitGradeAtLeast(grade: TraitGrade, min: TraitGrade): boolean {
 }
 
 /**
- * Auto Roll: Roll again and again, each priced and rerolled exactly as a single Roll, until one
- * lands a rerolled slot at `minGrade` or better, the next Roll is more than `traitGems` left, or
- * `maxRolls` have gone. The locks never change mid-run, so every Roll costs the same. Zero Rolls
+ * One Auto Roll batch: Roll again and again, each priced and rerolled exactly as a single Roll,
+ * until one lands a rerolled slot at `minGrade` or better, the next Roll is more than `traitGems`
+ * left, or `maxRolls` have gone. The locks never change mid-run, so every Roll costs the same. Zero Rolls
  * (nothing affordable, or nothing to reroll) comes back as the board it was given.
  */
 export function autoRollTraitBoard(
     board: TraitBoard,
     traitGems: number,
     minGrade: TraitGrade,
-    maxRolls: number = TRAIT_AUTO_ROLL_MAX_ROLLS,
+    maxRolls: number = TRAIT_AUTO_ROLL_BATCH,
     rng: () => number = randomFloat
 ): TraitAutoRollResult {
     const cost = traitRollCost(lockedCount(board))

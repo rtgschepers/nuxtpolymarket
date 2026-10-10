@@ -6,8 +6,8 @@ import { autoRollTraits } from '#server/utils/hero-quest-traits'
 import { isTraitGrade } from '#shared/utils/hero-quest/content/traits'
 
 /**
- * Auto Roll the Traits: Roll until a rerolled slot lands at `minGrade` or better, the Trait Gems
- * run short, or the per-press cap. Each Roll costs what a single Roll does. Lock-then-read on
+ * One batch of an Auto Roll: Roll until a rerolled slot lands at `minGrade` or better, the Trait
+ * Gems run short, or the batch is done, and the client asks again until it stops or is stopped. Each Roll costs what a single Roll does. Lock-then-read on
  * `hq_state`, paid in one guarded decrement.
  */
 export default defineEventHandler(async (event) => {
