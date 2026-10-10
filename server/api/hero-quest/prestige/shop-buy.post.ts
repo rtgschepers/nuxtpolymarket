@@ -1,7 +1,7 @@
 import { db } from '#server/database'
 import { requireUserId } from '#server/utils/auth'
 import { requireFeature } from '#server/utils/hero-quest-tutorials'
-import { buyShopTrack } from '#server/utils/hero-quest'
+import { buyShopTrack, settleHq } from '#server/utils/hero-quest'
 import { isShopTrackId } from '#shared/utils/hero-quest/content/shop'
 
 /**
@@ -19,6 +19,8 @@ export default defineEventHandler(async (event) => {
     }
     // Trait save slots are sold in the Traits scene too, which opens before the prestige shop
     await requireFeature(userId, upgradeId === 'traitSaveSlots' ? 'traits' : 'prestige')
+    // settle first, so the window before this pays at the rate it ran at, not the new one
+    await settleHq(userId)
 
     return db.transaction(tx => buyShopTrack(tx, userId, upgradeId))
 })

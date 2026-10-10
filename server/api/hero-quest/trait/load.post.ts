@@ -1,6 +1,7 @@
 import { db } from '#server/database'
 import { requireUserId } from '#server/utils/auth'
 import { requireFeature } from '#server/utils/hero-quest-tutorials'
+import { settleHq } from '#server/utils/hero-quest'
 import { loadTraitBoard } from '#server/utils/hero-quest-traits'
 import { MAX_TRAIT_SAVE_SLOTS } from '#shared/utils/hero-quest/constants'
 
@@ -12,6 +13,8 @@ import { MAX_TRAIT_SAVE_SLOTS } from '#shared/utils/hero-quest/constants'
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
     await requireFeature(userId, 'traits')
+    // settle first, so the window before this pays at the rate it ran at, not the new one
+    await settleHq(userId)
     const body = await readBody<{ saveSlotIndex?: unknown }>(event)
     const saveSlotIndex = Number(body?.saveSlotIndex)
     if (!Number.isInteger(saveSlotIndex) || saveSlotIndex < 0 || saveSlotIndex >= MAX_TRAIT_SAVE_SLOTS) {

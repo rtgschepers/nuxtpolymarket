@@ -8,6 +8,7 @@ import {
     championSlots,
     getShopLevels,
     restoreLoadoutSession,
+    settleHq,
     skillSlots
 } from '#server/utils/hero-quest'
 import { validateLiveLoadout, type LoadoutInput } from '#server/utils/hero-quest-loadout'
@@ -36,6 +37,8 @@ import { validateLiveLoadout, type LoadoutInput } from '#server/utils/hero-quest
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event)
     await requireFeature(userId, 'collections')
+    // settle first, so the window before this pays at the rate it ran at, not the new one
+    await settleHq(userId)
     const body = await readBody<LoadoutInput>(event)
 
     return db.transaction(async (tx: DbExecutor) => {
