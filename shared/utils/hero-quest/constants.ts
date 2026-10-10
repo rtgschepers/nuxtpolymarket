@@ -1785,6 +1785,13 @@ export const TRAIT_SAVE_SLOT_COST_STEP_GEMS = 500
 /** Storing the live board in a save slot, or loading one, costs this many Trait Gems a press (§6). */
 export const TRAIT_SAVE_LOAD_COST = 100
 
+/**
+ * Auto Roll (the user's call, 2026-10-10; not in `traits.md`): Rolls back to back until a slot lands
+ * at a chosen grade or better, the Trait Gems run short, or this many Rolls have gone in one press.
+ * A bound on one request's work, not a price: every Roll still costs what a Roll costs.
+ */
+export const TRAIT_AUTO_ROLL_MAX_ROLLS = 1000 // UNTUNED ╧
+
 // ── Prestige shop stat tracks ──────────────────────  open-items.md #41
 
 /**

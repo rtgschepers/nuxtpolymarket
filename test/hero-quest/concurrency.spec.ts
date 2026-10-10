@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '#server/database'
 import { hqCollection, hqFights, hqHolidayClaims, hqLoadouts, hqRaidState, hqShopUpgrades, hqState, hqTraitSaveSlots, hqTraitSlots, user } from '#server/database/schema'
-import { getTraitSaves, loadTraitBoard, rollTraits, serializeTraits, setTraitLock, storeTraitBoard } from '#server/utils/hero-quest-traits'
+import { autoRollTraits, getTraitSaves, loadTraitBoard, rollTraits, serializeTraits, setTraitLock, storeTraitBoard } from '#server/utils/hero-quest-traits'
 import { engageRaid, quickClearRaid } from '#server/utils/hero-quest-raids'
 import { claimCalendar } from '#server/utils/hero-quest-calendar'
 import { claimHoliday } from '#server/utils/hero-quest-holidays'
@@ -447,6 +447,18 @@ describe.skipIf(SKIP)('hero-quest concurrency', () => {
             expect(result.ok).toBe(3)
             expect(await traitGemsOf()).toBe(0)
             expect((await getTraitBoard(USER_ID)).every(slot => slot !== null)).toBe(true)
+        })
+
+        it('pays for each of a burst of Auto Rolls once, and never spends past zero', async () => {
+            await ensureHqState(USER_ID)
+            // seven Rolls' worth at nothing locked; SSS is all but out of reach, so every run spends what it can
+            await giveTraitGems(35)
+
+            const result = await burst(5, () => db.transaction(tx => autoRollTraits(tx, USER_ID, 'SSS', () => 0.5)))
+
+            expect(result.ok).toBe(1)
+            expect(await traitGemsOf()).toBe(0)
+            expect((await getTraitBoard(USER_ID)).every(slot => slot?.grade === 'E')).toBe(true)
         })
 
         it('prices a burst of Rolls by the locks and never rerolls a locked slot', async () => {

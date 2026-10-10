@@ -24,6 +24,7 @@ import { TRAIT_SETS, getTraitSet, getTraitStat } from '#shared/utils/hero-quest/
 import { shopTrackCost } from '#shared/utils/hero-quest/content/shop'
 import {
     activeTraitSets,
+    autoRollTraitBoard,
     canRollTraits,
     lockedCount,
     rerollTraitBoard,
@@ -36,6 +37,7 @@ import {
     type TraitBoard,
     type TraitSlotState
 } from '#shared/utils/hero-quest/traits'
+import type { TraitGrade } from '#shared/utils/hero-quest/types'
 import { randomFloat } from '#shared/utils/random'
 
 type TraitSaveRow = typeof hqTraitSaveSlots.$inferSelect
@@ -155,6 +157,25 @@ export async function rollTraits(tx: DbExecutor, userId: string, rng: () => numb
     // locked slots come back as they were, so only the rest are written
     await writeSlots(tx, userId, next.flatMap((slot, index) => board[index]?.locked ? [] : [{ index, slot }]))
     return { spent: cost, traitGems, slots: next.map(slotView) }
+}
+
+/**
+ * Auto Roll: Roll until a rerolled slot lands at `minGrade` or better, the Trait Gems run short, or
+ * `TRAIT_AUTO_ROLL_MAX_ROLLS` have gone. Every Roll is priced as a single one. The whole run is
+ * worked out under the `hq_state` lock against the balance read inside it, then paid in one guarded
+ * decrement and written once, so a burst queues and each pays for its own run. Call it inside a
+ * transaction.
+ */
+export async function autoRollTraits(tx: DbExecutor, userId: string, minGrade: TraitGrade, rng: () => number = randomFloat) {
+    const state = await lockState(tx, userId)
+    const board = await getTraitBoard(userId, tx)
+    if (!canRollTraits(board)) throw createError({ statusCode: 400, statusMessage: 'Every slot is locked' })
+
+    const run = autoRollTraitBoard(board, state.traitGems, minGrade, undefined, rng)
+    if (run.rolls === 0) throw createError({ statusCode: 400, statusMessage: 'Not enough Trait Gems' })
+    const traitGems = await spendTraitGems(tx, userId, run.spent)
+    await writeSlots(tx, userId, run.board.flatMap((slot, index) => !slot || board[index]?.locked ? [] : [{ index, slot }]))
+    return { rolls: run.rolls, spent: run.spent, stoppedBy: run.stoppedBy, traitGems, slots: run.board.map(slotView) }
 }
 
 /** Lock or unlock a rolled slot: free and unlimited (§3). An empty slot has nothing to protect. */
