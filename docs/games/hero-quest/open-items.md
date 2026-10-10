@@ -176,12 +176,14 @@ open:
 
 ### 53. Holiday gifts — built; the bundles are placeholders
 
-Full record: `build-log.md` #53. Four holidays, a claim each per year, in a three-day UTC window.
+Full record: `build-log.md` #53. Six holidays (Valentine's Day and Easter added 2026-10-10), a claim
+each per year, in a three-day UTC window, from a gift icon on the battle view.
 What it left open:
 
 1. **`HOLIDAY_GIFTS` is one `UNTUNED ╧` table**, and `HOLIDAY_CLAIM_WINDOW_DAYS` (3, the holiday
    counted) is §2's "e.g." taken at its word. The bundles follow §3's shape (Christmas richest,
-   Halloween smallest, themed Seals); every amount is a guess. Their Gems are platform-wide, so
+   Halloween and Valentine's Day smallest, themed Seals); every amount is a guess, the two new
+   holidays' included. Their Gems are platform-wide, so
    size them with the calendar's Gem days (#47) and the prestige milestones' (#48) in step 7 of the
    *Suggested order*, and their Gold after the Gold decision (#23), like the calendar's.
 2. **Lunar New Year's table ends at 2050**, and takes the date in China as the UTC day. A spec

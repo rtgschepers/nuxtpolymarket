@@ -19,6 +19,8 @@ Status: **Locked** — decisions confirmed for the "simple gift" phase, idea bac
 | Lunar New Year | Varies — needs a lookup table | Shifts year to year on the Gregorian calendar |
 | Halloween | Oct 31 | Fixed date |
 | Christmas / Winter Holiday | Dec 25 | Fixed date |
+| Valentine's Day | Feb 14 | Fixed date. Added 2026-10-10 (the user's call) |
+| Easter | Varies — computed | Western Easter Sunday, the Gregorian computus, so no table. Added 2026-10-10 (the user's call) |
 
 Starting with the most broadly-recognized, commercially-safe set for a global free-to-play audience — same "first pass, not final" spirit as every other content roster in this project (Champion names, Artifact effects, etc.). Adding more holidays later (Easter, a regional holiday, the game's own launch-anniversary) is a config-table addition, not a system redesign — extensibility was a design goal from the start.
 
@@ -65,7 +67,9 @@ What the build had to settle that this doc leaves open, none of it a rule change
 - **A gift belongs to the year its holiday fell in**, the claim's key with the holiday's ID, so a window running past New Year's Eve claims the earlier year's gift.
 - **Lunar New Year's table** (`LUNAR_NEW_YEAR_DATES`) runs 2024 to 2050, each the date in China taken as that UTC day.
 - **The claim is modelled on the login calendar** (`build-log.md` #47): §2's `seals/claim-daily.post.ts` was retired by `open-items.md` #29.
-- **The gift is claimed in the Calendar scene**, the "gift waiting" state §2 asks for: its title row shows the open gift's button, or which comes next.
+- **The gift is claimed from its own icon, not the Calendar** (2026-10-10, the user's call), the "gift waiting" state §2 asks for: a gift box in the holiday's colours wiggles in the battle view's top-right corner while one is open and unclaimed. Pressed, it opens a reveal over the stage: the box drops in and shakes while the claim is on its way, bursts open in gold with confetti, and each reward pops out with its count running up.
+- **No feature gate** (2026-10-10, the user's call): with no catch-up, gating the claim behind an unlock would cost a new player the gift outright.
+- **Valentine's Day and Easter joined the roster** (2026-10-10, the user's call), as §1 foresaw: a row each and a gift each, no system change. Easter is computed rather than tabled.
 
 ---
 

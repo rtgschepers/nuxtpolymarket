@@ -213,7 +213,7 @@ Unchanged, listed for completeness:
 - Trait slot UI (5 fixed slots, roll/lock states)
 - Arena candidate cards, battle log, Rating leaderboard
 - Encyclopedia list + detail views (168 collectibles + 16 class nodes)
-- Holiday claim banner + gift-box icon (4 holidays)
+- Holiday gift-box icon (6 holidays) + the gift reveal
 
 ---
 
