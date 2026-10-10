@@ -701,10 +701,20 @@ watch(() => props.scene, () => {
     raidReturning.value = false
 })
 const inRaid = computed(() => props.scene === 'raids' || raidRound.value !== null || raidReturning.value)
+/**
+ * Whether the player is still where the open Loadout session belongs: a raid's in the Raids scene or
+ * a round, the Arena's in the Arena or an Arena round (the user's call, 2026-10-10: the Arena's
+ * preferred Loadout works exactly as a raid's). Anywhere else the session is left.
+ */
+const inSessionScene = computed(() => {
+    const target = loadoutSession.value?.target
+    if (target === 'arena') return props.scene === 'arena' || arenaRound.value !== null || arenaResult.value !== null
+    return inRaid.value
+})
 let leavingRaid = false
 
 async function leaveRaidIfOpen() {
-    if (import.meta.server || inRaid.value || !loadoutSession.value || leavingRaid) return
+    if (import.meta.server || inSessionScene.value || !loadoutSession.value || leavingRaid) return
     leavingRaid = true
     try {
         await leaveRaid()
@@ -714,7 +724,7 @@ async function leaveRaidIfOpen() {
         leavingRaid = false
     }
 }
-watch([inRaid, loadoutSession], () => { void leaveRaidIfOpen() }, { immediate: true })
+watch([inSessionScene, loadoutSession], () => { void leaveRaidIfOpen() }, { immediate: true })
 onUnmounted(() => {
     // off Hero Quest altogether: the server puts it back; nothing here is left to refresh
     if (loadoutSession.value) void $fetch('/api/hero-quest/raid/leave', { method: 'POST' }).catch(() => {})
@@ -802,7 +812,7 @@ function facesOf(classId: string, heroRow: 'front' | 'back', champions: readonly
     return [{ asset: `hero/${classId}`, row: heroRow }, ...champions.map(c => ({ asset: `champion/${c.id}`, row: c.row }))]
 }
 
-const arenaView = computed<Omit<ArenaView, 'tab' | 'page'>>(() => {
+const arenaView = computed<Omit<ArenaView, 'tab' | 'page' | 'pickerOpen'>>(() => {
     const a = arena.value
     const rarityIn = (roster: readonly { id: string, rarity: string }[] | undefined) => {
         const map = new Map((roster ?? []).map(e => [e.id, e.rarity]))
@@ -822,7 +832,8 @@ const arenaView = computed<Omit<ArenaView, 'tab' | 'page'>>(() => {
         attemptsLeft: a?.attempts.left ?? 0,
         attemptsFree: a?.attempts.free ?? 0,
         attemptPrice: a?.attempts.nextPrice ?? 0,
-        refreshGems: a?.refreshGems ?? 0,
+        refreshPrice: a?.refreshes.nextPrice ?? 0,
+        refreshesLeft: a ? Math.max(0, a.refreshes.free - a.refreshes.used) : 0,
         gems: user.value?.gems ?? 0,
         rewards: a?.unclaimed ?? [],
         candidates: arenaCandidates.value?.map(c => ({
@@ -843,10 +854,11 @@ const arenaView = computed<Omit<ArenaView, 'tab' | 'page'>>(() => {
                 gear: GEAR_SLOTS.flatMap(slot => d.equippedGear[slot] ? [rarityIn(forge.value?.roster)(d.equippedGear[slot]!)] : [])
             }
             : null,
-        loadouts: Array.from({ length: loadouts.value?.slots ?? 0 }, (_, slotIndex) => {
-            const saved = loadouts.value?.saved.find(p => p.slotIndex === slotIndex)
-            return { slotIndex, name: saved?.name ?? `Loadout ${slotIndex + 1}`, saved: !!saved }
-        }),
+        // the Arena's preferred Loadout, picked as a raid's is (`loadouts.md` §4)
+        loadout: preferredName('arena'),
+        loadoutLive: loadoutSession.value?.target === 'arena' && loadoutSession.value.slotIndex !== null,
+        loadoutSlot: preferredName('arena') === null ? null : loadoutPreferences.value.arena ?? null,
+        loadoutOptions: raidLoadoutOptions.value,
         shop: arenaShop,
         log: arenaLog.value?.map(e => ({
             outcome: e.role === 'attacker' ? (e.won ? 'WON' : 'LOST') : (e.won ? 'HELD' : 'FELL'),
@@ -889,8 +901,12 @@ async function onArenaAction(target: ArenaTarget) {
         else if (target === 'refresh') await refreshArenaCandidates()
         else if (target === 'buy-attempt') await buyArenaAttempt()
         else if (target === 'claim') await claimArenaSeason()
-        else if (target === 'def:live') await setArenaDefense({ source: 'live' })
-        else if (target.startsWith('def:')) await setArenaDefense({ source: 'loadout', slotIndex: Number(target.slice(4)) })
+        else if (target === 'def:set') await setArenaDefense()
+        else if (target.startsWith('pick:')) {
+            const key = target.slice(5)
+            const slot = key === 'none' ? null : Number(key)
+            if ((loadoutPreferences.value.arena ?? null) !== slot) await setLoadoutPreference('arena', slot)
+        }
         else if (target.startsWith('shop:')) {
             const [, itemId, quantity] = target.split(':')
             await buyArenaItem(itemId!, Number(quantity))

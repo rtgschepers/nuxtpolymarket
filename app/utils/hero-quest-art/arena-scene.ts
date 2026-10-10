@@ -2,9 +2,10 @@
 //
 // Fight: the three candidates as cards (`ui-art.ts`'s `arena_candidate`), each its name, Rating,
 // Defense GPN and the defence it fields as faces in their rows (the Training Dummy as itself), with
-// an Attack button; under them today's attacks, an extra one to buy and a paid refresh. A season
+// an Attack button; under them the Arena's preferred Loadout (a list opening upward, as a raid's) and
+// today's attacks, then an extra attack to buy and a refresh (two free a day, then Gems). A season
 // reward waiting goes on a gold strip above the cards. Defence: the stored defence as the Loadouts
-// detail draws a slot, and the buttons that copy the live party or a saved Loadout into it. Shop:
+// detail draws a slot, and the one button that sets the current loadout as it. Shop:
 // everything Medals buy, a row each. Log and Ranking: the battle log (`arena_log`) and the Rating
 // leaderboard (`arena_leaderboard`), a page at a time.
 //
@@ -91,7 +92,9 @@ export interface ArenaView {
     attemptsLeft: number
     attemptsFree: number
     attemptPrice: number
-    refreshGems: number
+    /** The next refresh's Gem price, 0 while free ones are left today, and how many free ones are. */
+    refreshPrice: number
+    refreshesLeft: number
     gems: number
     /** Finished seasons' rewards waiting to be claimed. */
     rewards: readonly { season: number, rank: number, medals: number }[]
@@ -105,8 +108,14 @@ export interface ArenaView {
         artifacts: readonly { id: string, rarity: string }[]
         gear: readonly { id: string, rarity: string }[]
     } | null
-    /** The saved Loadouts a defence can be copied from, slot by slot. */
-    loadouts: readonly { slotIndex: number, name: string, saved: boolean }[]
+    /** The Arena's preferred Loadout's name, null with none; and whether it is the one live now. */
+    loadout: string | null
+    loadoutLive: boolean
+    /** Its slot, null with none, and the saved Loadouts its list offers. */
+    loadoutSlot: number | null
+    loadoutOptions: readonly { slotIndex: number, name: string }[]
+    /** The list is open. */
+    pickerOpen: boolean
     shop: readonly ArenaItemView[]
     log: readonly ArenaLogView[] | null
     board: { rows: readonly ArenaBoardRow[], me: { rank: number, rating: number } | null } | null
@@ -116,7 +125,8 @@ export type ArenaTarget =
     | `tab:${HqArenaTab}`
     | `attack:${number}`
     | 'buy-attempt' | 'refresh' | 'claim'
-    | 'def:live' | `def:${number}`
+    | 'loadout' | `pick:${number | 'none'}` | 'shut'
+    | 'def:set'
     | `shop:${string}:${1 | 10}`
     | 'prev' | 'next'
 
@@ -175,7 +185,8 @@ function claimBox(): Box {
 
 function cardBoxes(view: ArenaView, h: number): Box[] {
     const top = P.y + 14 + (view.rewards.length ? 17 : 0)
-    const bottom = footerY(h) - 3
+    // a row under the cards for the preferred Loadout and today's attacks
+    const bottom = loadoutBox(h).y - 3
     const w = Math.floor((P.w - 12 - 2 * CARD_GAP) / 3)
     return [0, 1, 2].map(i => ({ x: P.x + 6 + i * (w + CARD_GAP), y: top, w, h: bottom - top }))
 }
@@ -185,7 +196,23 @@ function attackBox(card: Box): Box {
 }
 
 function refreshLabel(view: ArenaView): string {
-    return `REFRESH ${view.refreshGems} GEMS`
+    return view.refreshPrice > 0 ? `REFRESH ${view.refreshPrice} GEMS` : `REFRESH, ${view.refreshesLeft} FREE`
+}
+
+/** The preferred-Loadout picker, on the row over the footer, its caption to its left. */
+function loadoutBox(h: number): Box {
+    return { x: P.x + 6 + textWidth('LOADOUT ON') + 4, y: footerY(h) - BTN_H - 3, w: 92, h: BTN_H }
+}
+
+/** The picker's list, opening upward: NONE first, then each saved Loadout. */
+function pickBox(view: ArenaView, h: number): Box {
+    const b = loadoutBox(h)
+    const rows = view.loadoutOptions.length + 1
+    return { x: b.x, y: b.y - rows * ROW_H - 5, w: b.w, h: rows * ROW_H + 4 }
+}
+
+function pickLines(view: ArenaView): { key: number | 'none', name: string }[] {
+    return [{ key: 'none' as const, name: 'NONE' }, ...view.loadoutOptions.map(o => ({ key: o.slotIndex, name: o.name }))]
 }
 
 function buyAttemptLabel(view: ArenaView): string {
@@ -201,18 +228,11 @@ function fightFooter(view: ArenaView, h: number): { refresh: Box, buy: Box } {
     return { refresh, buy }
 }
 
-function defenseButtons(view: ArenaView, h: number): { id: ArenaTarget, label: string, box: Box, enabled: boolean }[] {
-    const y = footerY(h)
-    const live = btn('COPY LIVE PARTY', P.x + 6, y)
-    const out = [{ id: 'def:live' as ArenaTarget, label: 'COPY LIVE PARTY', box: live, enabled: true }]
-    let x = live.x + live.w + 4 + textWidth('OR A LOADOUT') + 4
-    for (const l of view.loadouts) {
-        const label = String(l.slotIndex + 1)
-        const box = { x, y, w: 13, h: BTN_H }
-        out.push({ id: `def:${l.slotIndex}`, label, box, enabled: l.saved })
-        x += 15
-    }
-    return out
+const SET_DEFENSE = 'SET CURRENT LOADOUT AS DEFENCE'
+
+/** The Defence tab's one button (the user's call, 2026-10-10): the current loadout becomes the defence. */
+function defenseButton(h: number): Box {
+    return btn(SET_DEFENSE, P.x + 6, footerY(h))
 }
 
 function shopRowBox(i: number): Box {
@@ -250,6 +270,15 @@ export function arenaTargetAt(view: ArenaView, w: number, h: number, x: number, 
     }
     switch (view.tab) {
         case 'fight': {
+            // with the Loadout list open, only it and the picker answer; anywhere else puts it away
+            if (view.pickerOpen) {
+                if (inside(loadoutBox(h), x, y)) return 'loadout'
+                const list = pickBox(view, h)
+                if (!inside(list, x, y)) return 'shut'
+                const line = pickLines(view)[Math.floor((y - list.y - 2) / ROW_H)]
+                return line ? `pick:${line.key}` : null
+            }
+            if (inside(loadoutBox(h), x, y)) return 'loadout'
             if (view.rewards.length && inside(claimBox(), x, y)) return 'claim'
             const cards = cardBoxes(view, h)
             for (let i = 0; i < cards.length; i++) if (inside(attackBox(cards[i]!), x, y)) return `attack:${i}`
@@ -259,7 +288,7 @@ export function arenaTargetAt(view: ArenaView, w: number, h: number, x: number, 
             return null
         }
         case 'defense':
-            return defenseButtons(view, h).find(b => inside(b.box, x, y))?.id ?? null
+            return inside(defenseButton(h), x, y) ? 'def:set' : null
         case 'shop': {
             const first = view.page * 2 * SHOP_ROWS
             for (let i = 0; i < 2 * SHOP_ROWS && first + i < view.shop.length; i++) {
@@ -283,16 +312,18 @@ export function arenaTargetEnabled(view: ArenaView, target: ArenaTarget): boolea
     if (target.startsWith('tab:')) return target !== `tab:${view.tab}`
     if (target === 'prev') return view.page > 0
     if (target === 'next') return view.page < arenaPages(view) - 1
+    if (target === 'shut') return true
+    if (target === 'loadout') return view.pickerOpen || (!view.busy && view.loadoutOptions.length > 0)
     if (view.busy) return false
+    if (target.startsWith('pick:')) return true
     if (target === 'claim') return view.rewards.length > 0
-    if (target === 'refresh') return view.gems >= view.refreshGems
+    if (target === 'refresh') return view.gems >= view.refreshPrice
     if (target === 'buy-attempt') return view.gems >= view.attemptPrice
     if (target.startsWith('attack:')) {
         const c = view.candidates?.[Number(target.slice(7))]
         return !!c && view.attemptsLeft > 0 && (c.dummy || c.rating !== null)
     }
-    if (target === 'def:live') return true
-    if (target.startsWith('def:')) return view.loadouts.find(l => l.slotIndex === Number(target.slice(4)))?.saved ?? false
+    if (target === 'def:set') return true
     if (target.startsWith('shop:')) {
         const [, id, n] = target.split(':')
         const item = view.shop.find(i => i.id === id)
@@ -392,13 +423,34 @@ export class ArenaScene {
             })
         }
 
-        const y = footerY(s.h)
+        // the preferred Loadout and today's attacks, on their row over the footer
+        const lb = loadoutBox(s.h)
+        drawText(s, view.loadoutLive ? 'LOADOUT ON' : 'LOADOUT', P.x + 6, lb.y + 4, view.loadoutLive ? C.green3 : C.stone3, { shadow: 1 })
+        const label = fit((view.loadout ?? (view.loadoutOptions.length ? 'NONE' : 'NONE SAVED')).toUpperCase(), lb.w - 6)
+        plateButton(s, lb, label, BLUE, enabled('loadout'), lit('loadout') || view.pickerOpen, pressed && lit('loadout'))
         const left = view.attemptsLeft
-        drawText(s, 'ATTACKS', P.x + 6, y + 4, C.stone3, { shadow: 1 })
-        drawText(s, `${left}/${view.attemptsFree}`, P.x + 6 + textWidth('ATTACKS') + 4, y + 4, left > 0 ? C.gold3 : C.red2, { shadow: 1 })
+        const count = `${left}/${view.attemptsFree}`
+        drawText(s, count, P.x + P.w - 6, lb.y + 4, left > 0 ? C.gold3 : C.red2, { align: 2, shadow: 1 })
+        drawText(s, 'ATTACKS', P.x + P.w - 10 - textWidth(count), lb.y + 4, C.stone3, { align: 2, shadow: 1 })
+
         const f = fightFooter(view, s.h)
         plateButton(s, f.buy, buyAttemptLabel(view), PURPLE, enabled('buy-attempt'), lit('buy-attempt'), pressed)
         plateButton(s, f.refresh, refreshLabel(view), BLUE, enabled('refresh'), lit('refresh'), pressed)
+        if (view.pickerOpen) this.drawPicker(s, view, lit)
+    }
+
+    /** The preferred-Loadout list over the cards: the current pick marked, the pointed-at line lit. */
+    private drawPicker(s: Surface, view: ArenaView, lit: (t: ArenaTarget) => boolean): void {
+        const b = pickBox(view, s.h)
+        panel(s, b.x, b.y, b.w, b.h, [C.blue0, C.blue1, C.blue2], C.night1)
+        pickLines(view).forEach((line, i) => {
+            const y = b.y + 2 + i * ROW_H
+            const current = line.key === 'none' ? view.loadoutSlot === null : view.loadoutSlot === line.key
+            const on = lit(`pick:${line.key}`)
+            if (on) rect(s, b.x + 2, y, b.w - 4, ROW_H, C.night3)
+            if (current) drawText(s, '>', b.x + 4, y + 1, C.gold3, { shadow: 1 })
+            drawText(s, fit(line.name.toUpperCase(), b.w - 16), b.x + 11, y + 1, current ? C.gold3 : on ? C.white : C.bone1, { shadow: 1 })
+        })
     }
 
     private drawCard(s: Surface, t: number, b: Box, c: ArenaCandidateView, target: ArenaTarget, view: ArenaView, lit: (t: ArenaTarget) => boolean, enabled: (t: ArenaTarget) => boolean, pressed: boolean): void {
@@ -450,7 +502,7 @@ export class ArenaScene {
                 'OTHER PLAYERS CAN ONLY DRAW YOU AS AN OPPONENT',
                 'ONCE YOU HAVE ONE. THE AI FIGHTS WITH IT WHILE',
                 'YOU ARE AWAY; IT NEVER CHANGES YOUR LIVE PARTY.',
-                'COPY YOUR LIVE PARTY OR A SAVED LOADOUT BELOW.'
+                'SET YOUR CURRENT LOADOUT AS YOUR DEFENCE BELOW.'
             ]
             lines.forEach((line, i) => drawText(s, line, x, y + 16 + i * 8, C.stone3, { shadow: 1 }))
         } else {
@@ -471,10 +523,8 @@ export class ArenaScene {
             drawText(s, 'WHILE YOU ARE AWAY.', x, y + 60, C.stone3, { shadow: 1 })
             drawText(s, 'NEVER YOUR LIVE PARTY.', x, y + 68, C.stone3, { shadow: 1 })
         }
-        const buttons = defenseButtons(view, s.h)
-        const live = buttons[0]!
-        drawText(s, 'OR A LOADOUT', live.box.x + live.box.w + 4, live.box.y + 4, C.stone3, { shadow: 1 })
-        for (const b of buttons) plateButton(s, b.box, b.label, b.id === 'def:live' ? GREEN : BLUE, enabled(b.id) && b.enabled, lit(b.id), pressed)
+        // set again when it falls behind: a defence is the player's own call
+        plateButton(s, defenseButton(s.h), SET_DEFENSE, GREEN, enabled('def:set'), lit('def:set'), pressed)
     }
 
     // ── Shop ──

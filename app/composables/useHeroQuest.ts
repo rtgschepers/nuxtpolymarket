@@ -305,7 +305,8 @@ export const useHeroQuest = () => {
     async function refreshArenaCandidates() {
         const res = await call<{ gemsSpent: number, candidates: ArenaCandidate[] }>('/api/hero-quest/arena/refresh-candidates', {}, '')
         if (res) arenaCandidates.value = res.candidates
-        await fetchSession()
+        // a free refresh moves no Gems
+        if (res?.gemsSpent) await fetchSession()
         return res
     }
 
@@ -332,9 +333,9 @@ export const useHeroQuest = () => {
         return res
     }
 
-    /** Save the defence: a copy of the live loadout (`live`) or of a saved Loadout (`loadout` + `slotIndex`). */
-    async function setArenaDefense(body: { source: 'live' } | { source: 'loadout', slotIndex: number }) {
-        return call<{ defenseGpn: string | null }>('/api/hero-quest/arena/defense-set', body, '')
+    /** "Set current loadout as defence": the player's own loadout, as it is equipped now. */
+    async function setArenaDefense() {
+        return call<{ defenseGpn: string | null }>('/api/hero-quest/arena/defense-set', {}, '')
     }
 
     /** Buy from the Arena Shop with Medals. Gold and Gems move platform balances the response doesn't carry. */

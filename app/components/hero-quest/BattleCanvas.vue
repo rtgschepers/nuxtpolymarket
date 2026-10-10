@@ -124,7 +124,7 @@ const props = defineProps<{
     /** What a raid round or quick-clear paid, shown over the stage until its button is pressed. */
     raidReward?: RaidRewardView | null
     /** The Arena scene, less the tab and page the stage keeps itself. */
-    arena?: Omit<ArenaView, 'tab' | 'page'>
+    arena?: Omit<ArenaView, 'tab' | 'page' | 'pickerOpen'>
     /** An Arena attack to play in place of the run; the stage goes back to the run once it is cleared. */
     arenaRound?: StageArena | null
     /** What an Arena attack came to, shown over the stage until its button is pressed. */
@@ -775,7 +775,12 @@ function onPointerUp(e: PointerEvent) {
             arenaPage.value = 0
             emit('arenaTab', arenaTab.value)
         } else if (at === 'prev' || at === 'next') arenaPage.value += at === 'next' ? 1 : -1
-        else emit('arenaAction', at)
+        else if (at === 'loadout') arenaPicker.value = !arenaPicker.value
+        else if (at === 'shut') arenaPicker.value = false
+        else {
+            if (at.startsWith('pick:')) arenaPicker.value = false
+            emit('arenaAction', at)
+        }
     }
     else if (hit === 'cal:claim' || hit === 'cal:makeup') emit('claimCalendar', hit === 'cal:makeup')
     // a day other than today is only pointed at, for what it pays
@@ -914,11 +919,15 @@ const gachaHover = computed<GachaHover>(() => {
 /** The Arena's open tab and page; the tab keeps its place while the scene is closed and reopened. */
 const arenaTab = ref<HqArenaTab>('fight')
 const arenaPage = ref(0)
-const ARENA_EMPTY: Omit<ArenaView, 'tab' | 'page'> = {
-    busy: false, rating: 0, medals: 0, season: 1, seasonLeft: '', attemptsLeft: 0, attemptsFree: 0, attemptPrice: 0, refreshGems: 0,
-    gems: 0, rewards: [], candidates: null, defense: null, loadouts: [], shop: [], log: null, board: null
+const ARENA_EMPTY: Omit<ArenaView, 'tab' | 'page' | 'pickerOpen'> = {
+    busy: false, rating: 0, medals: 0, season: 1, seasonLeft: '', attemptsLeft: 0, attemptsFree: 0, attemptPrice: 0, refreshPrice: 0, refreshesLeft: 0,
+    gems: 0, rewards: [], candidates: null, defense: null, shop: [], log: null, board: null,
+    loadout: null, loadoutLive: false, loadoutSlot: null, loadoutOptions: []
 }
-const arenaView = computed<ArenaView>(() => ({ ...(props.arena ?? ARENA_EMPTY), tab: arenaTab.value, page: arenaPage.value }))
+/** The Arena's preferred-Loadout list is open; leaving the scene or the Fight tab puts it away. */
+const arenaPicker = ref(false)
+watch([openScene, arenaTab], () => { arenaPicker.value = false })
+const arenaView = computed<ArenaView>(() => ({ ...(props.arena ?? ARENA_EMPTY), tab: arenaTab.value, page: arenaPage.value, pickerOpen: arenaPicker.value }))
 // a list that shrank under the page shown takes it back to its last
 watch(() => arenaHit && arenaView.value ? arenaHit.arenaPages(arenaView.value) : 1, (pages) => {
     if (arenaPage.value >= pages) arenaPage.value = Math.max(0, pages - 1)
