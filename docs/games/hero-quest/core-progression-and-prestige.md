@@ -50,7 +50,7 @@ gates stay directly comparable while balancing:
 - HP **×9** trash-mob HP (`SUPER_BOSS_HP_MULT`)
 - ATK ×1.5 trash-mob ATK
 
-Each boss stands with `BOSS_MINION_COUNT = 2` trash-tier escorts (`open-items.md` #13), and the 30-second timer covers the whole encounter.
+A boss stands alone (`BOSS_MINION_COUNT = 0`, the user's call, 2026-10-09, `build-log.md` #51; it stood with two trash-tier escorts before, #13), so the 30-second timer is all its own. Adds a boss's own fight spawns still join it.
 
 **History:** the original ×8–12 (with the super boss compounding ×2 off the stage boss, ×16–24 of trash) was cut to ×3 / ×6 with the continuous curve, then raised to **×7 / ×9 in the combat tuning pass** (`open-items.md` #22) once the enemy HP curve was re-derived. The super boss is the heavier of the two on purpose: against a fixed `BOSS_TIMER_SECONDS`, a gate is a pure DPS check, and party DPS is exactly what Champions add. Making the *gate* the wall rather than the wave ramp is what turns "this got slow" into "this needs a party."
 

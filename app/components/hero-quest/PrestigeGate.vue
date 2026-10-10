@@ -3,6 +3,7 @@ import type { Presenter } from '~/utils/hero-quest-art/canvas'
 import type { SplashParty } from '~/utils/hero-quest-art/menu-splash'
 import { C, PALETTE_RGB } from '~/utils/hero-quest-art/palette'
 import type { HqIntroRect } from '~/composables/useHqIntro'
+import type { GuideTarget, GuideView } from '~/utils/hero-quest-art/guide'
 
 /**
  * What the Battle tab shows once the run is cleared: the party walking a bridge of light in the
@@ -28,6 +29,8 @@ const props = defineProps<{
     earned?: string | null
     /** The menu buttons shown: only the scenes open so far, as on the stage. */
     menuScenes?: readonly HqMenuScene[]
+    /** The guide's dialog, while a tutorial is due: the gate is where Prestige opens. */
+    guide?: GuideView | null
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +39,8 @@ const emit = defineEmits<{
     crossed: [rect: HqIntroRect | null]
     /** A menu band button was pressed. */
     scene: [scene: HqMenuScene]
+    /** The guide's panel was pressed: the next page, or the tutorial closed on the last. */
+    guideNext: []
 }>()
 
 const intro = import.meta.client ? takeHqIntro() : null
@@ -62,16 +67,20 @@ function fit() {
 }
 
 function go() {
-    if (props.pending || props.crossing) return
+    // a tutorial on screen holds the bridge: Begin Again waits until it is read
+    if (props.pending || props.crossing || props.guide) return
     emit('begin')
 }
 
 /** The button and the menu band live in the canvas, so the pointer is hit-tested against them in scene pixels. */
-type Target = 'begin' | HqMenuScene
+type Target = 'begin' | HqMenuScene | GuideTarget
 const hover = ref<Target | null>(null)
 const pressed = ref(false)
 let hitTest: ((x: number, y: number) => boolean) | null = null
 let band: typeof import('~/utils/hero-quest-art/menu-band') | null = null
+let guideHit: typeof import('~/utils/hero-quest-art/guide') | null = null
+/** The bridge's height: the band sits under it, and the guide's bar sits on it. */
+let sceneH = 0
 
 function targetAt(e: PointerEvent): Target | null {
     // once a prestige is under way the bridge has to stay up until the party is through
@@ -79,6 +88,14 @@ function targetAt(e: PointerEvent): Target | null {
     const r = canvas.value.getBoundingClientRect()
     const x = (e.clientX - r.left) / r.width * presenter.w
     const y = (e.clientY - r.top) / r.height * presenter.h
+    // a tutorial is forced: only its bar answers, or for an unlock only the button it points at
+    if (props.guide) {
+        if (props.guide.focus) {
+            const item = band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? null
+            return item === props.guide.focus ? item : null
+        }
+        return guideHit?.guideTargetAt(presenter.w, sceneH, x, y, props.guide) ?? null
+    }
     return band?.menuItemAt(presenter.w, presenter.h, x, y, props.menuScenes) ?? (hitTest?.(x, y) ? 'begin' : null)
 }
 
@@ -100,6 +117,7 @@ function onPointerUp(e: PointerEvent) {
     const hit = hover.value
     if (!wasPressed || !hit) return
     if (hit === 'begin') go()
+    else if (hit === 'guide:next') emit('guideNext')
     else emit('scene', hit)
 }
 
@@ -111,7 +129,8 @@ function onPointerLeave() {
 const buttonState = computed(() => props.pending
     ? 'busy' as const
     : hover.value !== 'begin' ? 'idle' as const : pressed.value ? 'pressed' as const : 'hover' as const)
-const bandHover = computed(() => hover.value === 'begin' ? null : hover.value)
+const bandHover = computed(() => hover.value === 'begin' || hover.value?.startsWith('guide:') ? null : hover.value as HqMenuScene | null)
+const guideHover = computed(() => hover.value === 'guide:next' ? hover.value : null)
 
 let leave: (() => void) | null = null
 let gain: ((text: string) => void) | null = null
@@ -125,14 +144,17 @@ watch(() => props.earned, (earned) => {
 onMounted(async () => {
     // started before the art loads, so the box never paints in its own place first
     const landed = intro && wrap.value ? growFrom(wrap.value, intro) : Promise.resolve()
-    const [{ PrestigeBridge, onBeginAgain, BRIDGE_HERO_FOCUS, BRIDGE_PORTAL_FOCUS }, { Presenter, startLoop }, menuBand] = await Promise.all([
+    const [{ PrestigeBridge, onBeginAgain, BRIDGE_HERO_FOCUS, BRIDGE_PORTAL_FOCUS }, { Presenter, startLoop }, menuBand, guideArt] = await Promise.all([
         import('~/utils/hero-quest-art/prestige-bridge'),
         import('~/utils/hero-quest-art/canvas'),
-        import('~/utils/hero-quest-art/menu-band')
+        import('~/utils/hero-quest-art/menu-band'),
+        import('~/utils/hero-quest-art/guide')
     ])
     if (disposed || !canvas.value) return
     band = menuBand
+    guideHit = guideArt
     const bridge = new PrestigeBridge(props.party)
+    sceneH = bridge.frame.h
     const banded = new menuBand.BandedFrame(bridge.frame.w, bridge.frame.h)
     presenter = new Presenter(canvas.value, banded.frame.w, banded.frame.h)
     // the iris foci are shares of the bridge, which the band now sits under
@@ -154,7 +176,11 @@ onMounted(async () => {
             else void irisClose(el, onBridge(BRIDGE_PORTAL_FOCUS)).then(() => { if (!disposed) emit('crossed', rectOf(box)) })
         }
     }, () => {
-        presenter!.present(banded.compose(bridge.render(t, buttonState.value), 'battle', bandHover.value, pressed.value, false, undefined, props.menuScenes))
+        const view = bridge.render(t, buttonState.value)
+        const frame = banded.compose(view, 'battle', bandHover.value, pressed.value, false, undefined, props.menuScenes)
+        // over the whole frame, so the band dims with the bridge; it steps aside once the party starts across
+        if (props.guide && !props.pending && !props.crossing) guideArt.drawGuide(frame, view.h, t, props.guide, guideHover.value)
+        presenter!.present(frame)
     })
     observer = new ResizeObserver(fit)
     observer.observe(wrap.value!)

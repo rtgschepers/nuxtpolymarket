@@ -37,15 +37,18 @@ import { GEAR } from '../../../shared/utils/hero-quest/content/gear'
 import { NUMBER_STYLES, drawNumberPop, drawNumberAtlas, numberAtlasWidth, numberHeight, drawPartyFrame, drawCooldown, drawEnrageTimer, drawStageProgress, drawChallengeButton, drawRevealBase, drawRevealAura, REVEAL_AURA_LOOP, REVEAL_LUT, REVEAL_SIZE } from './feedback'
 import { Surface as Surf, blit, rect, rowSpan, ROWS } from './surface'
 import { WORLD_SCENES, SW, SH, BG_LOOP, composeScene } from './scenery'
+import { GiftReveal, drawGiftIconIn, type GiftRewardLine } from './holiday-gift'
+import { HOLIDAYS } from '../../../shared/utils/hero-quest/content/holidays'
 import { colosseum } from './scenery-arena'
 import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawSplash } from './ui-art'
 import { drawLogo, LOGO_W, LOGO_H, LOGO_LOOP } from './logos'
 import { GILDED_WARLORD, GREAT_DUMMY, DEEPCOIL, BURROW_GRUB, ORE_BEETLE, FORGE_APPRENTICE, FORGE_JOURNEYMAN, FORGE_MASTER, RAMPANT, TRAINING_DUMMY } from './raids'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
+import { drawGuidePortrait, drawGuideSnail, GUIDE_LOOP, GUIDE_PORTRAIT } from './guide-portrait'
 
 export type ArtGroup =
     | 'heroes' | 'champions' | 'summons' | 'enemies' | 'bosses' | 'raids' | 'guild_raid' | 'dig_site_raid' | 'trait_raid' | 'training_raid' | 'forge_apprentice' | 'forge_journeyman' | 'forge_master' | 'class_skill_icons' | 'training_skill_icons' | 'ability_crest_icons' | 'offense_artifact_icons' | 'defense_artifact_icons' | 'tempo_artifact_icons' | 'fortune_artifact_icons' | 'gear_icons' | 'currency_icons' | 'status_icons'
-    | 'hero_skill_vfx' | 'damage_ability_vfx' | 'tank_ability_vfx' | 'support_ability_vfx' | 'control_ability_vfx' | 'training_active_vfx' | 'multi_strike_vfx' | 'feedback' | 'frames' | 'backgrounds' | 'arena_backgrounds' | 'ui' | 'branding'
+    | 'hero_skill_vfx' | 'damage_ability_vfx' | 'tank_ability_vfx' | 'support_ability_vfx' | 'control_ability_vfx' | 'training_active_vfx' | 'multi_strike_vfx' | 'feedback' | 'frames' | 'backgrounds' | 'arena_backgrounds' | 'guide' | 'ui' | 'branding'
 
 /**
  * The gallery's groups. `locked` marks art whose design is settled (the user's call, 2026-09-28):
@@ -98,6 +101,8 @@ export const ART_GROUPS: readonly { id: ArtGroup, label: string, locked?: true }
     { id: 'frames', label: 'Frames & badges', locked: true },
     { id: 'backgrounds', label: 'Backgrounds', locked: true },
     { id: 'arena_backgrounds', label: 'Arena backgrounds', locked: true },
+    // the tutorials' snail, Mossimer: Round 21, approved and locked (2026-10-09, the user)
+    { id: 'guide', label: 'Guide', locked: true },
     // parked until the real screens are built: redrawn against their layouts then (2026-09-29, the user)
     { id: 'ui', label: 'UI chrome · parked' },
     { id: 'branding', label: 'Branding', locked: true }
@@ -142,10 +147,13 @@ export interface ArtAsset {
  * 13 when the status effects locked, Round 14 when the Hero skill VFX locked, and Rounds 15–18
  * when the Damage, Tank, Support and Control Champion abilities locked, and Round 19 when the
  * Training Grounds actives locked (all 2026-10-02). Round 20, the Ascendant, was approved and locked
- * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09, so the next round
- * is 21; every earlier round is recorded in art-style.md.
+ * into the Hero, Frames, class skill icon and Hero skill VFX groups on 2026-10-09, and Round 21, the
+ * tutorials' guide, into the Guide group the same day; Round 22, the holiday gifts, is in review. Every earlier round
+ * is recorded in art-style.md.
  */
-export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = []
+export const ART_ROUNDS: readonly { n: number, label: string, prefixes: readonly string[] }[] = [
+    { n: 22, label: 'Holiday gifts', prefixes: ['ui/holiday_gift'] }
+]
 
 /** An asset rendered once into reusable frames — what the live stage blits. */
 export interface Baked { frames: Surface[], ax: number, ay: number, fps: number, loop: boolean }
@@ -609,7 +617,48 @@ function uiAssets(): ArtAsset[] {
         out.push({ ...anim(`bg/tab/${tab.id}`, 'backgrounds', 'UI backgrounds', `${tab.label} tab${tab.built ? '' : ' (Phase 4)'}`, SW, SH, 12, true, (d, t) => tab.draw(d, t)), opaque: true })
     }
     for (const c of CHROME) out.push(anim(`ui/${c.id}`, 'ui', 'UI chrome', c.label, c.w, c.h, c.frames, c.frames > 1, (d, t) => c.draw(d, t)))
+    out.push(...holidayGiftAssets())
     return out
+}
+
+function guideAssets(): ArtAsset[] {
+    const n = GUIDE_PORTRAIT
+    const frames = GUIDE_LOOP * AUTHORED_FPS
+    return [
+        anim('guide/snail', 'guide', 'Mossimer', 'The snail, idle', n, n, frames, true, (d, t) => drawGuideSnail(d, 0, 0, t)),
+        anim('guide/snail_talking', 'guide', 'Mossimer', 'The snail, talking', n, n, frames, true, (d, t) => drawGuideSnail(d, 0, 0, t, true)),
+        { ...anim('guide/portrait', 'guide', 'Mossimer', 'Portrait, as the guide panel shows it', n, n, frames, true, (d, t) => drawGuidePortrait(d, 0, 0, t)), opaque: true }
+    ]
+}
+
+const GIFT_SAMPLE: GiftRewardLine[] = [
+    { icon: 'gold', amount: 1_234_567, label: 'GOLD' },
+    { icon: 'gems', amount: 100, label: 'GEMS' },
+    { icon: 'seal_champion', amount: 5, label: 'GUILD SEALS' },
+    { icon: 'seal_gear', amount: 5, label: 'FORGE SEALS' },
+    { icon: 'seal_skill', amount: 5, label: 'SKILL SEALS' },
+    { icon: 'seal_artifact', amount: 5, label: 'EXCAVATION SEALS' }
+]
+
+/** The holiday gift: every holiday's icon through a wiggle, and the reveal with the claim landing at 0.6 s. */
+function holidayGiftAssets(): ArtAsset[] {
+    const cell = 28
+    return [
+        anim('ui/holiday_gift_icons', 'ui', 'UI chrome', `Holiday gift icons (${HOLIDAYS.length} holidays), wiggling`, cell * HOLIDAYS.length, cell, 22, true, (d, t) => {
+            HOLIDAYS.forEach((h, i) => drawGiftIconIn(d, { x: i * cell + 4, y: 4, w: 20, h: 20 }, t, { id: h.id, name: h.name }, false))
+        }),
+        // on the game's view, the stage's zoom3 camera
+        anim('ui/holiday_gift_reveal', 'ui', 'UI chrome', 'Holiday gift reveal (Christmas)', 272, 153, 135, false, (d, t) => {
+            rect(d, 0, 0, d.w, d.h, C.night2)
+            // a fresh reveal per frame, opened at 0 and handed its lines at 0.6, so any frame renders alone
+            const reveal = new GiftReveal()
+            const view = (lines: GiftRewardLine[] | null) => ({ key: 1, id: 'holiday_christmas' as const, name: 'Christmas', lines })
+            reveal.render(d, 0, view(null), false, false)
+            if (t >= 0.6) reveal.render(d, 0.6, view(GIFT_SAMPLE), false, false)
+            rect(d, 0, 0, d.w, d.h, C.night2)
+            reveal.render(d, t, view(t >= 0.6 ? GIFT_SAMPLE : null), false, false)
+        }, undefined, 30)
+    ]
 }
 
 function brandingAssets(): ArtAsset[] {
@@ -623,7 +672,7 @@ function brandingAssets(): ArtAsset[] {
 // ── Registry ───────────────────────────────────────────────────────────────────────
 
 type Provider = () => ArtAsset[]
-const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, paletteAssets, brandingAssets]
+const PROVIDERS: Provider[] = [heroAssets, championAssets, summonAssets, enemyAssets, bossAssets, raidAssets, vfxAssets, iconAssets, frameAssets, feedbackAssets, revealAssets, backgroundAssets, uiAssets, guideAssets, paletteAssets, brandingAssets]
 
 /** Register more providers (bosses, VFX, icons, …) — each module adds its own. */
 export function registerArt(p: Provider): void {

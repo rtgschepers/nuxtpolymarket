@@ -9,7 +9,7 @@ made it the most expensive bloat in the project.
 scripts cite them (`#22`, `#23.3`, `#18.6`). The gaps below — #4, #5, #8, #10–#21, #24, #26–#28 —
 are finished items, not missing ones; they are in `build-log.md` under the same number. #22, #23,
 #25 and #29 appear in both: the open part here, the full record there. New items continue from
-**#55** (#52 is taken by parallel work) — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up; #51 (Traits), #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
+**#55** — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up, built and its guide's art locked the same day, closing it; #51 (bosses without an escort) landed with it; #52 (Traits), #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
 
 **Resolving a bare `#N`:** this doc first, `build-log.md` otherwise. Sub-numbers (`#23.3`,
 `#18.6`) keep their original meaning in both.
@@ -46,6 +46,7 @@ read the older rule in the doc named in the middle column, it is superseded.**
 | 42 | `core-progression-and-prestige.md` and `pickableClasses`: a class pick is legal "at a prestige" (anything seen, or one tier deeper) — and in practice at any time, since nothing gated it | **A class token**: every prestige grants one (`hq_state.class_token`, migration `0051`; a flag, so a second prestige while holding one changes nothing), and taking a class **never reached before** — one tier deeper than the current — spends it. Switching back to any class already reached is free at any time. A new account starts without one, so everyone plays the Beginner until their first prestige. The class tree is its own scene and menu item; prestiging happens only through Begin Again on the bridge, which now raises the Void Shards it paid over the Hero (2026-10-04, the user's call) |
 | 44 | `idle-mechanics.md` §3: Battle Speed tiers 2x/3x/5x/10x, anchored at 50 Gems for 2x/30 min | **2x/3x/5x**, anchored at **250 Gems** (the old 10x price), both axes' rules unchanged. 10x was cut because at 10x the largest offline collect cleared the balance column by 1.87 orders of magnitude against the specs' 2. A second purchase of the running speed extends the block from its end; another speed is refused until it ends. §3 updated in place (2026-10-04, the user's calls) |
 | 44 | `gold-economy.md` §7: Seal-ladder growth 1.0007 (Guild, Dig Site) and 1.0011 (Forge, Training), sized so Gold completes a roster in ~6 months | **1.2 for all four**, set by feel: a day's first 10-pull is ~21M, the fifth ~14.7B, so Gold buys a few extra 10-pulls a day rather than completing a roster. There is no Seal button: a pull short of Seals buys them itself, at the price its button shows. §7 carries a dated note (2026-10-04, the user's call) |
+| 54 | `idle-mechanics.md` §2: the core loop is always-auto the instant the app is open, and the run advances continuously; §3: a Battle Speed block is pure wall-clock and runs down whether the app is open or not | **The run holds while the player is in a raid, and a running Battle Speed block waits with it.** Every fresh raid engage opens a session (`hq_state.pre_raid_snapshot`), with a preferred Loadout or without, and a settle while one is open pays nothing and only moves the clock; leaving drops the time spent there. A gap past `ONLINE_THRESHOLD_MS` closes it as time away, settled on the player's own loadout. The screen's projection, the boss auto-engage and the block's countdown hold with it; the block's expiry moves out by the held span (2026-10-10, the user's call). `build-log.md` #54 |
 | 39 | `gear-equipment.md` §3 ("every *other* owned piece … contributes a smaller passive bonus **instead**"), `build-log.md` #28's collection passives ("an equipped copy is never counted twice") | The collection passive is **additive with equipping** for Gear, Skills and Artifacts, as it already was for Champions: every owned copy pays its owned share, and an equipped one adds its full bonus on top. `gearModifiers`, `skillCollectionModifiers` and `artifactCollectionModifiers` changed; an equipped item is worth ~10% more than before (the share is 0.1 of the full line in all three). The campaign walk is unchanged — it models no collection. The Collections detail shows the two blocks, "In collection" always active once owned (2026-10-04, the user's call) |
 
 ---
@@ -58,23 +59,6 @@ read the older rule in the doc named in the middle column, it is superseded.**
 ---
 
 ## 🔴 Genuinely undesigned — full passes, not edits
-
-### 50. Tutorials with a guide character (backlog item 10) — **🚧 in progress, @rtgschepers, 2026-10-09**
-Picked up 2026-10-09; ask before starting on it. **Decided** (the user's calls): the guide is **a snail familiar**, working name Shellby (`GUIDE_NAME`, display only), unhurried and a little wry; the unlock schedule below; and **announce, then explain**: a line when a scene opens, two or three short pages the first time it is visited, plus an intro on a new run.
-
-| Opens at | Scenes |
-|---|---|
-| Start | Battle, Settings |
-| World 1 boss beaten | Gacha, Collections |
-| 1 World cleared | Milestones, Calendar |
-| 2 Worlds cleared | Loadouts, Battle Speed |
-| 4 Worlds cleared | Raids |
-| The run cleared | Prestige |
-| First prestige | Classes |
-
-**Built** (`FEATURE_UNLOCKS`, `shared/utils/hero-quest/tutorials.ts`, `content/tutorials.ts`): unlocks are derived from lifetime progress, never stored, and **enforced on the server** (`requireFeature` in every feature's routes, a 403 naming the checkpoint), so they can't be reached early. The tutorials seen are `hq_state.tutorials_seen` (migration `0059`); resetting them (Settings) locks nothing. The menu band shows only open scenes, a new one dotted until visited; a closed scene reached by a link falls back to the battle; the guide waits out boss and raid fights, and stays away while "show tutorials" is off.
-
-**Open:** the snail's art round (its portrait is a placeholder drawn in `guide.ts`), and its name.
 
 ### 7. Passive Skill Tree (backlog item 3)
 Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
@@ -126,9 +110,9 @@ fixed cooldown, with damage and a status or a drain. What it left open:
    pool, so only the Skills Unbreakable Will and Immortal Vanguard grant it. Worth a look when
    the Artifact effects are re-cut (`CLAUDE.md` §6).
 
-### 51. Traits — built; what the sims don't see, and two slips in `traits.md`
+### 52. Traits — built; what the sims don't see, and two slips in `traits.md`
 
-Full record: `build-log.md` #51. Five slots, Rolls, locks, Sets, save slots, and evasion live in
+Full record: `build-log.md` #52. Five slots, Rolls, locks, Sets, save slots, and evasion live in
 combat and GPN. What it left open:
 
 1. **Pacing is unmeasured.** The campaign walk and the balance script field no Traits, so they read
@@ -199,36 +183,30 @@ open:
 
 ### 53. Holiday gifts — built; the bundles are placeholders
 
-Full record: `build-log.md` #53. Four holidays, a claim each per year, in a three-day UTC window.
+Full record: `build-log.md` #53. Six holidays (Valentine's Day and Easter added 2026-10-10), a claim
+each per year, in a three-day UTC window, from a gift icon on the battle view.
 What it left open:
 
 1. **`HOLIDAY_GIFTS` is one `UNTUNED ╧` table**, and `HOLIDAY_CLAIM_WINDOW_DAYS` (3, the holiday
    counted) is §2's "e.g." taken at its word. The bundles follow §3's shape (Christmas richest,
-   Halloween smallest, themed Seals); every amount is a guess. Their Gems are platform-wide, so
+   Halloween and Valentine's Day smallest, themed Seals); every amount is a guess, the two new
+   holidays' included. Their Gems are platform-wide, so
    size them with the calendar's Gem days (#47) and the prestige milestones' (#48) in step 7 of the
    *Suggested order*, and their Gold after the Gold decision (#23), like the calendar's.
 2. **Lunar New Year's table ends at 2050**, and takes the date in China as the UTC day. A spec
    fails once the table is within twenty years of running out.
-3. **`holiday-events.md` §2 models the claim on `seals/claim-daily.post.ts`**, which #29 retired
-   (`tech-architecture.md` §5 still lists it). The login calendar (#47) was the model instead; no
-   rule moved.
+3. ~~`holiday-events.md` §2 models the claim on the retired `seals/claim-daily.post.ts`~~ — fixed
+   2026-10-10: §2 and `tech-architecture.md` §5 now name the login calendar's route.
 
-### 54. Per-raid Loadout auto-apply — built; choices made without asking
+### 54. Per-raid Loadout auto-apply — built; the Arena's half waits
 
-Full record: `build-log.md` #54. Each raid points at a saved slot from a picker on its own screen;
-a fresh engage snapshots and applies, leaving reverts. What it left open:
+Full record: `build-log.md` #54. Each raid points at a saved slot from a list on its own screen;
+a fresh engage snapshots and applies, leaving reverts, and the run (Battle Speed with it) holds
+while a session is open. Items 1–4 were settled on 2026-10-10 (the user's call) and are recorded
+there: the run's boss closing the session kept as the fallback, the cycling picker replaced by a
+list, a preset that can't be applied still refusing the engage, and the hold's two consequences
+fixed (Battle Speed waits with the run; the dev time skip leaves the raid first). What is left:
 
-1. **The run's boss closes the session.** Bosses engage under every scene, and the run's gate is
-   not the raid's fight, so a boss that fires while the player sits on the Raids scene fights on
-   the player's own loadout and the next raid engage applies the preferred one again.
-   `loadouts.md` §4 only says "on leaving the raid"; flip it if a boss should fight on the raid's.
-2. **The picker cycles** through the saved slots and none, rather than opening a list.
-3. **A preferred Loadout that can't be applied refuses the engage** (nothing spent) rather than
-   fighting on the live one. `loadouts.md` §1 says a Loadout never goes stale, so this should only
-   happen after a roster edit drops an ID.
-4. **Idle accrual during a session runs on the raid's Loadout**: the run never stops, and the
-   session is short. A session the client never closed reverts on the first read once the game
-   session has timed out (`HQ_SESSION_TIMEOUT_MS`), before that read's settle.
 5. **The Arena's pointer is stored but unread.** `arena` is a valid target (#1); the Arena's attack
    calls `engageLoadout(…, 'arena')` and its own leave when it is built.
 6. **`tech-architecture.md` §3 said a 5-entry map**, one per raid; #1 (the user's call,
@@ -359,7 +337,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `RAID_ENRAGE_SECONDS`, `RAID_DUMMY_SECONDS`, `RAID_KNIGHT_PWR_MULT`, `RAID_DIG_PWR_MULT`, `RAID_DIG_ADD_SECONDS`, `RAID_FORGE_PWR_MULT`, `RAID_FORGE_BOSS_STEPS`, `RAID_FORGE_HANDOFF_SECONDS` | `raid-system.md` | Built (#46). Each raid's HP multiplier is measured against its clock, so moving `RAID_ENRAGE_SECONDS` or `RAID_DUMMY_SECONDS` means re-measuring the HP multiplier it is coupled to. The PWR multipliers sit at 1: a raid boss hits like the stage it stands for |
 | `BOSS_SPECIAL_*` (11) | none — see #45 | One set of magnitudes for all twenty gate bosses' specials: cooldown, the spread, heavy and focus hits, burn, stun, silence, debuff and drain. Measured only on seeded gate fights; the campaign walk does not model them |
 | `CALENDAR_SCHEDULE`, `CALENDAR_INCOME_DAYS_FIRST`, `CALENDAR_INCOME_DAYS_LAST` | none — see #47 | The schedule's Gold minutes and Gem counts are placeholders, rebalanced after the Gold decision (#23), and count as one marker; day 30's 200 Void Shards is the user's. The two dials size every Seal, Key and Trait Gem day in days of income, ¼ to 1 |
-| `HOLIDAY_GIFTS`, `HOLIDAY_CLAIM_WINDOW_DAYS` | `holiday-events.md` §2–§3 | The four holidays' bundles, counted as one marker, and the claim window. Gems reach past Hero Quest: size them with the calendar's and the milestones' (#53) |
+| `HOLIDAY_GIFTS`, `HOLIDAY_CLAIM_WINDOW_DAYS` | `holiday-events.md` §2–§3 | The six holidays' bundles, counted as one marker, and the claim window. Gems reach past Hero Quest: size them with the calendar's and the milestones' (#53) |
 | `GPN_DISPLAY_SCALE` | `global-power-number.md` | Presentation only (#28): it changes how big GPN reads, never which party ranks above which, and cancels out of the Arena's percentage band |
 | `SLOT_BASE_BONUS` ×6, `GEAR_PASSIVE_COEFFICIENT` | `gear-equipment.md` §2 | Built. The six slot coefficients are deliberately *identical* — no doc ranks the stats against each other, so six different values would encode a spread nobody decided. `GEAR_PASSIVE_COEFFICIENT` must stay well under them or manual equip stops mattering |
 | `SKILL_PASSIVE_MAGNITUDE[]`, `SKILL_ECONOMY_COEFFICIENT` | `skills-gacha.md` §4 | The whole 36-skill magnitude ladder, indexed by rarity. §4 authors it as "small" → "large" and assigns no number anywhere; the *relative ordering* is design content, so retune the set rather than entries |
@@ -374,7 +352,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `SEAL_LADDER_GROWTH[]` | `gold-economy.md` §7 | Set, but calibrated against the superseded Gold anchors — see #23.2 |
 | `LOADOUT_SLOT_BASE_COST_GEMS` (4-level doubling, #40) | `loadouts.md` §3 | Built. §3 flags the first pairing of the doubling short track with Gems as a genuine unknown; at 4 levels the top step is 8× the base. Now checkable against real Gem flows: the login calendar (#47) and prestige milestones (#48) pay Gems, and Battle Speed (#44) is the only other Gem sink built so far. Traits and the Arena add more when they land |
 | `ONLINE_THRESHOLD_MS`, `HQ_REFRESH_INTERVAL_MS` | `tech-architecture.md` §9 | |
-| `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness. Live since Traits (#51): Vital Reflex reaches 0.50 |
+| `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness. Live since Traits (#52): Vital Reflex reaches 0.50 |
 | `OVERFLOW_CONVERSION_RATE` | `classes-and-combat.md` §7 | The only crit constant still untuned. Rarely reachable: with LCK off the level curve only a deliberately built crit Hero passes 100% |
 | `SEAL_GRANT_PER_BOSS` | `economy-and-currencies.md` §5 | A boss's batch, paid on the win. Doc gives only the shape and defers the values to the world/enemy pass (#6). Built and paying out |
 | `CONVERGENCE_COOLDOWN_FACTOR` | `capstone-class.md` | The Ascendant's power, the one open half of #43: best-of-each stats (the user's call), four free picks, and a volley paying `6 / factor` master skills a second very likely out-class every master. Measure the Ascendant on the campaign sim before moving it. Bounded above by the boss timer (past ~3.5 it never fires in a boss fight) |
@@ -410,7 +388,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
 3. ~~**World & Enemy Design (#6)**~~ **Closed 2026-10-04** — the art is restyled and locked (`art-style.md`); regular enemies get no abilities. ~~**Boss specials become real (#45)**~~ **built 2026-10-08**, measured on seeded gate fights; the open half is under #45 above.
 4. **The last quick call (#2)**, the Arena band — answer it with the Arena. #1 and #3 are decided, and with #3 the raid-rule questions #31 and #32 (2026-10-04); the asset calls (#4, #30) on 2026-09-17.
-5. **Phase 4 — endgame systems** (`implementation-plan.md`). Arena remains. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena. ~~Battle Speed~~ built (#44). ~~Raids~~ built, all five (#46). ~~Traits~~ built, with evasion (#51). ~~Holidays~~ built, the gifts (#53). ~~`loadouts.md` §4's per-raid auto-apply~~ built (#54); the Arena's half comes with the Arena.
+5. **Phase 4 — endgame systems** (`implementation-plan.md`). Arena remains. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena. ~~Battle Speed~~ built (#44). ~~Raids~~ built, all five (#46). ~~Traits~~ built, with evasion (#52). ~~Holidays~~ built, the gifts (#53). ~~`loadouts.md` §4's per-raid auto-apply~~ built (#54); the Arena's half comes with the Arena.
 6. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 7. **Playtest, then tune the rest.** The combat and progression block is tuned (#22); the gacha, shop, economy and ability-magnitude constants are settled here — see the standing-tuning section. The balance script and campaign sim stay in use throughout. **Once the Gold balance is decided, rebalance the login calendar's Gold and Gem days** (#47).
 

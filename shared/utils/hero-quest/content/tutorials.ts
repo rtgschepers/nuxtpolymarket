@@ -1,6 +1,10 @@
 /**
- * The guide's lines (`tutorials.ts`): a snail familiar who tags along with the party, unhurried and
- * a little wry, which suits a game that plays on while you're away (the user's call, 2026-10-09).
+ * The guide's lines (`tutorials.ts`). **Mossimer** is a snail who keeps the Chronicle: every run
+ * any hero has made toward the Void is written into the turns of its shell. When a run is beaten
+ * the Void folds the world back to Thornwick Vale and forgets it ever happened, but a snail carries
+ * everything it owns, so the Chronicle comes through every prestige intact. That is why it can
+ * guide you: it has watched this road walked more times than anyone. Unhurried, warm, a little
+ * wry about its pace (the user's call on a snail, 2026-10-09; the name and lore, 2026-10-09).
  *
  * Each tutorial is a few short pages, read one at a time. Nothing numeric is written into a line, so
  * a retuned constant can't leave the guide saying the old number.
@@ -10,79 +14,91 @@
 
 import type { TutorialId } from '../tutorials'
 
-/** A working name, display only (2026-10-09). */
-export const GUIDE_NAME = 'Shellby'
+/** Display only, so a rename touches no save. */
+export const GUIDE_NAME = 'Mossimer'
 
 export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
     'intro': [
-        'Oh, hello. I\'m Shellby. I\'ll tag along, at my own pace.',
+        'Ah, a new hero. I\'m Mossimer, keeper of the Chronicle. Don\'t mind the pace.',
+        'Every hero who ever marched on the Void is written in my shell. You\'re next.',
         'Your party fights on its own, even while you\'re away. Come back and collect.',
-        'Bosses wait for you, though. They only fight while you\'re watching.'
+        'Bosses are different. They only fight while you\'re watching. Glory wants a witness.',
+        'Off you go, then. I\'ll catch up. Eventually.'
     ],
 
-    'gacha:unlock': ['That boss was guarding something. The Gacha is open!'],
+    'loss_reminder': [
+        'Knocked back again? No shame in it. I\'ve lost a race or two myself.',
+        'Pull at the Gacha, then equip what you find in Collections. Bosses hate that.'
+    ],
+
+    'gacha:unlock': ['Bosses are a different breed. Time to find some help: the Gacha is now available.'],
     'gacha:visit': [
-        'Four gachas: Gear, Champions, Skills and Artifacts.',
-        'A pull costs Seals. A few free 10-pulls come round every day.',
-        'Short on Seals? A pull buys what it needs with Gold.'
+        'Four shrines, four gachas: Gear, Champions, Skills and Artifacts.',
+        'Feed one Seals and it gives something back. Some days, something wonderful.',
+        'A few free 10-pulls come round each day. Short on Seals? A pull buys them with Gold.',
+        'Every pull levels its gacha up, and a higher level brings rarer rewards.'
     ],
 
-    'collections:unlock': ['Whatever you pull lands in your Collections.'],
+    'collections:unlock': ['Everything you pull is kept in your Collections. I do like a tidy hoard.'],
     'collections:visit': [
-        'Equip Gear, Skills and Artifacts here, and field your Champions.',
-        'A duplicate levels up the copy you own. Nothing is wasted.',
-        'Even unequipped, everything you own helps a little.'
+        'Equip Gear, Skills and Artifacts here, and choose which Champions march with you.',
+        'A duplicate levels up the copy you own. In my experience, nothing is ever wasted.',
+        'Even what you leave on the shelf lends you a little strength.'
     ],
 
-    'milestones:unlock': ['A whole World cleared! That deserves a trophy. Milestones are open.'],
+    'milestones:unlock': ['A whole World cleared! That earns a line in the Chronicle. Milestones are now available.'],
     'milestones:visit': [
-        'Every feat pays here: Worlds, prestiges, raid levels, collections.',
-        'They never run out. Claim whenever you like. No hurry.'
+        'Every deed worth writing down is counted here: Worlds, prestiges, raids, collections.',
+        'The tracks never end and nothing expires. Claim whenever you like. I never rush.'
     ],
 
-    'calendar:unlock': ['The Calendar is open: a gift for every day you stop by.'],
+    'calendar:unlock': ['The Calendar is now available. Visit once a day and I\'ll have something for you.'],
     'calendar:visit': [
-        'One reward a day, and the cycle climbs to a big one at the end.',
-        'Missed a day? A few make-ups a cycle let you claim it late.'
+        'One gift a day, and the cycle builds to a grand one at the end.',
+        'Missed a day? It happens to the best of us. A few make-ups a cycle let you claim late.'
     ],
 
-    'loadouts:unlock': ['Loadouts are open. Save a party, swap it back in one tap.'],
+    'loadouts:unlock': ['Two Worlds behind you. Time to plan ahead: Loadouts are now available.'],
     'loadouts:visit': [
         'A Loadout saves your party, formation, Skills, Artifacts and Gear.',
-        'Keep one for waves and one for bosses. Saving costs nothing.'
+        'Keep one for waves and one for bosses. Saving is free, and swapping is one tap.'
     ],
 
-    'speed:unlock': ['Battle Speed is open. Even I could go faster.'],
+    'speed:unlock': ['Battle Speed is now available. I\'ve never tried it myself, but I hear it\'s thrilling.'],
     'speed:visit': [
-        'Spend Gems on a block of faster battles.',
-        'It keeps running while you\'re away. Take it from a snail: worth it.'
+        'Spend Gems on a stretch of faster battles.',
+        'It keeps running while you\'re away. Take it from a snail: speed is precious.'
     ],
 
-    'raids:unlock': ['Raids are open: five big bosses, each with a trick.'],
+    'raids:unlock': ['Four Worlds cleared, and something big has noticed you. Raids are now available.'],
     'raids:visit': [
-        'Each raid costs a Key. Keys come back every day.',
-        'Beat a level to open the next. Quick-clear your best any time.',
-        'Raids pay Seals, and the Trait raid pays Trait Gems.'
+        'Five great beasts wait in the raids, each with a trick of its own.',
+        'Each reward costs a Key, and Keys come back every day.',
+        'Beat a level to open the next, and quick-clear your best whenever you like.',
+        'Raids pay Seals, and the Trait raid pays Trait Gems. A higher level pays more.'
     ],
 
-    'traits:unlock': ['Traits are open: five slots of bonus stats for the whole party.'],
+    'traits:unlock': ['The Trait raid pays in Trait Gems, and here is where they go. Traits are now available.'],
     'traits:visit': [
-        'A Roll rerolls every slot you haven\'t locked, for Trait Gems.',
-        'Locking is free, but each lock makes the next Roll pricier.',
-        'Match Sets across slots for extra bonuses. Save a good board to come back to.'
+        'Five slots, each a bonus for the whole party. Roll them with Trait Gems.',
+        'A Roll rerolls every slot you haven\'t locked. Locking is free, but each lock makes the next Roll dearer.',
+        'Match Sets across slots for a bonus of their own.',
+        'Save a good board to come back to. Even I write the best ones down.'
     ],
 
-    'prestige:unlock': ['You beat the whole run! Prestige is open.'],
+    'prestige:unlock': ['You beat the Void. I\'ve seen this moment before. Prestige is now available.'],
     'prestige:visit': [
-        'Prestige starts the run over, harder, for Void Shards.',
-        'Your Hero keeps his level. Spend the Shards in the shop here.',
-        'Every prestige grants a class token, too.'
+        'The secret of the Chronicle: the Void is never gone. It folds the world back up.',
+        'Prestige walks you back to Thornwick Vale, on a harder road. The Void pays in Shards.',
+        'Your Hero keeps every level. Spend the Shards in the shop here.',
+        'Each prestige grants a class token, too.',
+        'The Void forgets every run. I don\'t. A snail carries everything it owns.'
     ],
 
-    'classes:unlock': ['Your first class token! Classes are open.'],
+    'classes:unlock': ['Your first class token! Classes are now available. The Chronicle loves a new costume.'],
     'classes:visit': [
         'A token takes your class one step deeper down the tree.',
         'Switching back to a class you\'ve had is always free.',
-        'Prestige once as every master, and something waits at the end.'
+        'Prestige once as every master, and something waits at the end. Even I\'ve only heard of it.'
     ]
 }

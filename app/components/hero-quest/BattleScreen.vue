@@ -9,19 +9,19 @@ import type { CollectionAction, CollectionLine, CollectionSection, CollectionTil
 import type { LoadoutEntry, LoadoutSlotView, LoadoutsView } from '~/utils/hero-quest-art/loadouts-scene'
 import type { PrestigeView } from '~/utils/hero-quest-art/prestige-scene'
 import type { ClassesView } from '~/utils/hero-quest-art/classes-scene'
-import type { StagePack } from '~/utils/hero-quest-art/demo'
 import type { SpeedView } from '~/utils/hero-quest-art/speed-scene'
 import type { SettingsTarget, SettingsView } from '~/utils/hero-quest-art/settings-scene'
-import type { CalendarGiftView, CalendarView } from '~/utils/hero-quest-art/calendar-scene'
+import type { CalendarView } from '~/utils/hero-quest-art/calendar-scene'
+import type { HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
 import type { TraitsTarget, TraitsView } from '~/utils/hero-quest-art/traits-scene'
 import type { TraitGrade } from '~/utils/hero-quest-art/palette'
-import type { RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
-import type { RaidId as StageRaidId, StageRaid } from '~/utils/hero-quest-art/demo'
+import type { RaidLoadoutOption, RaidRewardView, RaidRowView } from '~/utils/hero-quest-art/raids-scene'
+import type { RaidId as StageRaidId, StagePack, StageRaid } from '~/utils/hero-quest-art/demo'
 import { RAIDS, type RaidId } from '#shared/utils/hero-quest/content/raids'
 import { LOADOUT_TARGETS } from '#shared/utils/hero-quest/loadout-session'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
-import { isHqFeature, nextTutorial, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
+import { bossLossMark, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
 import { GUIDE_NAME, TUTORIAL_PAGES } from '#shared/utils/hero-quest/content/tutorials'
 import type { GuideView } from '~/utils/hero-quest-art/guide'
 import type { GachaBannerView, GachaButton, GachaCard, GachaSystemId, GachaView, PullPrice } from '~/utils/hero-quest-art/gacha-scene'
@@ -49,7 +49,7 @@ const {
     holidays, claimHoliday, milestones, claimMilestones, ascendant, tutorials, markTutorialSeen, resetTutorials,
     traits, rollTraits, lockTrait, saveTraits, loadTraits, buyTraitSaveSlot
 } = useHeroQuest()
-const { user } = useAuth()
+const { user, fetchSession } = useAuth()
 
 /**
  * The Collections scene's tab, off the route, and the roster it shows, with what each entry's
@@ -582,7 +582,8 @@ const raidRows = computed<RaidRowView[]>(() => (raids.value ?? []).map(r => ({
     id: r.id as RaidId,
     open: r.open,
     loadout: preferredName(r.id),
-    loadoutLive: loadoutSession.value?.target === r.id,
+    loadoutSlot: preferredName(r.id) === null ? null : loadoutPreferences.value[r.id] ?? null,
+    loadoutLive: loadoutSession.value?.target === r.id && loadoutSession.value.slotIndex !== null,
     keys: r.keys,
     keyCap: r.keyCap,
     nextKeys: r.nextKeyAt === null ? null : countdown(r.nextKeyAt - raidClock.value),
@@ -597,22 +598,20 @@ function preferredName(target: string): string | null {
     return loadouts.value?.saved.find(p => p.slotIndex === slot)?.name ?? null
 }
 
-/** The saved slots a raid's picker steps through, in slot order. */
-const savedSlots = computed(() => (loadouts.value?.saved ?? []).map(p => p.slotIndex).sort((a, b) => a - b))
+/** The saved slots a raid's picker lists, in slot order. */
+const raidLoadoutOptions = computed<RaidLoadoutOption[]>(() => (loadouts.value?.saved ?? [])
+    .map(p => ({ slotIndex: p.slotIndex, name: p.name }))
+    .sort((a, b) => a.slotIndex - b.slotIndex))
 
 /**
- * The picker on a raid's screen: each press points the raid at the next saved slot, and past the
- * last at none (`loadouts.md` §4). Free; the live loadout moves on the raid's next engage.
+ * A line picked off a raid's Loadout list: the slot it now points at, or none (`loadouts.md` §4).
+ * Free; the live loadout moves on the raid's next engage.
  */
-async function onRaidLoadout(raidId: RaidId) {
-    const slots = savedSlots.value
-    if (!slots.length) return
-    const current = loadoutPreferences.value[raidId]
-    const at = current === undefined ? -1 : slots.indexOf(current)
-    const next = at + 1 < slots.length ? slots[at + 1]! : null
+async function onRaidLoadout(raidId: RaidId, slotIndex: number | null) {
+    if ((loadoutPreferences.value[raidId] ?? null) === slotIndex) return
     raidsBusy.value = true
     try {
-        await setLoadoutPreference(raidId, next)
+        await setLoadoutPreference(raidId, slotIndex)
     } catch {
         // `useHeroQuest` has already shown the error
     } finally {
@@ -655,8 +654,9 @@ function closeRaidReward() {
 }
 
 /**
- * Leaving the raid puts back the loadout its preferred one replaced (`loadouts.md` §4): not after
- * each attempt, but once the player is neither on the Raids scene nor watching a round. A reload
+ * Leaving the raid lets the run go on and puts back the loadout its preferred one replaced
+ * (`loadouts.md` §4): not after each attempt, but once the player is neither on the Raids scene
+ * nor watching a round. Every raid opens a session, so every raid is left this way. A reload
  * onto another scene leaves too, since the session is the server's. `raidReturning` covers the
  * beat between a round's popup closing and the route reaching the Raids scene again.
  */
@@ -748,29 +748,7 @@ async function onSetting(target: SettingsTarget) {
 const calendarNextDay = useHqCountdown(() => calendar.value?.nextDayAt)
 const calendarClock = useHqClock()
 
-const SEAL_NAMES: Readonly<Record<string, string>> = { gear: 'FORGE', champion: 'GUILD', skill: 'SKILL', artifact: 'EXCAVATION' }
-
-/**
- * The holiday gift the Calendar scene's title row shows: the first one open and unclaimed, else
- * one open and claimed, else the next to open, with what it pays (or when it opens) spelled out.
- */
-const calendarGift = computed<CalendarGiftView | null>(() => {
-    const h = holidays.value
-    if (!h) return null
-    const open = h.open.find(g => !g.claimed) ?? h.open[0]
-    if (open) {
-        const seals = open.seals.length === 4 && open.seals.every(x => x.amount === open.seals[0]!.amount)
-            ? [`${open.seals[0]!.amount} OF EVERY SEAL`]
-            : open.seals.map(x => `${x.amount} ${SEAL_NAMES[x.system] ?? ''} SEALS`)
-        const pays = [`${formatHq(open.gold)} GOLD`, `${open.gems} GEMS`, ...seals].join(', ')
-        return { name: open.name, state: open.claimed ? 'claimed' : 'open', detail: pays }
-    }
-    if (!h.next) return null
-    const days = Math.max(1, Math.ceil((h.next.opensAt - calendarClock.value) / 86_400_000))
-    return { name: h.next.name, state: 'next', detail: `IN ${days} DAY${days === 1 ? '' : 'S'}` }
-})
-
-/** The Calendar scene: every day's reward and state, the make-ups, the clocks, and the holiday gift. */
+/** The Calendar scene: every day's reward and state, the make-ups, and the clocks. */
 const calendarView = computed<CalendarView>(() => {
     const c = calendar.value
     return {
@@ -780,8 +758,7 @@ const calendarView = computed<CalendarView>(() => {
         makeupsPerCycle: CALENDAR_MAKEUPS_PER_CYCLE,
         makeupDay: c?.makeupDay ?? null,
         nextDayIn: (calendarNextDay.value ?? '').toUpperCase(),
-        cycleDaysLeft: c ? Math.max(1, Math.ceil((c.endsAt - calendarClock.value) / 86_400_000)) : 0,
-        gift: calendarGift.value
+        cycleDaysLeft: c ? Math.max(1, Math.ceil((c.endsAt - calendarClock.value) / 86_400_000)) : 0
     }
 })
 const calendarBusy = ref(false)
@@ -797,17 +774,53 @@ async function onClaimCalendar(makeup: boolean) {
     }
 }
 
-/** Claim the open holiday gift the Calendar scene shows. */
-async function onClaimHoliday() {
-    const gift = holidays.value?.open.find(g => !g.claimed)
-    if (!gift) return
-    calendarBusy.value = true
+const SEAL_NAMES: Readonly<Record<string, string>> = { gear: 'FORGE SEALS', champion: 'GUILD SEALS', skill: 'SKILL SEALS', artifact: 'EXCAVATION SEALS' }
+
+/** The holiday gift waiting in the battle view's corner: the earliest open one not yet claimed. */
+const holidayGift = computed<HolidayGiftIconView | null>(() => {
+    const open = holidays.value?.open.find(g => !g.claimed)
+    return open ? { id: open.id, name: open.name } : null
+})
+
+/** The gift being opened: it shows at once, and its lines land with the claim. */
+const holidayReveal = ref<HolidayRevealView | null>(null)
+let holidayRevealKey = 0
+/** A claim paid Gold or Gems the header hasn't shown yet: it reads them back once the reveal is put away. */
+let holidayPaid = false
+
+function settleHolidayBalance() {
+    if (!holidayPaid) return
+    holidayPaid = false
+    void fetchSession()
+}
+
+function onHolidayRevealClose() {
+    holidayReveal.value = null
+    settleHolidayBalance()
+}
+onUnmounted(settleHolidayBalance)
+
+/** Open the waiting gift: the reveal starts on the press, and the box bursts once the claim is in. */
+async function onHolidayOpen() {
+    const gift = holidayGift.value
+    if (!gift || holidayReveal.value) return
+    const key = ++holidayRevealKey
+    holidayReveal.value = { key, id: gift.id, name: gift.name, lines: null }
     try {
-        await claimHoliday(gift.id)
+        const res = await claimHoliday(gift.id)
+        if (!res) return
+        holidayPaid = parseFloat(res.gold) > 0 || res.gems > 0
+        // a reveal no longer showing still owes the header its balance
+        if (holidayReveal.value?.key !== key) return settleHolidayBalance()
+        const lines = [
+            { icon: 'gold', amount: parseFloat(res.gold) || 0, label: 'GOLD' },
+            { icon: 'gems', amount: res.gems, label: 'GEMS' },
+            ...res.seals.map(x => ({ icon: `seal_${x.system}`, amount: x.amount, label: SEAL_NAMES[x.system] ?? 'SEALS' }))
+        ].filter(line => line.amount > 0)
+        holidayReveal.value = { ...holidayReveal.value, lines }
     } catch {
-        // `useHeroQuest` has already shown the error
-    } finally {
-        calendarBusy.value = false
+        // `useHeroQuest` has already shown the error; the box goes with it
+        if (holidayReveal.value?.key === key) holidayReveal.value = null
     }
 }
 
@@ -902,8 +915,11 @@ async function onTraitAction(target: TraitsTarget) {
     }
 }
 
-/** The running Battle Speed block's time left, off the server's expiry. */
-const speedLeft = useHqCountdown(() => battleSpeed.value?.expiresAt)
+/** The running Battle Speed block's time left, off the server's expiry; it stands still in a raid, as the block does. */
+const speedLeftLive = useHqCountdown(() => battleSpeed.value?.expiresAt)
+const speedLeft = computed(() => loadoutSession.value && battleSpeed.value?.expiresAt
+    ? formatHqCountdown(battleSpeed.value.remainingSeconds)
+    : speedLeftLive.value)
 
 /** The Battle Speed scene: the running block, the Gems to spend, and every block's price. */
 const speedView = computed<SpeedView>(() => {
@@ -973,7 +989,8 @@ async function onShopBuy(upgradeId: string) {
  * `run`/`hero` stay in scope deliberately: `liveHero` is the right thing to *show* and the wrong
  * thing to compare a payload against, so anything that needs the anchor still has it.
  */
-const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed)
+// the run holds while a raid session is open, as the server's settle does
+const { liveRun, liveHero, speedNow } = useHqLiveRun(run, hero, battleSpeed, computed(() => loadoutSession.value !== null))
 
 /**
  * Who stands on the stage: the Hero and the Champions fielded, in party order, each on its row.
@@ -1004,14 +1021,31 @@ const unlocked = computed<readonly HqFeature[]>(() => tutorials.value?.unlocked 
 /** Closed here before the server says so, so a tutorial doesn't flash back while its write is on its way. */
 const seenLocally = ref<string[]>([])
 const seenTutorials = computed(() => [...(tutorials.value?.seen ?? []), ...seenLocally.value])
-/** The menu shows Settings and every scene open so far. */
-const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || unlocked.value.includes(s)))
+/** The open features the menu shows: with tutorials on, a feature waits for its turn behind one that opened with it. */
+const shownFeatures = computed<readonly HqFeature[]>(() => settings.value?.tutorials === false
+    ? unlocked.value
+    : revealedFeatures(unlocked.value, seenTutorials.value, props.scene))
+/** The menu shows Settings and every feature shown. */
+const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || shownFeatures.value.includes(s)))
 /** Opened and not visited yet: the button carries the red dot until it is. */
 const newScenes = computed(() => unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)))
 
-// a scene not open yet, reached by a link or a reload, falls back to the battle
-watch([() => props.scene, unlocked], ([scene]) => {
-    if (tutorials.value && isHqFeature(scene) && !unlocked.value.includes(scene)) emit('scene', 'battle')
+/** The scene last opened from the menu: picked from what the menu showed, so it is never sent back. */
+let openedFromMenu: HqScene | null = null
+
+/**
+ * A scene not open yet, or waiting its turn, reached by a link or a reload falls back to the battle.
+ * Checked on arrival and when the tutorials first load, never against a scene opened from the menu:
+ * re-checking as the tutorials moved sent players out of scenes they had just opened.
+ */
+watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
+    if (scene === openedFromMenu) return
+    openedFromMenu = null
+    if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) return
+    if (import.meta.dev) {
+        console.warn('[hero-quest] scene not shown, back to the battle', { scene, unlocked: unlocked.value, seen: seenTutorials.value, shown: shownFeatures.value })
+    }
+    emit('scene', 'battle')
 }, { immediate: true })
 
 /**
@@ -1025,7 +1059,7 @@ const dueTutorial = computed<TutorialId | null>(() => {
 const guidePage = ref(0)
 watch(dueTutorial, () => { guidePage.value = 0 })
 const guideView = computed<GuideView | null>(() => dueTutorial.value
-    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value }
+    ? { name: GUIDE_NAME, pages: TUTORIAL_PAGES[dueTutorial.value], page: guidePage.value, focus: unlockFocus(dueTutorial.value) }
     : null)
 
 function closeTutorial() {
@@ -1037,6 +1071,28 @@ function closeTutorial() {
     })
 }
 
+/** An unlock's scene, whose menu button is the one thing a forced unlock lets the player press. */
+function unlockFocus(id: TutorialId): HqMenuScene | null {
+    return id.endsWith(':unlock') ? id.slice(0, -':unlock'.length) as HqMenuScene : null
+}
+
+/** A menu press. Pressing the button an unlock points at is how that unlock is read. */
+function onScene(scene: HqScene) {
+    if (guideView.value?.focus === scene) closeTutorial()
+    openedFromMenu = scene
+    emit('scene', scene)
+}
+
+/** A boss fight lost: counted toward the guide's one reminder, which shows once the replay is done. */
+function countBossLoss() {
+    const mark = bossLossMark(seenTutorials.value)
+    if (!mark) return
+    seenLocally.value = [...seenLocally.value, mark]
+    markTutorialSeen(mark).catch(() => {
+        // `useHeroQuest` has already shown the error; this loss just goes uncounted
+    })
+}
+
 function onGuideNext() {
     const view = guideView.value
     if (!view) return
@@ -1044,8 +1100,6 @@ function onGuideNext() {
     else closeTutorial()
 }
 const engaging = ref(false)
-/** Which of the two paths opened the replay — only an automatic one dismisses itself. */
-const fightWasAutomatic = ref(false)
 
 /**
  * The boss's name and timer, taken as the fight is engaged: the payload that lands with the
@@ -1150,10 +1204,10 @@ async function runFightAt(automatic: boolean) {
         const name = liveRun.value?.farming ? run.value?.enemyName : liveRun.value?.enemyName
         const boss = { name: name ?? 'Boss', timer: liveRun.value?.bossTimerSeconds ?? 30 }
         const result = await engageBoss({ silentErrors: automatic })
-        fightWasAutomatic.value = automatic
         fightBoss.value = boss
         fightProgress.value = { time: 0, done: false }
         fight.value = result
+        if (result && result.outcome !== 'win') countBossLoss()
     } finally {
         engaging.value = false
     }
@@ -1179,7 +1233,8 @@ useHqAutoBoss({
     lostHere: () => lostHere.value,
     secondsPerKill: () => liveRun.value?.secondsPerKill ?? null,
     engaging: () => engaging.value,
-    replayOpen: () => fight.value !== null || raidRound.value !== null,
+    // a raid session holds the run, its gate included, until the player leaves the raid
+    replayOpen: () => fight.value !== null || raidRound.value !== null || loadoutSession.value !== null,
     engage: () => runFightAt(true)
 })
 
@@ -1245,9 +1300,11 @@ const awayReport = computed(() => {
           :crossing="crossing"
           :earned="earnedShards"
           :menu-scenes="menuScenes"
+          :guide="guideView"
           @begin="beginAgain"
           @crossed="onCrossed"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
+          @guide-next="onGuideNext"
         />
         <p class="text-center text-sm text-muted">
           Begin again at World 1 for {{ formatHq(nextPrestigeReward) }} Void Shards. Your hero keeps every level.
@@ -1288,15 +1345,17 @@ const awayReport = computed(() => {
           :traits-busy="traitsBusy"
           :raids="raidRows"
           :raids-busy="raidsBusy"
-          :loadouts-saved="savedSlots.length > 0"
+          :raid-loadouts="raidLoadoutOptions"
           :raid-round="raidRound"
+          :holiday-gift="holidayGift"
+          :holiday-reveal="holidayReveal"
           :raid-reward="raidReward"
           :classes="classesView"
           :classes-busy="classesBusy"
           @fight-progress="fightProgress = $event"
           @pack="stagePack = $event"
           @challenge="onEngage"
-          @scene="emit('scene', $event)"
+          @scene="onScene"
           @collection-tab="openCollectionTab"
           @collection-action="onCollectionAction"
           @loadout-action="onLoadoutAction"
@@ -1307,10 +1366,10 @@ const awayReport = computed(() => {
           @gacha-close="gachaReveal = null"
           @setting="onSetting"
           @claim-calendar="onClaimCalendar"
-          @claim-holiday="onClaimHoliday"
+          @holiday-open="onHolidayOpen"
+          @holiday-reveal-close="onHolidayRevealClose"
           @claim-milestones="onClaimMilestones"
           @guide-next="onGuideNext"
-          @guide-skip="closeTutorial"
           @trait-action="onTraitAction"
           @raid-enter="onRaidEnter"
           @raid-quick="onRaidQuick"
@@ -1321,7 +1380,7 @@ const awayReport = computed(() => {
         />
       </template>
 
-      <!-- Hidden rather than unmounted under a scene: the fight panel closes an automatic fight on its own timer. -->
+      <!-- Hidden rather than unmounted under a scene: the fight panel closes every fight on its own timer. -->
       <div
         v-show="scene === 'battle' && !showGate"
         class="space-y-6"
@@ -1334,7 +1393,7 @@ const awayReport = computed(() => {
           :boss-timer-seconds="fightBoss.timer"
           :time="fightProgress.time"
           :done="fightProgress.done"
-          :auto-close="fightWasAutomatic"
+          auto-close
           @skip="battleCanvas?.skipFight()"
           @close="fight = null"
         />

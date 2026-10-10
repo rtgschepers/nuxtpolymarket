@@ -29,7 +29,7 @@ import { calendarGoldPerHour, serializeCalendar } from '#server/utils/hero-quest
 import { serializeHqMilestones } from '#server/utils/hero-quest-milestones'
 import { serializeTutorials } from '#server/utils/hero-quest-tutorials'
 import { getHolidayClaims, serializeHolidays } from '#server/utils/hero-quest-holidays'
-import { restoreStaleLoadoutSession, serializeLoadoutPreferences, serializeLoadoutSession } from '#server/utils/hero-quest-loadout'
+import { serializeLoadoutPreferences, serializeLoadoutSession } from '#server/utils/hero-quest-loadout'
 import { GACHA_SYSTEMS } from '#shared/utils/hero-quest/gacha'
 import { getTraitSaves, serializeTraits } from '#server/utils/hero-quest-traits'
 
@@ -83,10 +83,8 @@ export default defineEventHandler(async (event) => {
         }
     }
 
-    // A raid's preferred Loadout left live by a session that ended without leaving the raid (a tab
-    // shut mid-raid) goes back before the settle, so the time away accrues on the player's own.
-    if (existing.preRaidSnapshot !== null) await restoreStaleLoadoutSession(userId)
-
+    // A raid session left open (a tab shut mid-raid) is closed by the settle itself once the gap
+    // outlasts presence, so the time away accrues on the player's own loadout.
     const settleOutcome = await settleHq(userId)
     const { state, result, online, previousLevel } = settleOutcome
 
@@ -154,7 +152,7 @@ export default defineEventHandler(async (event) => {
         loadouts: serializeLoadouts(loadoutRows, shopLevels),
         /** Raid (or `arena`) → the saved slot it applies on a fresh engage (`loadouts.md` §4). */
         loadoutPreferences: serializeLoadoutPreferences(state, loadoutRows, shopLevels),
-        /** The open preferred-Loadout session, if a raid's Loadout is live now: its raid and slot. */
+        /** The open raid session, if any: its raid and the slot it applied (null for none). The run holds while it is open. */
         loadoutSession: serializeLoadoutSession(state),
         /** The Traits scene: the live board, the Roll's price, every Set's tier, and the save slots. */
         traits: serializeTraits(state, traitBoard, traitSaves, shopLevels),

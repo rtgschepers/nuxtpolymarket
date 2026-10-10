@@ -9,6 +9,7 @@ import { panel } from './ui-art'
 import { plateButton, type Box } from './collections-scene'
 import type { SceneBackdrops } from './menu-band'
 import type { HqSettingKey, HqSettings } from '../../../shared/utils/hero-quest/settings'
+import { GUIDE_NAME } from '../../../shared/utils/hero-quest/content/tutorials'
 
 export interface SettingsView {
     settings: HqSettings
@@ -25,7 +26,7 @@ const SECTIONS: readonly { title: string, rows: readonly Row[] }[] = [
     {
         title: 'TUTORIALS',
         rows: [
-            { id: 'tutorials', name: 'SHOW TUTORIALS', line: 'SHELLBY EXPLAINS EACH PART OF THE GAME AS IT OPENS.' },
+            { id: 'tutorials', name: 'SHOW TUTORIALS', line: `${GUIDE_NAME.toUpperCase()} EXPLAINS EACH PART OF THE GAME AS IT OPENS.` },
             { id: 'resetTutorials', name: 'RESET TUTORIALS', line: 'SEE EVERY TUTORIAL AGAIN.' }
         ]
     },

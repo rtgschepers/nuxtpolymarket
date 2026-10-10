@@ -13,7 +13,7 @@ import { hqHolidayClaims, hqState } from '#server/database/schema'
 import { credit, creditGems } from '#server/utils/balance'
 import { bankedGoldOf, getCollections, getShopLevels, getTraitBoard, heroSnapshotOf, sealGrant } from '#server/utils/hero-quest'
 import { calendarGoldPerHour } from '#server/utils/hero-quest-calendar'
-import { holidayGift, holidayGiftGold, nextHolidayWindow, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
+import { holidayGift, holidayGiftGold, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
 import { isHolidayId } from '#shared/utils/hero-quest/content/holidays'
 import { GACHA_SYSTEMS, type GachaSystem } from '#shared/utils/hero-quest/gacha'
 import type { HolidayGift } from '#shared/utils/hero-quest/constants'
@@ -30,11 +30,10 @@ function giftSeals(gift: HolidayGift): { system: GachaSystem, amount: number }[]
 }
 
 /**
- * The gifts as the Calendar scene shows them: every one open now, whether it is claimed and what
- * it pays at the run's current income, and the next one to open.
+ * The gifts open now, for the battle view's gift icon: whether each is claimed and what it pays at
+ * the run's current income.
  */
 export function serializeHolidays(claims: readonly { holidayId: string, year: number }[], goldPerHour: number, now = Date.now()) {
-    const next = nextHolidayWindow(now)
     return {
         open: openHolidayWindows(now).map((w) => {
             const gift = holidayGift(w.holiday.id)
@@ -48,8 +47,7 @@ export function serializeHolidays(claims: readonly { holidayId: string, year: nu
                 gems: gift.gems,
                 seals: giftSeals(gift)
             }
-        }),
-        next: next ? { id: next.holiday.id, name: next.holiday.name, opensAt: next.opensAt } : null
+        })
     }
 }
 

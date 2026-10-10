@@ -40,6 +40,7 @@ import { db } from '#server/database'
 import { hqCollection, hqFights, hqLoadouts, hqShopUpgrades, hqState, hqTraitSaveSlots, hqTraitSlots } from '#server/database/schema'
 import { credit, creditGems } from '#server/utils/balance'
 import { isBossStage, sealGrantSet, settleHq } from '#server/utils/hero-quest'
+import { leaveLoadoutSession } from '#server/utils/hero-quest-loadout'
 import { CLASS_NODES } from '#shared/utils/hero-quest/content/classes'
 import { GACHA_CONTENT, gachaContent } from '#shared/utils/hero-quest/content/registry'
 import { SHOP_TRACKS } from '#shared/utils/hero-quest/content/shop'
@@ -150,7 +151,9 @@ export interface DevSkipResult {
 export async function devSkip(userId: string, hours: number, mode: SkipMode): Promise<DevSkipResult> {
     const { chunks, chunkMs } = skipPlan(hours, mode)
 
-    // Bank whatever really elapsed before rewriting the clock underneath it.
+    // An open raid session holds the run, so the skip leaves the raid first, or every online chunk
+    // would pay nothing. Then bank whatever really elapsed before rewriting the clock underneath it.
+    await db.transaction(tx => leaveLoadoutSession(tx, userId))
     const before = await settleHq(userId)
 
     /**

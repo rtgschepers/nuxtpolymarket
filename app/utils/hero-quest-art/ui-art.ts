@@ -438,38 +438,6 @@ export const CHROME: readonly Chrome[] = [
                 drawText(s, String(v), 154, y + 1, C.white, { align: 2, shadow: 1 })
             })
         }
-    },
-    {
-        id: 'holiday_banner', label: 'Holiday claim banner', w: 200, h: 40, frames: 12,
-        draw(s, t) {
-            panel(s, 0, 0, 200, 40, [C.red0, C.red1, C.red3], C.red0)
-            for (let i = 0; i < 24; i++) {
-                const x = R(hash2(1, i) * 200)
-                const y = R(((hash2(2, i) * 40) + qt(t) * 12) % 40)
-                if ((y >= 5 && y <= 16 && x >= 30 && x <= 170) || (y >= 20 && y <= 36 && x >= 66 && x <= 134)) continue
-                px(s, x, y, C.white)
-            }
-            drawText(s, 'A GIFT FOR THE SEASON', 100, 8, C.gold3, { align: 1, shadow: 2 })
-            panel(s, 70, 22, 60, 13, [C.gold0, C.gold1, C.gold3], C.gold1)
-            drawText(s, 'CLAIM', 100, 25, C.ink, { align: 1, shadow: 0 })
-        }
-    },
-    {
-        id: 'holiday_gifts', label: 'Holiday gift-box icons (4 holidays)', w: 112, h: 32, frames: 1,
-        draw(s) {
-            // New Year, Lunar New Year, Halloween, Winter Holiday
-            const sets: [number, number, number][] = [[C.blue1, C.gold2, C.white], [C.red1, C.gold2, C.gold3], [C.orange, C.purple1, C.green3], [C.green1, C.red2, C.white]]
-            sets.forEach(([box, ribbon, hi], i) => {
-                const x = 14 + i * 28
-                rect(s, x - 9, 12, 19, 16, C.ink); rect(s, x - 8, 13, 17, 14, box); rect(s, x - 10, 9, 21, 5, C.ink); rect(s, x - 9, 10, 19, 3, box)
-                rect(s, x - 1, 10, 3, 17, ribbon); rect(s, x - 9, 17, 17, 2, ribbon)
-                disc(s, x - 3, 7, 2.5, ribbon); disc(s, x + 3, 7, 2.5, ribbon); px(s, x - 3, 6, hi); px(s, x + 3, 6, hi)
-                if (i === 2) { rect(s, x - 5, 18, 2, 2, C.ink); rect(s, x + 3, 18, 2, 2, C.ink); rect(s, x - 3, 22, 7, 1, C.ink) } // a jack-o'-lantern face
-                if (i === 3) for (let k = 0; k < 4; k++) px(s, x - 6 + k * 4, 24 - (k & 1) * 6, C.white) // snow
-                if (i === 0) px(s, x + 6, 3, C.gold3) // a new-year spark
-                if (i === 1) { px(s, x - 6, 16, C.gold3); px(s, x + 6, 22, C.gold3) }
-            })
-        }
     }
 ]
 

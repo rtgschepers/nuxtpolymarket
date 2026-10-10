@@ -73,11 +73,10 @@ export const ELITE_PACK_SIZE = 6
 /**
  * Minions standing with a boss or super boss; the encounter holds `BOSS_MINION_COUNT + 1` bodies.
  *
- * Smaller than a wave pack: the escort splits the party's attention and gives AoE something to
- * answer. `BOSS_TIMER_SECONDS` covers the **whole encounter**, so every minion is time taken off
- * the boss.
+ * None (the user's call, 2026-10-09; it was 2): a boss fight is the boss alone, plus whatever adds
+ * its own fight spawns. The pack code still takes any count, so an escort is one number away.
  */
-export const BOSS_MINION_COUNT = 2
+export const BOSS_MINION_COUNT = 0
 
 /**
  * Fraction of a pack still swinging, averaged over one stage attempt.
@@ -1191,7 +1190,7 @@ export const CALENDAR_SCHEDULE: readonly CalendarDay[] = [ // UNTUNED ╧
 /** A scene that opens at a checkpoint. Battle and Settings are open from the start. */
 export type HqFeature = 'gacha' | 'collections' | 'milestones' | 'calendar' | 'loadouts' | 'speed' | 'raids' | 'traits' | 'prestige' | 'classes'
 
-/** A point of lifetime progress: a World's mid-boss beaten, Worlds cleared, the run cleared, prestiges made. */
+/** A point of lifetime progress: a World's mid-boss fought (beaten, or lost to), Worlds cleared, the run cleared, prestiges made. */
 export type FeatureCheckpoint =
     | { kind: 'boss', world: number }
     | { kind: 'worlds', count: number }
@@ -1233,13 +1232,15 @@ export interface HolidayGift {
 
 /**
  * Each holiday's gift, authored per holiday rather than computed (§3): Christmas richest, Halloween
- * the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
+ * and Valentine's Day the smallest, and each one's Seals themed. Every amount is a placeholder. Gems are the
  * platform-wide currency, so these reach past Hero Quest; size them with the calendar's Gem days
  * and the milestones' (`open-items.md` #47, #48).
  */
 export const HOLIDAY_GIFTS: Readonly<Record<HolidayId, HolidayGift>> = { // UNTUNED ╧
     holiday_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 3, gear: 3, skill: 3, artifact: 3 } },
     holiday_lunar_new_year: { goldMinutes: 60, gems: 50, seals: { champion: 5 } },
+    holiday_valentines: { goldMinutes: 30, gems: 25, seals: { champion: 3 } },
+    holiday_easter: { goldMinutes: 45, gems: 40, seals: { skill: 5 } },
     holiday_halloween: { goldMinutes: 30, gems: 25, seals: { artifact: 5 } },
     holiday_christmas: { goldMinutes: 120, gems: 100, seals: { champion: 5, gear: 5, skill: 5, artifact: 5 } }
 }
@@ -1339,8 +1340,9 @@ export const AUTO_ENGAGE_MAX_DELAY_SECONDS = 10
 export const AUTO_ENGAGE_RETRY_SECONDS = 3
 
 /**
- * How long an automatically-engaged replay holds on its outcome before closing itself. A
- * *manually* engaged fight never auto-closes — the player dismisses it themselves.
+ * How long a boss replay holds on its outcome before closing itself and the run moving on. Every
+ * fight closes so, a challenged one too: its Continue button sat under the stage, out of sight, and
+ * the run waited behind a VICTORY banner until it was found (2026-10-10).
  */
 export const AUTO_ENGAGE_REPLAY_HOLD_SECONDS = 2.5
 

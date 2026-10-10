@@ -299,10 +299,10 @@ Locked: 5 trait slots, fixed from account start (no progression — the first sl
 
 ## As built — 2026-10-09
 
-Built as `build-log.md` #51 records; what it left open is `open-items.md` #51. In short:
+Built as `build-log.md` #52 records; what it left open is `open-items.md` #52. In short:
 
 - **Every number above is in `constants.ts`** (`TRAIT_*`), the vocabulary in `content/traits.ts`, the rules in `shared/utils/hero-quest/traits.ts`. Nothing was added as `UNTUNED ╧`.
 - **Readings this doc left open:** Vital Reflex's HP is VIT, as the HP stat is (§0); Aggression's main attack stat is PWR; Hero Skill DMG multiplies the damage of the Hero's own skills, not heals or shields; Back to Basics multiplies basic-attack damage; Divine Blessing heals once a second in a fight and counts as sustain in the idle rate.
-- **Champion ATK reaches every Champion, Tank included** (§4). The Implementation Note's "non-Tank" sentence above is stale; recorded in `open-items.md` #51.
+- **Champion ATK reaches every Champion, Tank included** (§4). The Implementation Note's "non-Tank" sentence above is stale; recorded in `open-items.md` #52.
 - **A Roll with all five locked is refused** server-side as well as disabled on the stage, so nobody pays 30 for nothing.
 - **A save slot stores the locks** with the five slots, and a load restores them.

@@ -59,14 +59,17 @@ describe('the enemy grid', () => {
         expect(columnOf(4, 6)).toEqual([1, 4])
     })
 
-    it('puts a boss behind its own escort, with no boss-specific branch', () => {
-        const size = packSizeFor(BOSS_STAGE)
-        const bossIndex = size - 1
-        // Minions occupy the front, the boss the back — falling out of `ceil(size / 2)` alone.
-        expect(enemyPosition(bossIndex, size).row).toBe('back')
-        for (let index = 0; index < BOSS_MINION_COUNT; index++) {
-            expect(enemyPosition(index, size).row, `minion ${index}`).toBe('front')
-        }
+    it('would put a boss behind an escort, with no boss-specific branch', () => {
+        // Bosses stand alone now; an escort of two would still screen its boss, out of
+        // `ceil(size / 2)` alone.
+        expect(enemyPosition(2, 3).row).toBe('back')
+        expect(enemyPosition(0, 3).row).toBe('front')
+        expect(enemyPosition(1, 3).row).toBe('front')
+    })
+
+    it('stands a boss alone in front', () => {
+        expect(packSizeFor(BOSS_STAGE)).toBe(BOSS_MINION_COUNT + 1)
+        expect(enemyPosition(0, packSizeFor(BOSS_STAGE))).toEqual({ row: 'front', col: 0 })
     })
 
     it('keeps a lone enemy in front, so nothing hides behind an empty row', () => {
