@@ -1,6 +1,6 @@
 // The Traits scene (`traits.md`): the five slots down the left, each in its grade's frame with the
 // stat, its value and its Set, and a padlock beside it; the Roll button under them, priced by how
-// many are locked. On the right, the five Sets with how many pieces each has and the tier it
+// many are locked, with Auto Roll and the grade it stops at beside it. On the right, the five Sets with how many pieces each has and the tier it
 // reached, and the save slots as a two-by-two grid of cards, each with Save and Load (a locked one
 // with the Gem price of the next). The line along the bottom spells out what the pointer is over.
 // A Roll spins its slots through the grades until the new board is in, then lands them one at a
@@ -71,6 +71,10 @@ export interface TraitsView {
     armed: TraitsTarget | null
     /** The Roll being revealed; null when none is. */
     roll: TraitRollView | null
+    /** The grade Auto Roll stops at, or better. */
+    autoGrade: TraitGrade
+    /** The list of grades to stop at is open. */
+    gradePickerOpen: boolean
 }
 
 /** A Roll on its way or just in: the slots it rerolls, and whether the new board has arrived. */
@@ -78,16 +82,31 @@ export interface TraitRollView {
     key: number
     slots: readonly number[]
     landed: boolean
+    /** What an Auto Roll came to, spelled out, for the bottom line once it lands; null for a single Roll. */
+    note: string | null
+    /** An Auto Roll's running count while it goes; null for a single Roll. */
+    auto: { rolls: number, spent: number } | null
 }
 
 /** What the pointer can be over. */
-export type TraitsTarget = 'roll' | 'skip' | `slot:${number}` | `lock:${number}` | `set:${number}` | `save:${number}` | `load:${number}` | `buy:${number}`
+export type TraitsTarget = 'roll' | 'auto' | 'stop' | 'grade' | `grade:${TraitGrade}` | 'shut' | 'skip' | `slot:${number}` | `lock:${number}` | `set:${number}` | `save:${number}` | `load:${number}` | `buy:${number}`
 
 const LEFT_X = 6
 const ROWS_Y = 14
 const ROW_PITCH = 22
 const LOCK_W = 14
-const ROLL: Box = { x: LEFT_X, y: 126, w: TRAIT_FRAME_W + 3 + LOCK_W, h: 13 }
+// the Roll row: Roll, Auto Roll, and the grade Auto Roll stops at, across the slots' width
+const ROLL: Box = { x: LEFT_X, y: 126, w: 66, h: 13 }
+const AUTO: Box = { x: ROLL.x + ROLL.w + 2, y: ROLL.y, w: 37, h: 13 }
+const GRADE: Box = { x: AUTO.x + AUTO.w + 2, y: ROLL.y, w: TRAIT_FRAME_W + 3 + LOCK_W - ROLL.w - AUTO.w - 4, h: 13 }
+/** The grades Auto Roll can stop at, best first: below C a first Roll all but always lands one. */
+export const AUTO_GRADES: readonly TraitGrade[] = ['SSS', 'SS', 'S', 'A', 'B', 'C']
+const GRADE_ROW_H = 10
+
+function gradeListBox(): Box {
+    const h = AUTO_GRADES.length * GRADE_ROW_H + 4
+    return { x: GRADE.x - 6, y: GRADE.y - h - 1, w: GRADE.w + 6, h }
+}
 const RIGHT_X = 146
 const SETS_Y = 22
 const SET_PITCH = 9
@@ -99,6 +118,8 @@ const BTN_H = 11
 const INFO_Y = 145
 
 const ROLL_PLATE = [C.purple0, C.purple1, C.purple2] as const
+const AUTO_PLATE = [C.teal0, C.teal1, C.teal2] as const
+const STOP_PLATE = [C.red0, C.red1, C.red2] as const
 const SAVE_PLATE = [C.blue0, C.blue1, C.blue2] as const
 const LOAD_PLATE = [C.green0, C.green1, C.green2] as const
 const BUY_PLATE = [C.green0, C.green1, C.green2] as const
@@ -166,8 +187,25 @@ function fit(text: string, w: number): string {
 }
 
 /** What a point on the view is over. */
+/** An Auto Roll is going: its slots spin until the player stops it or it stops itself. */
+export function autoRolling(view: TraitsView): boolean {
+    return !!view.roll?.auto && !view.roll.landed
+}
+
 export function traitsTargetAt(view: TraitsView, w: number, x: number, y: number): TraitsTarget | null {
+    // while an Auto Roll goes, its button is STOP and nothing else answers
+    if (autoRolling(view)) return inside(AUTO, x, y) ? 'stop' : null
+    // with the grade list open, only it and its chip answer; anywhere else puts it away
+    if (view.gradePickerOpen) {
+        if (inside(GRADE, x, y)) return 'grade'
+        const list = gradeListBox()
+        if (!inside(list, x, y)) return 'shut'
+        const grade = AUTO_GRADES[Math.floor((y - list.y - 2) / GRADE_ROW_H)]
+        return grade ? `grade:${grade}` : null
+    }
     if (inside(ROLL, x, y)) return 'roll'
+    if (inside(AUTO, x, y)) return 'auto'
+    if (inside(GRADE, x, y)) return 'grade'
     for (let i = 0; i < view.slots.length; i++) {
         if (inside(lockBox(i), x, y)) return `lock:${i}`
         if (inside(rowBox(i), x, y)) return `slot:${i}`
@@ -185,9 +223,10 @@ export function traitsTargetAt(view: TraitsView, w: number, x: number, y: number
 
 /** Whether pressing a target does anything now; the rest are only pointed at. */
 export function traitsTargetEnabled(view: TraitsView, target: TraitsTarget, busy: boolean): boolean {
-    if (target === 'skip') return true
+    if (target === 'skip' || target === 'shut' || target === 'stop') return true
     if (busy) return false
-    if (target === 'roll') return view.rerolls > 0 && view.affordable
+    if (target === 'roll' || target === 'auto') return view.rerolls > 0 && view.affordable
+    if (target === 'grade' || target.startsWith('grade:')) return true
     const [kind, n] = target.split(':') as [string, string]
     const i = Number(n)
     if (kind === 'lock') return view.slots[i] !== null && view.slots[i] !== undefined
@@ -326,11 +365,23 @@ export class TraitsScene {
             blit(s, BURST, b.x + (TRAIT_TAB >> 1) - (REVEAL_SIZE >> 1), b.y + (b.h >> 1) - (REVEAL_SIZE >> 1), REVEAL_LUT[lut]!)
         })
 
-        const best = this.rollBest(view, t)
-        if (revealing && !best) drawText(s, 'ROLLING...', LEFT_X, INFO_Y, C.stone3, { shadow: 1 })
+        if (view.gradePickerOpen) this.drawGradeList(s, view, hover)
+
+        const best = this.rollNote(view, t) ?? this.rollBest(view, t)
+        const auto = autoRolling(view) ? view.roll!.auto! : null
+        if (auto) drawText(s, fit(`AUTO ROLLING: ${auto.rolls} ROLLS, ${auto.spent} TRAIT GEMS. STOP ENDS IT.`, s.w - 12), LEFT_X, INFO_Y, C.bone1, { shadow: 1 })
+        else if (revealing && !best) drawText(s, 'ROLLING...', LEFT_X, INFO_Y, C.stone3, { shadow: 1 })
         else if (best && !hover) drawText(s, fit(best, s.w - 12), LEFT_X, INFO_Y, C.gold3, { shadow: 1 })
         else drawText(s, fit(this.info(view, hover), s.w - 12), LEFT_X, INFO_Y, hover ? C.bone1 : C.stone2, { shadow: 1 })
         return s
+    }
+
+    /** An Auto Roll's summary, from once its slots land until a few seconds after; null otherwise. */
+    private rollNote(view: TraitsView, t: number): string | null {
+        const note = view.roll?.note
+        if (!note || !view.roll) return null
+        const since = Math.min(...view.roll.slots.map(i => this.sinceLanded(view, i, t) ?? -1))
+        return since >= 0 && since <= 4 ? note : null
     }
 
     /** The best grade of A or better a Roll landed in the last few seconds, spelled out; null with none. */
@@ -402,12 +453,31 @@ export class TraitsScene {
         const lit = hover === 'roll'
         plateButton(s, ROLL, '', ROLL_PLATE, enabled, lit, pressed)
         // the price beside the gem that pays it, centred
-        const label = view.rerolls === 0 ? 'ALL LOCKED' : `ROLL ${view.rerolls === view.slots.length ? 'ALL' : view.rerolls} FOR ${view.rollCost}`
+        const label = view.rerolls === 0 ? 'ALL LOCKED' : `ROLL ${view.rollCost}`
         const lw = textWidth(label) + (view.rerolls === 0 ? 0 : 13)
         const sink = enabled && lit && pressed ? 1 : 0
         const x0 = ROLL.x + ((ROLL.w - lw) >> 1)
         drawText(s, label, x0, ROLL.y + 4 + sink, enabled ? C.white : C.stone2, { shadow: 1 })
         if (view.rerolls > 0) glyph(s, CURRENCY_ICONS.trait_gems!, x0 + lw - 4, ROLL.y + 6 + sink, true)
+
+        const armed = view.armed === 'auto'
+        if (autoRolling(view)) plateButton(s, AUTO, 'STOP', STOP_PLATE, true, hover === 'stop', pressed)
+        else plateButton(s, AUTO, armed ? 'SURE?' : 'AUTO', armed ? CONFIRM_PLATE : AUTO_PLATE, traitsTargetEnabled(view, 'auto', busy), hover === 'auto' || armed, pressed)
+        // the grade it stops at, in that grade's colours
+        plateButton(s, GRADE, `${view.autoGrade}+`, TRAIT_GRADE_COLORS[view.autoGrade], !busy, hover === 'grade' || view.gradePickerOpen, pressed && hover === 'grade')
+    }
+
+    /** The grades to stop at, opening upward from the chip, the chosen one marked. */
+    private drawGradeList(s: Surface, view: TraitsView, hover: TraitsTarget | null): void {
+        const b = gradeListBox()
+        panel(s, b.x, b.y, b.w, b.h, [C.teal0, C.teal1, C.teal2], C.night1)
+        AUTO_GRADES.forEach((grade, i) => {
+            const y = b.y + 2 + i * GRADE_ROW_H
+            const lit = hover === `grade:${grade}`
+            if (lit) rect(s, b.x + 2, y, b.w - 4, GRADE_ROW_H, C.night3)
+            if (grade === view.autoGrade) drawText(s, '>', b.x + 4, y + 1, C.gold3, { shadow: 1 })
+            drawText(s, `${grade}+`, b.x + 11, y + 1, TRAIT_GRADE_COLORS[grade][2], { shadow: 1 })
+        })
     }
 
     private drawSet(s: Surface, k: number, set: TraitSetView, lit: boolean): void {
@@ -480,6 +550,11 @@ export class TraitsScene {
             case 'roll':
                 if (view.rerolls === 0) return 'EVERY SLOT IS LOCKED: UNLOCK ONE TO ROLL.'
                 return `ROLL ${view.rerolls} SLOT${view.rerolls === 1 ? '' : 'S'} FOR ${view.rollCost} TRAIT GEMS. EACH LOCK ADDS 5.`
+            case 'auto':
+                if (view.rerolls === 0) return 'EVERY SLOT IS LOCKED: UNLOCK ONE TO ROLL.'
+                return `ROLL UNTIL A SLOT LANDS AT ${view.autoGrade} OR BETTER, ${view.rollCost} TRAIT GEMS A ROLL.`
+            case 'grade':
+                return n ? `STOP AT ${n} OR BETTER.` : `AUTO ROLL STOPS AT ${view.autoGrade} OR BETTER. PRESS TO CHANGE.`
             case 'slot': {
                 const slot = view.slots[i]
                 if (!slot) return 'AN EMPTY SLOT. A ROLL FILLS IT.'

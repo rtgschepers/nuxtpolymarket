@@ -19,6 +19,7 @@ import {
 import { TRAIT_GRADES, TRAIT_SETS, TRAIT_STATS } from '#shared/utils/hero-quest/content/traits'
 import {
     activeTraitSets,
+    autoRollTraitBoard,
     canRollTraits,
     emptyTraitBoard,
     lockedCount,
@@ -151,6 +152,32 @@ describe('rolling and locking', () => {
             { slotIndex: 9, stat: 'trait_imp', grade: 'S', setId: 'set_deep_impact', locked: false }
         ])
         expect(board).toEqual([null, null, null, { stat: 'trait_imp', grade: 'S', set: 'set_deep_impact', locked: true }, null])
+    })
+
+    describe('Auto Roll', () => {
+        const unlockedBoard = () => Array.from({ length: TRAIT_SLOT_COUNT }, () => ({ ...roll('trait_lck', 'F', 'set_deep_impact'), locked: false }))
+
+        it('stops on the first Roll that lands a slot at the grade, paying for each Roll', () => {
+            // every draw near 1: the last stat and Set, and SSS
+            const run = autoRollTraitBoard(unlockedBoard(), 100, 'S', 1000, () => 0.99999)
+            expect(run).toMatchObject({ rolls: 1, spent: 5, stoppedBy: 'hit' })
+            expect(run.board.every(slot => slot?.grade === 'SSS')).toBe(true)
+        })
+
+        it('stops when the next Roll is more than the Trait Gems left, or at the cap', () => {
+            // every draw at 0.5: grade E, never S
+            expect(autoRollTraitBoard(unlockedBoard(), 23, 'S', 1000, () => 0.5)).toMatchObject({ rolls: 4, spent: 20, stoppedBy: 'gems' })
+            expect(autoRollTraitBoard(unlockedBoard(), 1000, 'S', 7, () => 0.5)).toMatchObject({ rolls: 7, spent: 35, stoppedBy: 'cap' })
+            expect(autoRollTraitBoard(unlockedBoard(), 4, 'S', 1000, () => 0.5)).toMatchObject({ rolls: 0, spent: 0, stoppedBy: 'gems' })
+        })
+
+        it('prices every Roll by the locks, never rerolls a locked slot, and never stops on one', () => {
+            const board = unlockedBoard()
+            board[2] = { ...roll('trait_atk', 'SSS', 'set_aggression'), locked: true }
+            const run = autoRollTraitBoard(board, 30, 'S', 1000, () => 0.5)
+            expect(run).toMatchObject({ rolls: 3, spent: 30, stoppedBy: 'gems' })
+            expect(run.board[2]).toEqual(board[2])
+        })
     })
 
     it('opens one save slot and sells up to four', () => {

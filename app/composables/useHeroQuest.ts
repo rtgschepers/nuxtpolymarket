@@ -123,12 +123,12 @@ export const useHeroQuest = () => {
         url: string,
         body: Record<string, unknown>,
         successMsg: string,
-        options: { silentErrors?: boolean } = {}
+        options: { silentErrors?: boolean, refresh?: boolean } = {}
     ): Promise<T | null> {
         try {
             const res = await $fetch(url, { method: 'POST', body })
             if (successMsg) toast.add({ title: successMsg, color: 'success' })
-            await refresh()
+            if (options.refresh !== false) await refresh()
             return res as T
         } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!options.silentErrors) {
@@ -268,6 +268,20 @@ export const useHeroQuest = () => {
     /** Roll every unlocked Trait slot, for the Trait Gems the board's locks price it at. */
     async function rollTraits() {
         return call<{ spent: number, traitGems: number }>('/api/hero-quest/trait/roll', {}, '')
+    }
+
+    /**
+     * One Auto Roll batch. The state is not read back, since a run asks for batch after batch;
+     * `refreshTraits` does that once the run is over.
+     */
+    async function autoRollTraits(minGrade: string) {
+        return call<{ rolls: number, spent: number, stoppedBy: 'hit' | 'gems' | 'cap', traitGems: number, slots: ({ grade: string } | null)[] }>(
+            '/api/hero-quest/trait/auto-roll', { minGrade }, '', { refresh: false })
+    }
+
+    /** Read the state back after an Auto Roll run. */
+    async function refreshTraits() {
+        await refresh()
     }
 
     /** Lock or unlock a Trait slot: free. */
@@ -513,6 +527,8 @@ export const useHeroQuest = () => {
         markTutorialSeen,
         resetTutorials,
         rollTraits,
+        autoRollTraits,
+        refreshTraits,
         lockTrait,
         saveTraits,
         loadTraits,

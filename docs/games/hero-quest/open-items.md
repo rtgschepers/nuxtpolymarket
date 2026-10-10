@@ -333,7 +333,7 @@ economy — a tuning question, listed below rather than a blocker.
 
 ## ⚪ Standing numeric tuning — **what is still `// UNTUNED ╧`**
 
-Named constants with a formula shape locked and a placeholder value. Consolidated so a tuning pass has one list. `rg '╧' shared/utils/hero-quest/constants.ts` is the authority — **97 markers** as of 2026-10-09 (`rg -c` prints 99: the file's header legend carries the glyph twice), up from 61 on 2026-09-16 with the raids (#46), boss specials (#45), the login calendar (#47), milestones (#48), the Ascendant (#43) and the holiday gifts (#53). Every marker has a row below; the Arena row's constants are not in `constants.ts` until the Arena is built.
+Named constants with a formula shape locked and a placeholder value. Consolidated so a tuning pass has one list. `rg '╧' shared/utils/hero-quest/constants.ts` is the authority — **98 markers** as of 2026-10-10 (`rg -c` prints 100: the file's header legend carries the glyph twice), up from 61 on 2026-09-16 with the raids (#46), boss specials (#45), the login calendar (#47), milestones (#48), the Ascendant (#43) and the holiday gifts (#53). Every marker has a row below; the Arena row's constants are not in `constants.ts` until the Arena is built.
 
 ~~**Decided: none of this is tuned before playtesting.**~~ **Superseded for the combat and progression block by #22**, which tuned it on the campaign walk. The original reasoning still holds for everything that remains below: the balance script and campaign sim project *what the formulas say*, and a projected value that feels wrong in play is worth less than no value, because it looks settled. What remains is mostly the gacha, shop and ability-magnitude layers, which the campaign walk barely exercises — so they want play data or a different measurement, not another sim pass.
 
@@ -368,6 +368,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `SEAL_LADDER_GROWTH[]` | `gold-economy.md` §7 | Set, but calibrated against the superseded Gold anchors — see #23.2 |
 | `LOADOUT_SLOT_BASE_COST_GEMS` (4-level doubling, #40) | `loadouts.md` §3 | Built. §3 flags the first pairing of the doubling short track with Gems as a genuine unknown; at 4 levels the top step is 8× the base. Now checkable against real Gem flows: the login calendar (#47) and prestige milestones (#48) pay Gems, and Battle Speed (#44) is the only other Gem sink built so far. Traits and the Arena add more when they land |
 | `ONLINE_THRESHOLD_MS`, `HQ_REFRESH_INTERVAL_MS` | `tech-architecture.md` §9 | |
+| `TRAIT_AUTO_ROLL_BATCH` | — (Auto Roll, `build-log.md` #52) | Rolls an Auto Roll does per request, 10: how finely STOP cuts in, against how many requests a long run makes (an SSS takes about 670 Rolls, so about 67 requests). Not a price |
 | `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness. Live since Traits (#52): Vital Reflex reaches 0.50 |
 | `OVERFLOW_CONVERSION_RATE` | `classes-and-combat.md` §7 | The only crit constant still untuned. Rarely reachable: with LCK off the level curve only a deliberately built crit Hero passes 100% |
 | `SEAL_GRANT_PER_BOSS` | `economy-and-currencies.md` §5 | A boss's batch, paid on the win. Doc gives only the shape and defers the values to the world/enemy pass (#6). Built and paying out |

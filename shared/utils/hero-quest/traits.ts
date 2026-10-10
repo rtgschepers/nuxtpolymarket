@@ -13,6 +13,7 @@
  */
 
 import {
+    TRAIT_AUTO_ROLL_BATCH,
     TRAIT_GRADE_RATES,
     TRAIT_ROLL_BASE_COST,
     TRAIT_ROLL_COST_PER_LOCK,
@@ -113,6 +114,51 @@ export function rerollTraitBoard(board: TraitBoard, rng: () => number = randomFl
         if (slot?.locked) return { ...slot }
         return { ...rollTrait(rng), locked: false }
     })
+}
+
+/** Why an Auto Roll batch stopped: a slot landed at the grade, the Trait Gems ran short, or the batch is done (go on). */
+export type TraitAutoRollStop = 'hit' | 'gems' | 'cap'
+
+export interface TraitAutoRollResult {
+    /** Every slot filled once any Roll went; as given (empty slots and all) when none did. */
+    board: (TraitSlotState | null)[]
+    rolls: number
+    spent: number
+    stoppedBy: TraitAutoRollStop
+}
+
+/** Whether `grade` is `min` or better. */
+export function traitGradeAtLeast(grade: TraitGrade, min: TraitGrade): boolean {
+    return TRAIT_GRADES.indexOf(grade) >= TRAIT_GRADES.indexOf(min)
+}
+
+/**
+ * One Auto Roll batch: Roll again and again, each priced and rerolled exactly as a single Roll,
+ * until one lands a rerolled slot at `minGrade` or better, the next Roll is more than `traitGems`
+ * left, or `maxRolls` have gone. The locks never change mid-run, so every Roll costs the same. Zero Rolls
+ * (nothing affordable, or nothing to reroll) comes back as the board it was given.
+ */
+export function autoRollTraitBoard(
+    board: TraitBoard,
+    traitGems: number,
+    minGrade: TraitGrade,
+    maxRolls: number = TRAIT_AUTO_ROLL_BATCH,
+    rng: () => number = randomFloat
+): TraitAutoRollResult {
+    const cost = traitRollCost(lockedCount(board))
+    let current: (TraitSlotState | null)[] = board.map(slot => slot ? { ...slot } : null)
+    let rolls = 0
+    let spent = 0
+    if (!canRollTraits(board)) return { board: current, rolls, spent, stoppedBy: 'cap' }
+    while (true) {
+        if (rolls >= maxRolls) return { board: current, rolls, spent, stoppedBy: 'cap' }
+        if (spent + cost > traitGems) return { board: current, rolls, spent, stoppedBy: 'gems' }
+        current = rerollTraitBoard(current, rng)
+        rolls++
+        spent += cost
+        const hit = current.some((slot, index) => !!slot && !board[index]?.locked && traitGradeAtLeast(slot.grade, minGrade))
+        if (hit) return { board: current, rolls, spent, stoppedBy: 'hit' }
+    }
 }
 
 /** A stat's value at a grade, as a fraction (§4). */
