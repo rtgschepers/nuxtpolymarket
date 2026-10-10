@@ -34,7 +34,9 @@ import { CLASS_NODES } from '../../shared/utils/hero-quest/content/classes'
 import { CHAMPION_ABILITY_POOL, ability, getArchetype } from '../../shared/utils/hero-quest/content/champions'
 import { ZERO } from '../../shared/utils/hero-quest/numbers'
 import type { Decimal } from '../../shared/utils/hero-quest/numbers'
-import type { ChampionArchetype, ClassId, HeroSnapshot, StageArchetype } from '../../shared/utils/hero-quest/types'
+import type { ChampionArchetype, ClassId, HeroSnapshot, StageArchetype, TraitRoll } from '../../shared/utils/hero-quest/types'
+import { TRAIT_GRADES, TRAIT_SETS, TRAIT_STATS, isTraitGrade } from '../../shared/utils/hero-quest/content/traits'
+import { rollTrait } from '../../shared/utils/hero-quest/traits'
 
 export type Verdict = 'clear' | 'timer_fail' | 'wipe' | 'stalled'
 
@@ -70,6 +72,39 @@ export interface StageReport {
 
     verdict: Verdict
     goldPerKill: number
+}
+
+/** mulberry32, so a `roll:N` board is the same board on every run. */
+function seeded(seed: number): () => number {
+    let a = seed >>> 0
+    return () => {
+        a = (a + 0x6D2B79F5) >>> 0
+        let t = a
+        t = Math.imul(t ^ (t >>> 15), t | 1)
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+}
+
+/**
+ * A Trait board for the sim to field (`traits.md`), from `--traits`:
+ *
+ * - `none`: no Traits, the walk as it was tuned.
+ * - a grade (`E`, `A`, ...): ATK, SPD, HP, Champion ATK and Hero Skill DMG, all at that grade, one
+ *   slot of each Set, so every Set that opens at one piece is live and none is stacked.
+ * - `roll:N`: one real Roll with seed N, what a player's first Roll hands them.
+ */
+export function simTraitBoard(spec: string): TraitRoll[] {
+    if (spec === 'none' || spec === '') return []
+    if (isTraitGrade(spec)) {
+        return TRAIT_STATS.slice(0, TRAIT_SETS.length).map((stat, i) => ({ stat: stat.id, grade: spec, set: TRAIT_SETS[i]!.id }))
+    }
+    const seed = /^roll:(\d+)$/.exec(spec)
+    if (seed) {
+        const rng = seeded(Number(seed[1]))
+        return TRAIT_SETS.map(() => rollTrait(rng))
+    }
+    throw new Error(`--traits takes none, a grade (${TRAIT_GRADES.join(' ')}) or roll:N, not "${spec}"`)
 }
 
 export function makeHero(classId: ClassId, heroLevel: number, overrides: Partial<HeroSnapshot> = {}): HeroSnapshot {
