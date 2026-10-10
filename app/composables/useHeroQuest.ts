@@ -244,7 +244,7 @@ export const useHeroQuest = () => {
      * carry, so the session is read back; it happens a few times a year.
      */
     async function claimHoliday(holidayId: string) {
-        const res = await call<{ holidayId: string, year: number, gold: string, gems: number }>('/api/hero-quest/holiday/claim', { holidayId }, '')
+        const res = await call<{ holidayId: string, year: number, gold: string, gems: number, seals: { system: string, amount: number }[] }>('/api/hero-quest/holiday/claim', { holidayId }, '')
         await fetchSession()
         return res
     }

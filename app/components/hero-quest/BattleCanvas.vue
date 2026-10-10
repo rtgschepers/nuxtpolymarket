@@ -14,6 +14,7 @@ import type { CalendarScene, CalendarTarget, CalendarView } from '~/utils/hero-q
 import type { MilestonesScene, MilestonesTarget, MilestonesView } from '~/utils/hero-quest-art/milestones-scene'
 import type { GuideTarget, GuideView } from '~/utils/hero-quest-art/guide'
 import type { RaidRewardView, RaidRowView, RaidsHover, RaidsScene, RaidsView } from '~/utils/hero-quest-art/raids-scene'
+import type { GiftReveal, HolidayGiftIconView, HolidayRevealView } from '~/utils/hero-quest-art/holiday-gift'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import { LOADOUT_NAME_MAX_LENGTH } from '#shared/utils/hero-quest/constants'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
@@ -103,6 +104,10 @@ const props = defineProps<{
     raidsBusy?: boolean
     /** Any Loadout is saved, for the Raids scene's preferred-Loadout picker. */
     loadoutsSaved?: boolean
+    /** A holiday gift waiting to be opened, for the battle view's corner; null with none. */
+    holidayGift?: HolidayGiftIconView | null
+    /** The holiday gift being opened, over everything; null when none is. */
+    holidayReveal?: HolidayRevealView | null
     /** A raid round to play in place of the run; the stage goes back to the run once it is cleared. */
     raidRound?: StageRaid | null
     /** What a raid round or quick-clear paid, shown over the stage until its button is pressed. */
@@ -167,8 +172,10 @@ const emit = defineEmits<{
     raidRewardClose: []
     /** Today's calendar cell, or the make-up button, was pressed. */
     claimCalendar: [makeup: boolean]
-    /** The Calendar scene's holiday gift button was pressed. */
-    claimHoliday: []
+    /** The holiday gift in the battle view's corner was pressed. */
+    holidayOpen: []
+    /** The holiday reveal's button was pressed once everything was out. */
+    holidayRevealClose: []
     /** A milestone card with steps waiting was pressed, or claim-all (null). */
     claimMilestones: [track: string | null]
     /** The guide's panel was pressed: the next page, or the tutorial closed on the last. */
@@ -217,6 +224,8 @@ let calendarHit: typeof import('~/utils/hero-quest-art/calendar-scene') | null =
 let milestonesScene: MilestonesScene | null = null
 let milestonesHit: typeof import('~/utils/hero-quest-art/milestones-scene') | null = null
 let guideHit: typeof import('~/utils/hero-quest-art/guide') | null = null
+let giftHit: typeof import('~/utils/hero-quest-art/holiday-gift') | null = null
+let giftReveal: GiftReveal | null = null
 /** The stage's clock, for the scene that times its own animation (the gacha reveal). */
 let sceneTime = 0
 let band: typeof import('~/utils/hero-quest-art/menu-band') | null = null
@@ -366,7 +375,7 @@ defineExpose({ skipFight, closeIris })
  * The challenge button and the menu band live in the canvas, so the pointer is hit-tested against
  * them in the view's own pixels. The page's own Fight button stays the keyboard's way in.
  */
-type Target = 'challenge' | HqMenuScene | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
+type Target = 'challenge' | 'gift' | 'gift:ok' | 'gift:skip' | HqMenuScene | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
     | `card:${number}` | `loadout:${LoadoutButton}` | `buy:${number}` | 'shop:prev' | 'shop:next' | `class:${string}` | KitTarget | `speed:${number}:${number}`
     | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${RaidId | 'enter' | 'quick' | 'loadout'}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
 
@@ -450,6 +459,12 @@ function targetAt(e: PointerEvent): Target | null {
     const r = canvas.value.getBoundingClientRect()
     const x = (e.clientX - r.left) / r.width * presenter.w
     const y = (e.clientY - r.top) / r.height * presenter.h
+    // the holiday reveal takes every press: before the end a press shows it all, after it the button closes it
+    if (props.holidayReveal) {
+        if (!giftReveal || !giftHit) return null
+        if (!giftReveal.done(props.holidayReveal, sceneTime)) return 'gift:skip'
+        return giftHit.onRevealButton(presenter.w, sceneH, x, y) ? 'gift:ok' : null
+    }
     // the reward popup takes every press: only its button does anything
     if (props.raidReward) return raidsHit?.onRaidRewardButton(presenter.w, sceneH, x, y) ? 'reward:ok' : null
     // the guide's panel sits over the scene: a press on it is the guide's
@@ -536,8 +551,6 @@ function targetAt(e: PointerEvent): Target | null {
         // the make-up button is no target with nothing to make up; a day is pointed at for what it pays
         if (at === 'makeup') return !props.calendarBusy && calendarHit.calendarMakeupEnabled(props.calendar) ? 'cal:makeup' : null
         if (at === 'claim') return props.calendarBusy ? null : 'cal:claim'
-        // an open gift is a button; a claimed one is pointed at for what it paid, the next one for nothing
-        if (at === 'gift') return props.calendar.gift?.state === 'claimed' || (props.calendar.gift?.state === 'open' && !props.calendarBusy) ? 'cal:gift' : null
         return at ? `cal:${at}` : null
     }
     if (openScene.value === 'speed' && speedHit && props.speedView) {
@@ -545,6 +558,7 @@ function targetAt(e: PointerEvent): Target | null {
         // a block that cannot be bought (too dear, or another speed running) is no target
         return block && !props.speedBusy && speedHit.speedBlockOpen(props.speedView, block) ? `speed:${block.speed}:${block.minutes}` : null
     }
+    if (openScene.value === 'battle' && giftShows() && giftHit?.onGiftIcon(presenter.w, x, y)) return 'gift'
     return openScene.value === 'battle' && props.challenge && stage?.onChallenge(x, y) ? 'challenge' : null
 }
 
@@ -640,6 +654,11 @@ function onPointerUp(e: PointerEvent) {
     if (!wasPressed || !hit) return
     const item = HQ_MENU_SCENES.find(s => s === hit)
     if (hit === 'challenge') emit('challenge')
+    else if (hit === 'gift') emit('holidayOpen')
+    else if (hit === 'gift:ok') emit('holidayRevealClose')
+    else if (hit === 'gift:skip') {
+        if (props.holidayReveal) giftReveal?.skip(props.holidayReveal)
+    }
     else if (item) emit('scene', item === openScene.value ? 'battle' : item)
     else if (hit === 'close') detail.value = null
     else if (hit === 'shop:prev' || hit === 'shop:next') shopPage.value += hit === 'shop:next' ? 1 : -1
@@ -659,9 +678,6 @@ function onPointerUp(e: PointerEvent) {
     else if (hit.startsWith('setting:')) emit('setting', hit.slice(8) as SettingsTarget)
     else if (hit === 'reward:ok') emit('raidRewardClose')
     else if (hit === 'cal:claim' || hit === 'cal:makeup') emit('claimCalendar', hit === 'cal:makeup')
-    else if (hit === 'cal:gift') {
-        if (props.calendar?.gift?.state === 'open' && !props.calendarBusy) emit('claimHoliday')
-    }
     // a day other than today is only pointed at, for what it pays
     else if (hit.startsWith('cal:')) return
     else if (hit === 'guide:next') emit('guideNext')
@@ -728,6 +744,11 @@ function onPointerLeave() {
     draftAtPress = null
 }
 
+/** The gift waits in the battle view's corner, but not over a fight, a raid round or its own reveal. */
+function giftShows(): boolean {
+    return !!props.holidayGift && !props.fight && !props.raidRound && !props.holidayReveal
+}
+
 const challengeState = computed(() => !props.challenge ? 'off' as const : hover.value !== 'challenge' ? 'idle' as const : pressed.value ? 'pressed' as const : 'hover' as const)
 const bandHover = computed(() => HQ_MENU_SCENES.find(s => s === hover.value) ?? null)
 const collectionsHover = computed<CollectionsHover>(() => {
@@ -779,10 +800,10 @@ function milestoneRowOf(target: string) {
     return props.milestones?.rows[Number(target.slice(7))]
 }
 const guideHover = computed<GuideTarget | null>(() => hover.value === 'guide:next' || hover.value === 'guide:skip' ? hover.value : null)
-/** The band's red dots: a scene opened and not visited yet, today's calendar reward or a holiday gift, or a milestone step waiting. */
+/** The band's red dots: a scene opened and not visited yet, today's calendar reward, or a milestone step waiting. */
 const bandAlerts = computed<ReadonlySet<HqMenuScene>>(() => new Set<HqMenuScene>([
     ...(props.newScenes ?? []),
-    ...(props.calendar?.days[props.calendar.today]?.state === 'today' || props.calendar?.gift?.state === 'open' ? ['calendar' as const] : []),
+    ...(props.calendar?.days[props.calendar.today]?.state === 'today' ? ['calendar' as const] : []),
     ...(props.milestones?.rows.some(r => r.claimable.length > 0) ? ['milestones' as const] : [])
 ]))
 const speedHover = computed<SpeedBlock | null>(() => {
@@ -801,7 +822,7 @@ const loadoutsHover = computed<LoadoutsHover>(() => {
 onMounted(async () => {
     // started before the engine loads, so the box never paints in its own place first
     const landed = intro && wrap.value ? growFrom(wrap.value, intro) : Promise.resolve()
-    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt] = await Promise.all([
+    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt, giftArt] = await Promise.all([
         import('~/utils/hero-quest-art/demo'),
         import('~/utils/hero-quest-art/canvas'),
         import('~/utils/hero-quest-art/menu-band'),
@@ -815,7 +836,8 @@ onMounted(async () => {
         import('~/utils/hero-quest-art/raids-scene'),
         import('~/utils/hero-quest-art/calendar-scene'),
         import('~/utils/hero-quest-art/milestones-scene'),
-        import('~/utils/hero-quest-art/guide')
+        import('~/utils/hero-quest-art/guide'),
+        import('~/utils/hero-quest-art/holiday-gift')
     ])
     if (disposed || !canvas.value) return
     band = menuBand
@@ -843,6 +865,8 @@ onMounted(async () => {
     milestonesScene = new milestonesArt.MilestonesScene(backdrops)
     milestonesHit = milestonesArt
     guideHit = guideArt
+    giftHit = giftArt
+    giftReveal = new giftArt.GiftReveal()
     stage = new BattleDemo()
     build()
     if (intro) {
@@ -889,11 +913,13 @@ onMounted(async () => {
                                     : scene === 'milestones'
                                     ? milestonesScene!.render(t, props.milestones ?? { rows: [] }, milestonesHover.value, pressed.value, !!props.milestonesBusy)
                                     : scene === 'calendar'
-                                    ? calendarScene!.render(t, props.calendar ?? { today: 0, days: [], makeupsLeft: 0, makeupsPerCycle: 0, makeupDay: null, nextDayIn: '', cycleDaysLeft: 0, gift: null }, calendarHover.value, pressed.value, !!props.calendarBusy)
+                                    ? calendarScene!.render(t, props.calendar ?? { today: 0, days: [], makeupsLeft: 0, makeupsPerCycle: 0, makeupDay: null, nextDayIn: '', cycleDaysLeft: 0 }, calendarHover.value, pressed.value, !!props.calendarBusy)
                                     : scene === 'settings'
                                     ? settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
                                     : speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
-        if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)
+        if (scene === 'battle' && giftShows() && giftHit) giftHit.drawGiftIcon(view, t, props.holidayGift!, hover.value === 'gift')
+        if (props.holidayReveal && giftReveal) giftReveal.render(view, t, props.holidayReveal, hover.value === 'gift:ok', pressed.value)
+        else if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)
         // the guide waits out a raid's reward popup rather than covering it
         else if (props.guide && guideHit) guideHit.drawGuide(view, t, props.guide, guideHover.value, pressed.value)
         presenter!.present(banded!.compose(view, scene, bandHover.value, pressed.value, !!props.raidRound, bandAlerts.value, props.menuScenes))
