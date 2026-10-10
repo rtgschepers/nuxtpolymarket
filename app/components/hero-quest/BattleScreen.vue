@@ -47,7 +47,7 @@ const {
     pull, freePull, settings, setSetting, raids, engageRaid, quickClearRaid, calendar, claimCalendar,
     holidays, claimHoliday, milestones, claimMilestones, ascendant, tutorials, markTutorialSeen, resetTutorials
 } = useHeroQuest()
-const { user } = useAuth()
+const { user, fetchSession } = useAuth()
 
 /**
  * The Collections scene's tab, off the route, and the roster it shows, with what each entry's
@@ -783,6 +783,20 @@ const holidayGift = computed<HolidayGiftIconView | null>(() => {
 /** The gift being opened: it shows at once, and its lines land with the claim. */
 const holidayReveal = ref<HolidayRevealView | null>(null)
 let holidayRevealKey = 0
+/** A claim paid Gold or Gems the header hasn't shown yet: it reads them back once the reveal is put away. */
+let holidayPaid = false
+
+function settleHolidayBalance() {
+    if (!holidayPaid) return
+    holidayPaid = false
+    void fetchSession()
+}
+
+function onHolidayRevealClose() {
+    holidayReveal.value = null
+    settleHolidayBalance()
+}
+onUnmounted(settleHolidayBalance)
 
 /** Open the waiting gift: the reveal starts on the press, and the box bursts once the claim is in. */
 async function onHolidayOpen() {
@@ -792,7 +806,10 @@ async function onHolidayOpen() {
     holidayReveal.value = { key, id: gift.id, name: gift.name, lines: null }
     try {
         const res = await claimHoliday(gift.id)
-        if (!res || holidayReveal.value?.key !== key) return
+        if (!res) return
+        holidayPaid = parseFloat(res.gold) > 0 || res.gems > 0
+        // a reveal no longer showing still owes the header its balance
+        if (holidayReveal.value?.key !== key) return settleHolidayBalance()
         const lines = [
             { icon: 'gold', amount: parseFloat(res.gold) || 0, label: 'GOLD' },
             { icon: 'gems', amount: res.gems, label: 'GEMS' },
@@ -1231,7 +1248,7 @@ const awayReport = computed(() => {
           @setting="onSetting"
           @claim-calendar="onClaimCalendar"
           @holiday-open="onHolidayOpen"
-          @holiday-reveal-close="holidayReveal = null"
+          @holiday-reveal-close="onHolidayRevealClose"
           @claim-milestones="onClaimMilestones"
           @guide-next="onGuideNext"
           @guide-skip="closeTutorial"

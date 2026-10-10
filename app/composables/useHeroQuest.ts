@@ -241,12 +241,10 @@ export const useHeroQuest = () => {
 
     /**
      * Claim an open holiday's gift. Its Gold and Gems move platform balances the response doesn't
-     * carry, so the session is read back; it happens a few times a year.
+     * carry, so the caller reads the session back once the reveal is done, or the header would spoil it.
      */
     async function claimHoliday(holidayId: string) {
-        const res = await call<{ holidayId: string, year: number, gold: string, gems: number, seals: { system: string, amount: number }[] }>('/api/hero-quest/holiday/claim', { holidayId }, '')
-        await fetchSession()
-        return res
+        return call<{ holidayId: string, year: number, gold: string, gems: number, seals: { system: string, amount: number }[] }>('/api/hero-quest/holiday/claim', { holidayId }, '')
     }
 
     /**
