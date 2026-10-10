@@ -118,6 +118,7 @@ import {
     battleSpeedPrice,
     battleSpeedRemainingSeconds,
     extendBattleSpeed,
+    heldBattleSpeedExpiry,
     speedBoostFor,
     type BattleSpeedDuration,
     type BattleSpeedTier,
@@ -333,6 +334,15 @@ export function tenureDaysOf(state: HqStateRow): number {
 /** The row's Battle Speed block, in the shape `battle-speed.ts` reads. */
 export function battleSpeedOf(state: HqStateRow): BattleSpeedWindow {
     return { multiplier: state.speedBoostMultiplier, expiresAt: state.speedBoostExpiresAt }
+}
+
+/**
+ * The columns that move the run's clock to `now` over a span it held (a raid session): the block
+ * waits with the run, so its expiry is pushed out by the span rather than run down.
+ */
+export function holdClockTo(state: HqStateRow, now: number): Partial<HqStateRow> {
+    const expiry = heldBattleSpeedExpiry(battleSpeedOf(state), state.lastSettledAt.getTime(), now)
+    return { lastSettledAt: new Date(now), ...(expiry ? { speedBoostExpiresAt: expiry } : {}) }
 }
 
 /**
@@ -553,12 +563,12 @@ export async function settleHq(userId: string): Promise<SettleOutcome> {
         const elapsedMs = now - locked.lastSettledAt.getTime()
         if (elapsedMs <= 0) return { state: locked, result: null, online: true, previousLevel: locked.heroLevel, elapsedSeconds: 0 }
 
-        // The run holds while the player is in a raid (`loadouts.md` §4): the window is dropped, not paid.
+        // The run holds while the player is in a raid (`loadouts.md` §4): the window is dropped, not paid, and Battle Speed waits too.
         // A gap too long to be presence means they left without closing it, so it settles as time away.
         let state = locked
         if (locked.preRaidSnapshot !== null) {
             if (elapsedMs <= ONLINE_THRESHOLD_MS) {
-                const [held] = await tx.update(hqState).set({ lastSettledAt: new Date(now) }).where(eq(hqState.userId, userId)).returning()
+                const [held] = await tx.update(hqState).set(holdClockTo(locked, now)).where(eq(hqState.userId, userId)).returning()
                 return { state: held ?? locked, result: null, online: true, previousLevel: locked.heroLevel, elapsedSeconds: 0 }
             }
             state = await restoreLoadoutSession(tx, userId, locked, now)
@@ -671,7 +681,7 @@ export function openLoadoutSnapshotOf(state: HqStateRow): { columns: LiveLoadout
  * it now stands (the same row when no session is open).
  *
  * The run held while the session was open, so the time since the last settle is dropped (the clock
- * moves to `now`) while the player was still present. A gap longer than `ONLINE_THRESHOLD_MS` is
+ * moves to `now`, and a Battle Speed block with it) while the player was still present. A gap longer than `ONLINE_THRESHOLD_MS` is
  * left for the settle that follows, as time away on the player's own loadout.
  *
  * Call it with `state` read under the `hqState` row lock, inside that transaction: the snapshot is
@@ -685,7 +695,7 @@ export async function restoreLoadoutSession(tx: DbExecutor, userId: string, stat
     if (!session) return state
     const present = now - state.lastSettledAt.getTime() <= ONLINE_THRESHOLD_MS
     const [updated] = await tx.update(hqState)
-        .set({ ...(session.columns ?? {}), preRaidSnapshot: null, ...(present ? { lastSettledAt: new Date(now) } : {}) })
+        .set({ ...(session.columns ?? {}), preRaidSnapshot: null, ...(present ? holdClockTo(state, now) : {}) })
         .where(eq(hqState.userId, userId))
         .returning()
     return updated ?? state

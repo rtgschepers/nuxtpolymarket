@@ -219,6 +219,31 @@ describe.skipIf(SKIP)('hero-quest preferred loadouts on raid engage', () => {
         expect(state.preRaidSnapshot).not.toBeNull()
     })
 
+    it('pauses a running Battle Speed block with the run, on a held settle and on leaving', async () => {
+        await engage('raid_training_grounds')
+        const expiresAt = new Date(Date.now() + 600_000)
+        await db.update(hqState).set({ speedBoostMultiplier: 2, speedBoostExpiresAt: expiresAt, lastSettledAt: new Date(Date.now() - 120_000) }).where(eq(hqState.userId, USER_ID))
+
+        await settleHq(USER_ID)
+        const held = (await stateOf()).speedBoostExpiresAt!.getTime()
+        expect(held - expiresAt.getTime()).toBeGreaterThanOrEqual(120_000)
+        expect(held - expiresAt.getTime()).toBeLessThan(125_000)
+
+        await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - 60_000) }).where(eq(hqState.userId, USER_ID))
+        expect(await leave()).toBe(true)
+        expect((await stateOf()).speedBoostExpiresAt!.getTime() - held).toBeGreaterThanOrEqual(60_000)
+    })
+
+    it('leaves a block that ran out before the raid alone', async () => {
+        await engage('raid_training_grounds')
+        const expiresAt = new Date(Date.now() - 300_000)
+        await db.update(hqState).set({ speedBoostMultiplier: 2, speedBoostExpiresAt: expiresAt, lastSettledAt: new Date(Date.now() - 120_000) }).where(eq(hqState.userId, USER_ID))
+
+        await settleHq(USER_ID)
+
+        expect((await stateOf()).speedBoostExpiresAt!.getTime()).toBe(expiresAt.getTime())
+    })
+
     it('drops the time spent in the raid on leaving, and the run goes on from there', async () => {
         await engage('raid_training_grounds')
         await db.update(hqState).set({ lastSettledAt: new Date(Date.now() - 120_000) }).where(eq(hqState.userId, USER_ID))

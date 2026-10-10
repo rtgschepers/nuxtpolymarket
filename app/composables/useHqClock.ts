@@ -44,11 +44,15 @@ export function useHqCountdown(unlocksAt: () => number | null | undefined) {
     return computed(() => {
         const at = unlocksAt()
         if (at === null || at === undefined) return null
-
-        const seconds = Math.max(0, Math.ceil((at - clock.value) / 1000))
-        const hours = Math.floor(seconds / 3600)
-        const minutes = Math.floor((seconds % 3600) / 60)
-        const pad = (value: number) => String(value).padStart(2, '0')
-        return hours > 0 ? `${hours}h ${pad(minutes)}m` : `${pad(minutes)}:${pad(seconds % 60)}`
+        return formatHqCountdown((at - clock.value) / 1000)
     })
+}
+
+/** `seconds` left as `useHqCountdown` shows them: for a countdown that stands still. */
+export function formatHqCountdown(seconds: number): string {
+    const whole = Math.max(0, Math.ceil(seconds))
+    const hours = Math.floor(whole / 3600)
+    const minutes = Math.floor((whole % 3600) / 60)
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return hours > 0 ? `${hours}h ${pad(minutes)}m` : `${pad(minutes)}:${pad(whole % 60)}`
 }

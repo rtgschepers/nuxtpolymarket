@@ -95,3 +95,14 @@ export function extendBattleSpeed(
     const from = running === 1 ? now : expiryMs(window)!
     return { multiplier: speed, expiresAt: new Date(from + minutes * 60_000) }
 }
+
+/**
+ * The block's expiry once a span the run held (a raid session, `loadouts.md` §4) is taken out of
+ * it: a block running at `fromMs` is pushed out by the whole span, so held time never spends it.
+ * `null` when no block ran at `fromMs`, and nothing moves.
+ */
+export function heldBattleSpeedExpiry(window: BattleSpeedWindow, fromMs: number, toMs: number): Date | null {
+    const end = expiryMs(window)
+    if (end === null || end <= fromMs || toMs <= fromMs) return null
+    return new Date(end + (toMs - fromMs))
+}

@@ -821,8 +821,11 @@ async function onClaimMilestones(track: string | null) {
     }
 }
 
-/** The running Battle Speed block's time left, off the server's expiry. */
-const speedLeft = useHqCountdown(() => battleSpeed.value?.expiresAt)
+/** The running Battle Speed block's time left, off the server's expiry; it stands still in a raid, as the block does. */
+const speedLeftLive = useHqCountdown(() => battleSpeed.value?.expiresAt)
+const speedLeft = computed(() => loadoutSession.value && battleSpeed.value?.expiresAt
+    ? formatHqCountdown(battleSpeed.value.remainingSeconds)
+    : speedLeftLive.value)
 
 /** The Battle Speed scene: the running block, the Gems to spend, and every block's price. */
 const speedView = computed<SpeedView>(() => {
