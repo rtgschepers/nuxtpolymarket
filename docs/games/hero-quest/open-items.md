@@ -9,7 +9,7 @@ made it the most expensive bloat in the project.
 scripts cite them (`#22`, `#23.3`, `#18.6`). The gaps below — #4, #5, #8, #10–#21, #24, #26–#28 —
 are finished items, not missing ones; they are in `build-log.md` under the same number. #22, #23,
 #25 and #29 appear in both: the open part here, the full record there. New items continue from
-**#55** (#52 went unused) — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up, built and its guide's art locked the same day, closing it; #51 (bosses without an escort) landed with it; #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
+**#55** — #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up, built and its guide's art locked the same day, closing it; #51 (bosses without an escort) landed with it; #52 (Traits), #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
 
 **Resolving a bare `#N`:** this doc first, `build-log.md` otherwise. Sub-numbers (`#23.3`,
 `#18.6`) keep their original meaning in both.
@@ -70,7 +70,7 @@ Explicitly deferred scope — the gift-mechanic phase is locked, but limited-tim
 
 ## ⚠️ Open consequences of work that landed
 
-Eleven items are built and working but left something undecided. The full record of each is in
+Twelve items are built and working but left something undecided. The full record of each is in
 `build-log.md`; only the open half is restated here. (The `killFraction` invariant that used to
 sit here as #24 is not an open item — it is a trap, and it lives in `CLAUDE.md` §7 and
 `build-log.md` #24.)
@@ -109,6 +109,46 @@ fixed cooldown, with damage and a status or a drain. What it left open:
    status a special lands), but the 48-Artifact distribution never draws Unshaken from the Tempo
    pool, so only the Skills Unbreakable Will and Immortal Vanguard grant it. Worth a look when
    the Artifact effects are re-cut (`CLAUDE.md` §6).
+
+### 52. Traits — built; Deep Impact breaks the pacing, and two slips in `traits.md`
+
+Full record: `build-log.md` #52. Five slots, Rolls, locks, Sets, save slots, and evasion live in
+combat and GPN. What it left open:
+
+1. **⚠ Deep Impact collapses the mid-game — needs your call.** Measured 2026-10-10 with the
+   campaign walk's new `--traits` flag (party of 3, Worlds 5–10 of the first run, since Traits open
+   at 4 Worlds cleared):
+
+   | Board | Worlds 5–10 | First prestige |
+   |---|---|---|
+   | None (as tuned) | 9d 12h | not in the grind budget |
+   | Three F slots, no live Set | 8d 8h | not in budget |
+   | One E ATK slot | 9d 16h | yes, just |
+   | One F slot, Vital Reflex or Divine Blessing 1pc | 9d 5h | not in budget |
+   | **One F slot, Deep Impact 1pc (+400% IMP)** | **1d 13h** | yes |
+   | Deep Impact 2pc / 3pc | 15h 49m / 9h 3m | yes |
+   | `--traits=E` (every 1-piece Set live) | 1d 0h | yes |
+   | `--traits=A` | 10h 14m | yes |
+
+   The grades barely matter; Deep Impact's one-piece +400% IMP does nearly all of it, and two
+   boards in three roll at least one piece. The week-long first run (`core-progression-and-prestige.md`
+   §1) shrinks to about two days the moment Traits open. The other magnitudes look sized right
+   (+25% ATK, the most common grade, is worth hours, not days). `traits.md` locks every number, so
+   none is `UNTUNED ╧` and moving one is a design decision; likeliest fix is Deep Impact's tiers
+   (+400/800/1200%): one piece is worth more than an SS IMP roll (+300%), on two boards in three. Nothing changed
+   yet. ATK and Champion ATK still stack on one stat (`traits.md` §0).
+2. **Two contradictions inside `traits.md`, taken the owning text's way rather than reconciled:**
+   - The *Implementation Note* still says Champion ATK is "scoped to non-Tank Champions' PWR",
+     while §4's table and the same note's revision say **all four archetypes, Tank included**.
+     Built as §4: every Champion.
+   - §5's evasion note says `MAX_EVASION` 0.60 sits "below the party-reachable ceiling of a
+     5-piece Vital Reflex board (+50%)". It sits above it, ten points of headroom, which is what
+     the same bullet goes on to argue and what `classes-and-combat.md` §7 says. Built at 0.60;
+     only the wording is wrong.
+3. ~~A Roll or a load does not settle first~~ — fixed 2026-10-10 (the user's call): every route
+   that moves the idle rate settles first (`trait/roll`, `trait/load`, `loadout/set`,
+   `loadout/apply`, `prestige/pick-class`, `prestige/shop-buy`), so a window is always paid at the
+   rate it ran at.
 
 ### 47. The login calendar — built; its Gold and Gem days are placeholders
 
@@ -328,7 +368,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
 | `SEAL_LADDER_GROWTH[]` | `gold-economy.md` §7 | Set, but calibrated against the superseded Gold anchors — see #23.2 |
 | `LOADOUT_SLOT_BASE_COST_GEMS` (4-level doubling, #40) | `loadouts.md` §3 | Built. §3 flags the first pairing of the doubling short track with Gems as a genuine unknown; at 4 levels the top step is 8× the base. Now checkable against real Gem flows: the login calendar (#47) and prestige milestones (#48) pay Gems, and Battle Speed (#44) is the only other Gem sink built so far. Traits and the Arena add more when they land |
 | `ONLINE_THRESHOLD_MS`, `HQ_REFRESH_INTERVAL_MS` | `tech-architecture.md` §9 | |
-| `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness |
+| `MAX_EVASION` | `classes-and-combat.md` §7 | **Locked at 0.60** — not open, listed for completeness. Live since Traits (#52): Vital Reflex reaches 0.50 |
 | `OVERFLOW_CONVERSION_RATE` | `classes-and-combat.md` §7 | The only crit constant still untuned. Rarely reachable: with LCK off the level curve only a deliberately built crit Hero passes 100% |
 | `SEAL_GRANT_PER_BOSS` | `economy-and-currencies.md` §5 | A boss's batch, paid on the win. Doc gives only the shape and defers the values to the world/enemy pass (#6). Built and paying out |
 | `CONVERGENCE_COOLDOWN_FACTOR` | `capstone-class.md` | The Ascendant's power, the one open half of #43: best-of-each stats (the user's call), four free picks, and a volley paying `6 / factor` master skills a second very likely out-class every master. Measure the Ascendant on the campaign sim before moving it. Bounded above by the boss timer (past ~3.5 it never fires in a boss fight) |
@@ -364,7 +404,7 @@ Two rows are not constants in the strict sense: the archetype stat spreads are a
    - ~~**Check the cleared-run manual re-engage** flagged in #25.~~ Fixed.
 3. ~~**World & Enemy Design (#6)**~~ **Closed 2026-10-04** — the art is restyled and locked (`art-style.md`); regular enemies get no abilities. ~~**Boss specials become real (#45)**~~ **built 2026-10-08**, measured on seeded gate fights; the open half is under #45 above.
 4. **The last quick call (#2)**, the Arena band — answer it with the Arena. #1 and #3 are decided, and with #3 the raid-rule questions #31 and #32 (2026-10-04); the asset calls (#4, #30) on 2026-09-17.
-5. **Phase 4 — endgame systems** (`implementation-plan.md`). Traits and Arena remain. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena. ~~Battle Speed~~ built (#44). ~~Raids~~ built, all five (#46). ~~Holidays~~ built, the gifts (#53). ~~`loadouts.md` §4's per-raid auto-apply~~ built (#54); the Arena's half comes with the Arena.
+5. **Phase 4 — endgame systems** (`implementation-plan.md`). Arena remains. ~~GPN~~ built (#28); the leaderboard aggregate and Defense GPN remain, with Arena. ~~Battle Speed~~ built (#44). ~~Raids~~ built, all five (#46). ~~Traits~~ built, with evasion (#52). ~~Holidays~~ built, the gifts (#53). ~~`loadouts.md` §4's per-raid auto-apply~~ built (#54); the Arena's half comes with the Arena.
 6. **Passive Skill Tree (#7)** — the last unbuilt major system; good candidate for its own dedicated session.
 7. **Playtest, then tune the rest.** The combat and progression block is tuned (#22); the gacha, shop, economy and ability-magnitude constants are settled here — see the standing-tuning section. The balance script and campaign sim stay in use throughout. **Once the Gold balance is decided, rebalance the login calendar's Gold and Gem days** (#47).
 

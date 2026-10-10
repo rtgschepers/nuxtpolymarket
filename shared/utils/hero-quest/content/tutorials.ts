@@ -78,6 +78,14 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Raids pay Seals, and the Trait raid pays Trait Gems. A higher level pays more.'
     ],
 
+    'traits:unlock': ['The Trait raid pays in Trait Gems, and here is where they go. Traits are now available.'],
+    'traits:visit': [
+        'Five slots, each a bonus for the whole party. Roll them with Trait Gems.',
+        'A Roll rerolls every slot you haven\'t locked. Locking is free, but each lock makes the next Roll dearer.',
+        'Match Sets across slots for a bonus of their own.',
+        'Save a good board to come back to. Even I write the best ones down.'
+    ],
+
     'prestige:unlock': ['You beat the Void. I\'ve seen this moment before. Prestige is now available.'],
     'prestige:visit': [
         'The secret of the Chronicle: the Void is never gone. It folds the world back up.',
