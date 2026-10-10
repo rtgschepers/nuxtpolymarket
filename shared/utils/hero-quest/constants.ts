@@ -1187,7 +1187,8 @@ export const CALENDAR_SCHEDULE: readonly CalendarDay[] = [ // UNTUNED ╧
 // Every menu scene but Settings opens at a checkpoint of lifetime progress, and the guide announces
 // it there (`tutorials.ts`). The schedule is the user's (2026-10-09): each scene opens where it first
 // becomes useful, the Shop at the World 1 boss's first win since 2026-10-10, and Classes at the
-// first prestige. Battle Speed is a tab in the Shop now, not a scene, and still opens at two Worlds.
+// first prestige. Battle Speed is a tab in the Shop now, and the Milestones one in the Calendar, each
+// still opening where it did.
 
 /** A scene that opens at a checkpoint. Battle and Settings are open from the start. */
 export type HqFeature = 'gacha' | 'collections' | 'milestones' | 'calendar' | 'loadouts' | 'speed' | 'raids' | 'traits' | 'shop' | 'classes'
@@ -1206,8 +1207,9 @@ export const FEATURE_UNLOCKS: readonly { feature: HqFeature, at: FeatureCheckpoi
     { feature: 'collections', at: { kind: 'boss', world: 1 } },
     // the Shop takes the win, and comes after the two above when they open on the same fight
     { feature: 'shop', at: { kind: 'boss_beaten', world: 1 } },
-    { feature: 'milestones', at: { kind: 'worlds', count: 1 } },
+    // the Calendar first: it is the main page of the button the two share
     { feature: 'calendar', at: { kind: 'worlds', count: 1 } },
+    { feature: 'milestones', at: { kind: 'worlds', count: 1 } },
     { feature: 'loadouts', at: { kind: 'worlds', count: 2 } },
     { feature: 'speed', at: { kind: 'worlds', count: 2 } },
     { feature: 'raids', at: { kind: 'worlds', count: 4 } },

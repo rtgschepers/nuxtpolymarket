@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The milestones' route, drawn on the stage as the Milestones scene, which is where they are
+ * The Calendar's Milestones tab, drawn on the stage, which is where they are
  * claimed (`shared/utils/hero-quest/milestones.ts`).
  */
 const { initialized } = useHeroQuest()

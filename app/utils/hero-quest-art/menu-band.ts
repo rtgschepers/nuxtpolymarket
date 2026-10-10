@@ -117,30 +117,6 @@ const CALENDAR: Glyph = (g, x, y) => {
     rect(g, x + 1, y + 2, 2, 1, C.red2)
 }
 
-/** A trophy: a gold cup with a handle looped out either side, on a stem and a wooden plinth. */
-export const TROPHY: Glyph = (g, x, y) => {
-    // the handles, behind the cup's rim; kept within ±7, as a small glyph's buffer reaches no further right
-    for (const side of [-1, 1]) {
-        const hx = side < 0 ? x - 7 : x + 5
-        rect(g, hx, y - 6, 3, 1, C.gold1)
-        rect(g, side < 0 ? hx : hx + 2, y - 6, 1, 4, C.gold1)
-        rect(g, hx, y - 3, 3, 1, C.gold1)
-    }
-    // the cup, narrowing to its foot, lit from the left with a shade down its right
-    rect(g, x - 4, y - 6, 9, 5, C.gold2)
-    rect(g, x - 3, y - 1, 7, 1, C.gold2)
-    rect(g, x - 2, y, 5, 1, C.gold1)
-    rect(g, x + 2, y - 6, 2, 5, C.gold1)
-    rect(g, x - 4, y - 7, 9, 1, C.gold3)
-    rect(g, x - 2, y - 5, 1, 3, C.white)
-    // the stem and the plinth
-    rect(g, x - 1, y + 1, 3, 3, C.gold1)
-    rect(g, x - 1, y + 1, 1, 3, C.gold2)
-    rect(g, x - 3, y + 4, 7, 1, C.gold2)
-    rect(g, x - 4, y + 5, 9, 2, C.brown2)
-    rect(g, x - 4, y + 5, 9, 1, C.brown3)
-}
-
 /** A market stall: a striped awning with a scalloped edge on two posts, over a counter of wares. */
 export const SHOP_STALL: Glyph = (g, x, y) => {
     rect(g, x - 7, y - 8, 15, 1, C.red1)
@@ -176,7 +152,6 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     classes: NODE_TREE,
     // the Shop (the user's call, 2026-10-10: open from the World 1 boss, so no longer prestige's)
     shop: SHOP_STALL,
-    milestones: TROPHY,
     calendar: CALENDAR,
     settings: COG
 }

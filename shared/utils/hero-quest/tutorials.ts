@@ -61,12 +61,15 @@ export function featureCheckpoint(feature: HqFeature): FeatureCheckpoint {
     return CHECKPOINT_OF.get(feature)!
 }
 
+/** Features that are a tab in another feature's scene since 2026-10-10, by the scene they live in. */
+const TAB_FEATURES: Readonly<Partial<Record<HqFeature, HqFeature>>> = { speed: 'shop', milestones: 'calendar' }
+
 /**
- * The menu button a feature lives behind: its own scene, except Battle Speed, a tab in the Shop
- * since 2026-10-10. Its unlock points at the Shop's button, and its red dot sits there.
+ * The menu button a feature lives behind: its own scene, except Battle Speed, a tab in the Shop,
+ * and the Milestones, a tab in the Calendar. Its unlock points at that button, and its red dot sits there.
  */
-export function featureMenuScene(feature: HqFeature): Exclude<HqFeature, 'speed'> {
-    return feature === 'speed' ? 'shop' : feature
+export function featureMenuScene(feature: HqFeature): Exclude<HqFeature, 'speed' | 'milestones'> {
+    return (TAB_FEATURES[feature] ?? feature) as Exclude<HqFeature, 'speed' | 'milestones'>
 }
 
 /** What reaching a checkpoint takes, as a sentence's predicate: "Opens once you beat the World 1 boss". */

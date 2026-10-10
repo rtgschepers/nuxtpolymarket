@@ -408,11 +408,22 @@ function onShopTab(tab: HqShopTab) {
     void navigateTo(hqShopTabPath(tab))
 }
 
+/** The Calendar's tab, off the route: the login calendar, or the Milestones. */
+const calendarTab = computed<HqCalendarTab>(() => hqCalendarTabOf(route.path))
+
+function onCalendarTab(tab: HqCalendarTab) {
+    void navigateTo(hqCalendarTabPath(tab))
+}
+
 /**
- * Where the player stands, as the tutorials read it: Battle Speed's own tutorial plays on its Shop
- * tab, the scene it had before it moved there.
+ * Where the player stands, as the tutorials read it: Battle Speed's and the Milestones' own
+ * tutorials play on their tabs, the scenes they had before they moved there.
  */
-const tutorialScene = computed<string>(() => props.scene === 'shop' && shopTab.value === 'speed' ? 'speed' : props.scene)
+const tutorialScene = computed<string>(() => {
+    if (props.scene === 'shop' && shopTab.value === 'speed') return 'speed'
+    if (props.scene === 'calendar' && calendarTab.value === 'milestones') return 'milestones'
+    return props.scene
+})
 
 const prestigeView = computed<PrestigeView>(() => {
     const shards = D(voidShards.value ?? '0')
@@ -1127,6 +1138,8 @@ const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || 
 const newScenes = computed(() => [...new Set(unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)).map(featureMenuScene))])
 /** Battle Speed's tab can be pressed: it is open, and its turn in the tutorials has come. */
 const speedOpen = computed(() => shownFeatures.value.includes('speed'))
+/** The Milestones' tab can be pressed: they are open, and their turn in the tutorials has come. */
+const milestonesOpen = computed(() => shownFeatures.value.includes('milestones'))
 
 /** The scene last opened from the menu: picked from what the menu showed, so it is never sent back. */
 let openedFromMenu: HqScene | null = null
@@ -1142,6 +1155,8 @@ watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
     if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) {
         // the Shop is open but Battle Speed's tab is not yet: the Upgrades tab instead
         if (scene === 'shop' && shopTab.value === 'speed' && tutorials.value && !speedOpen.value) onShopTab('upgrades')
+        // and the Calendar's, with the Milestones not open yet
+        if (scene === 'calendar' && calendarTab.value === 'milestones' && tutorials.value && !milestonesOpen.value) onCalendarTab('calendar')
         return
     }
     if (import.meta.dev) {
@@ -1183,8 +1198,9 @@ function onScene(scene: HqScene) {
     const due = dueTutorial.value
     if (guideView.value?.focus === scene) closeTutorial()
     openedFromMenu = scene
-    // Battle Speed's unlock opens the Shop on its tab, where its explanation plays
+    // Battle Speed's and the Milestones' unlocks open their scene on their tab, where the explanation plays
     if (due === 'speed:unlock' && scene === 'shop') onShopTab('speed')
+    else if (due === 'milestones:unlock' && scene === 'calendar') onCalendarTab('milestones')
     else emit('scene', scene)
 }
 
@@ -1428,6 +1444,9 @@ const awayReport = computed(() => {
           :scene="scene"
           :shop-tab="shopTab"
           :speed-open="speedOpen"
+          :calendar-tab="calendarTab"
+          :milestones-open="milestonesOpen"
+          @calendar-tab="onCalendarTab"
           @shop-tab="onShopTab"
           :collections="collections"
           :collections-busy="collectionsBusy"

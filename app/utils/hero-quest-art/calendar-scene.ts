@@ -116,8 +116,8 @@ export class CalendarScene {
 
     /** `hover` is what the pointer is over; `busy` holds the claim and the make-up while one is on its way. */
     render(t: number, view: CalendarView, hover: CalendarTarget | null, pressed: boolean, busy: boolean): Surface {
+        // the Calendar's tabs stand where a title would (`scene-tabs.ts`), drawn over by the canvas
         const s = this.backdrops.render('calendar', t, false)
-        drawText(s, 'LOGIN CALENDAR', 6, 4, C.gold2, { shadow: 1 })
         drawText(s, `DAY ${view.today + 1} OF ${view.days.length}`, s.w - 6, 4, C.bone1, { align: 2, shadow: 1 })
 
         const pulse = Math.floor(t * 3) % 2 === 0
