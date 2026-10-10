@@ -35,6 +35,7 @@ Mostly already decided by other locked docs; stated here as the single reference
   - **The client waits one kill before firing** (`AUTO_ENGAGE_GRACE_KILLS = 1`, clamped to 1–10s). The screen projects kills fractionally so bars move smoothly, while the server floors to whole kills, so the screen reaches a gate up to one kill before the server agrees. An engage sent in that window is rejected with a 400; the client swallows it and retries after 3s rather than showing an error.
   - **Never re-fights a cleared run.** A won World 10 super boss leaves the run parked on the same gate with `runCleared` set; auto-engage holds there, since firing would re-fight the final boss forever and every win pays Milestone Seals.
   - An automatically engaged replay closes itself 2.5s after its outcome; a manually engaged one waits for the player.
+- **The run holds while the player is in a raid** (2026-10-10, `open-items.md` #54): from a raid's first engage until the player leaves it, nothing accrues and no boss fires on its own. The time spent there is dropped, not banked.
 - **Skill casting is not a separate axis anymore.** Every skill on every unit auto-fires on cooldown (`classes-and-combat.md` §3), so stage/kill-count auto-advancement and skill firing are simply the same always-on behavior. Nothing about the party's DPS contribution depends on the player being present or attentive.
 
 ---
