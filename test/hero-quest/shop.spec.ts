@@ -90,13 +90,13 @@ describe('hero-quest prestige shop', () => {
         expect(SHOP_TRACKS.some(track => track.id.startsWith('gear'))).toBe(false)
     })
 
-    it('prices Loadout and Trait save slots in Gems and everything else in Void Shards', () => {
-        // The two non-Void-Shard tracks in the game. Both add zero combat power on their own —
-        // pure convenience — which is why they take the convenience currency (`loadouts.md` §3,
-        // `traits.md` §6).
-        for (const track of SHOP_TRACKS) {
-            expect(track.currency, track.id).toBe(track.id === 'loadoutSlots' || track.id === 'traitSaveSlots' ? 'gems' : 'voidShards')
-        }
+    it('prices the offline tracks in Gold, Loadout and Trait save slots in Gems, and the rest in Void Shards', () => {
+        // Gems for the two pure-convenience tracks (`loadouts.md` §3, `traits.md` §6); Gold for the
+        // offline ones, so they can be bought long before a prestige (the user's call, 2026-10-10).
+        const currencyOf = (id: string) => id === 'loadoutSlots' || id === 'traitSaveSlots'
+            ? 'gems'
+            : id === 'offlineEfficiency' || id === 'offlineCap' ? 'gold' : 'voidShards'
+        for (const track of SHOP_TRACKS) expect(track.currency, track.id).toBe(currencyOf(track.id))
     })
 
     it('prices Trait save slots on the flat +500 step, 250 / 750 / 1250, three levels', () => {
@@ -168,12 +168,16 @@ describe('hero-quest prestige shop', () => {
             expect(shopTrackCost('offlineCap', 0)).toBe(OFFLINE_CAP_BASE_COST)
         })
 
-        it('doubles per level on the short track, exactly', () => {
-            // `cost(level) = BASE × 2^(level-1)` — the doc's 5-level shape, unrounded.
-            for (let level = 0; level < MAX_OFFLINE_EFFICIENCY_LEVEL; level++) {
-                expect(shopTrackCost('offlineEfficiency', level))
-                    .toBeCloseTo(OFFLINE_EFFICIENCY_BASE_COST * Math.pow(2, level), 10)
-            }
+        it('prices Offline Efficiency at 1M Gold, x10 a level, 10B for the fifth', () => {
+            expect(Array.from({ length: MAX_OFFLINE_EFFICIENCY_LEVEL }, (_, level) => shopTrackCost('offlineEfficiency', level)))
+                .toEqual([1e6, 1e7, 1e8, 1e9, 1e10])
+            expect(OFFLINE_EFFICIENCY_BASE_COST).toBe(1e6)
+        })
+
+        it('prices Offline Cap at 100K Gold, x1.5 a level, 28,762,658,885 for the 32nd', () => {
+            expect(shopTrackCost('offlineCap', 0)).toBe(100_000)
+            expect(shopTrackCost('offlineCap', 1)).toBe(150_000)
+            expect(shopTrackCost('offlineCap', MAX_OFFLINE_CAP_LEVEL - 1)).toBe(28_762_658_885)
         })
 
         it('climbs monotonically on the long track and stays whole', () => {
@@ -189,7 +193,7 @@ describe('hero-quest prestige shop', () => {
         it('gates the last few levels hard, which is the point of the long curve', () => {
             const first = shopTrackCost('offlineCap', 0)!
             const last = shopTrackCost('offlineCap', MAX_OFFLINE_CAP_LEVEL - 1)!
-            expect(last / first).toBeGreaterThan(1e6)
+            expect(last / first).toBeGreaterThan(1e5)
         })
 
         it('returns null at the cap so a maxed track can never be bought again', () => {

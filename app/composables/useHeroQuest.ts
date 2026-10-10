@@ -31,7 +31,7 @@ const poll: { users: number, timer: ReturnType<typeof setInterval> | null } = { 
 
 export const useHeroQuest = () => {
     const toast = useToast()
-    const { fetchSession } = useAuth()
+    const { fetchSession, setBalance } = useAuth()
 
     /**
      * The session (`useHqSession`), decided as each read arrives rather than in a watcher, so the
@@ -185,12 +185,14 @@ export const useHeroQuest = () => {
     }
 
     /**
-     * Buy a prestige-shop level. A Gems track (Loadout or Trait save slots) moves a platform balance
-     * the response doesn't carry, and Gems have no setter of their own, so the session is read back.
+     * Buy a shop level. A Gold track (the offline ones) carries the new balance, so it is set straight
+     * away; a Gems track (Loadout or Trait save slots) moves a platform balance the response doesn't
+     * carry, and Gems have no setter of their own, so the session is read back.
      */
     async function buyUpgrade(upgradeId: string) {
-        const res = await call<{ currency: 'voidShards' | 'gems' }>('/api/hero-quest/prestige/shop-buy', { upgradeId }, '')
-        if (res?.currency === 'gems') await fetchSession()
+        const res = await call<{ currency: 'voidShards' | 'gems' | 'gold', balance: string | null }>('/api/hero-quest/prestige/shop-buy', { upgradeId }, '')
+        if (res?.currency === 'gold' && res.balance !== null) setBalance(res.balance)
+        else if (res?.currency === 'gems') await fetchSession()
         return res
     }
 

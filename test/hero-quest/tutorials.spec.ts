@@ -44,12 +44,10 @@ describe('hero-quest feature unlocks', () => {
     })
 
     it('follows the schedule through the Worlds, the run\'s clear and the first prestige', () => {
-        expect(unlockedFeatures(at(2, 1))).toEqual(['gacha', 'collections', 'milestones', 'calendar'])
-        expect(unlockedFeatures(at(3, 1))).toEqual(['gacha', 'collections', 'milestones', 'calendar', 'loadouts', 'speed'])
+        expect(unlockedFeatures(at(2, 1))).toEqual(['gacha', 'collections', 'prestige', 'milestones', 'calendar'])
+        expect(unlockedFeatures(at(3, 1))).toEqual(['gacha', 'collections', 'prestige', 'milestones', 'calendar', 'loadouts', 'speed'])
         expect(featureUnlocked('raids', at(4, 10))).toBe(false)
         expect(featureUnlocked('raids', at(5, 1))).toBe(true)
-        expect(featureUnlocked('prestige', at(WORLD_COUNT, 10))).toBe(false)
-        expect(featureUnlocked('prestige', at(WORLD_COUNT, 10, 0, true))).toBe(true)
         expect(featureUnlocked('classes', at(WORLD_COUNT, 10, 0, true))).toBe(false)
         expect(featureUnlocked('classes', at(1, 1, 1))).toBe(true)
     })
@@ -81,8 +79,13 @@ describe('hero-quest tutorials', () => {
         expect(nextTutorial(open, ['intro', 'gacha:unlock', 'gacha:visit', 'collections:unlock'], 'collections')).toBe('collections:visit')
     })
 
+    it('opens the Shop on the World 1 boss\'s win, not on a loss to it', () => {
+        expect(unlockedFeatures(at(1, BOSS_STAGE, 0, false, true))).toEqual(['gacha', 'collections'])
+        expect(unlockedFeatures(at(1, BOSS_STAGE + 1))).toEqual(['gacha', 'collections', 'prestige'])
+    })
+
     it('shows a feature that opened with another only once its own tutorial is up', () => {
-        const open = unlockedFeatures(at(1, BOSS_STAGE + 1))
+        const open = unlockedFeatures(at(1, BOSS_STAGE, 0, false, true))
         expect(open).toEqual(['gacha', 'collections'])
         // during the intro neither shows; the Gacha comes out with its announcement
         expect(revealedFeatures(open, [], 'battle')).toEqual([])
@@ -93,6 +96,15 @@ describe('hero-quest tutorials', () => {
         expect(revealedFeatures(open, gachaDone, 'gacha')).toEqual(['gacha'])
         expect(revealedFeatures(open, gachaDone, 'battle')).toEqual(['gacha', 'collections'])
         expect(revealedFeatures(open, [...gachaDone, 'collections:visit'], 'gacha')).toEqual(['gacha', 'collections'])
+    })
+
+    it('brings the Shop out last when the one fight opens it with the Gacha and Collections', () => {
+        const open = unlockedFeatures(at(1, BOSS_STAGE + 1))
+        const both = ['intro', 'gacha:unlock', 'gacha:visit', 'collections:unlock', 'collections:visit']
+        expect(revealedFeatures(open, ['intro'], 'battle')).toEqual(['gacha'])
+        expect(revealedFeatures(open, both.slice(0, 3), 'battle')).toEqual(['gacha', 'collections'])
+        expect(nextTutorial(open, both, 'battle')).toBe('prestige:unlock')
+        expect(revealedFeatures(open, both, 'battle')).toEqual(['gacha', 'collections', 'prestige'])
     })
 
     it('reminds once, on the battle after the second boss lost, once the Gacha and Collections are explained', () => {

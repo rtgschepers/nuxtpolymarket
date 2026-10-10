@@ -1,5 +1,5 @@
-// The Prestige scene's shop: every prestige-shop track as a card, two rows of three to a page,
-// under the player's Void Shards and Gems and a pager. A card shows the track's icon and name, how
+// The Shop scene (the `prestige` scene, renamed 2026-10-10): every shop track as a card, two rows of
+// three to a page, under the player's Gold, Gems and Void Shards and a pager. A card shows the track's icon and name, how
 // far along it is (or that it has no limit), what it gives now and at the next level, and a Buy
 // button with the price in its currency; a maxed track says so instead.
 
@@ -25,7 +25,7 @@ export interface ShopTrackView {
     next: string | null
     /** The next level's price, spelled out; null once maxed. */
     cost: string | null
-    currency: 'voidShards' | 'gems'
+    currency: 'voidShards' | 'gems' | 'gold'
     affordable: boolean
 }
 
@@ -33,6 +33,7 @@ export interface PrestigeView {
     tracks: readonly ShopTrackView[]
     voidShards: string
     gems: string
+    gold: string
     /** The track whose Buy was pressed once and waits for the second press that confirms it. */
     armed?: string | null
 }
@@ -82,7 +83,8 @@ const ICONS: Readonly<Record<string, Glyph>> = {
 
 const CURRENCY_GLYPH: Readonly<Record<ShopTrackView['currency'], Glyph>> = {
     voidShards: CURRENCY_ICONS.void_shards!,
-    gems: CURRENCY_ICONS.gems!
+    gems: CURRENCY_ICONS.gems!,
+    gold: CURRENCY_ICONS.gold!
 }
 
 const BUY_PLATE = [C.green0, C.green1, C.green2] as const
@@ -150,16 +152,16 @@ export class PrestigeScene {
      */
     render(t: number, view: PrestigeView, page: number, hover: number | 'prev' | 'next' | null, pressed: boolean, busy: boolean): Surface {
         const s = this.backdrops.render('prestige', t, false)
-        drawText(s, 'PRESTIGE SHOP', 6, 4, C.gold2, { shadow: 1 })
+        drawText(s, 'SHOP', 6, 4, C.gold2, { shadow: 1 })
         const pages = Math.max(1, Math.ceil(view.tracks.length / SHOP_PAGE_SIZE))
         if (pages > 1) this.drawPager(s, page, pages, hover, pressed)
-        // the two balances the shop spends, right-aligned: Void Shards, then Gems
+        // the three balances the shop spends, right-aligned: Void Shards, Gems, then Gold
         let x = s.w - 6
-        for (const [amount, g] of [[view.gems, CURRENCY_ICONS.gems!], [view.voidShards, CURRENCY_ICONS.void_shards!]] as const) {
+        for (const [amount, g] of [[view.voidShards, CURRENCY_ICONS.void_shards!], [view.gems, CURRENCY_ICONS.gems!], [view.gold, CURRENCY_ICONS.gold!]] as const) {
             const tw = textWidth(amount.toUpperCase())
             drawText(s, amount.toUpperCase(), x, 4, C.bone1, { align: 2, shadow: 1 })
-            glyph(s, g, x - tw - 7, 6, true)
-            x -= tw + 20
+            glyph(s, g, x - tw - 9, 6, true)
+            x -= tw + 24
         }
         view.tracks.slice(page * SHOP_PAGE_SIZE, (page + 1) * SHOP_PAGE_SIZE)
             .forEach((track, i) => this.drawCard(s, cardBox(s.w, i), track, hover === i, pressed, busy, view.armed === track.id))

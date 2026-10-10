@@ -15,7 +15,7 @@ export const HQ_SCENE_LABELS: Readonly<Record<HqScene, string>> = {
     traits: 'Traits',
     raids: 'Raids',
     classes: 'Classes',
-    prestige: 'Prestige',
+    prestige: 'Shop',
     speed: 'Battle Speed',
     milestones: 'Milestones',
     calendar: 'Calendar',

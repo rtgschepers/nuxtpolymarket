@@ -20,8 +20,8 @@
  * ## Two currencies
  *
  * Loadout slots (`loadouts.md` §3) and Trait save slots (`traits.md` §6) are priced in **Gems** —
- * see `LOADOUT_SLOT_BASE_COST_GEMS` and `TRAIT_SAVE_SLOT_BASE_COST_GEMS` — and everything else in
- * Void Shards. That is why `ShopTrack` carries a `currency` and the buy
+ * see `LOADOUT_SLOT_BASE_COST_GEMS` and `TRAIT_SAVE_SLOT_BASE_COST_GEMS` — the two offline tracks in
+ * **Gold** (the user's call, 2026-10-10), and everything else in Void Shards. That is why `ShopTrack` carries a `currency` and the buy
  * route branches on it.
  */
 
@@ -72,8 +72,8 @@ export type ShopTrackId =
     | 'statImp'
     | 'statVit'
 
-/** What pays for a track. Void Shards unless the track buys pure convenience. */
-export type ShopCurrency = 'voidShards' | 'gems'
+/** What pays for a track: Void Shards, Gems for pure convenience, Gold for the offline tracks. */
+export type ShopCurrency = 'voidShards' | 'gems' | 'gold'
 
 export interface ShopTrack {
     id: ShopTrackId
@@ -90,10 +90,8 @@ export interface ShopTrack {
     costStep?: number
     currency: ShopCurrency
     /**
-     * Whether to round the price to a whole number. Only Offline Efficiency stays exact, which
-     * preserves the doc's `cost(level) = BASE × 2^(level-1)` for that 5-level track.
-     *
-     * Always true for a Gems track — `debitGems` takes an integer and rejects anything else.
+     * Whether to round the price to a whole number. Always true for a Gems or Gold track:
+     * `debitGems` takes an integer, and a Gold price reads as whole coins.
      */
     roundCost: boolean
     /** The stat a stat track raises, party-wide. */
@@ -123,8 +121,8 @@ export const SHOP_TRACKS: readonly ShopTrack[] = [
         maxLevel: MAX_OFFLINE_EFFICIENCY_LEVEL,
         baseCost: OFFLINE_EFFICIENCY_BASE_COST,
         costGrowth: OFFLINE_EFFICIENCY_COST_GROWTH,
-        currency: 'voidShards',
-        roundCost: false
+        currency: 'gold',
+        roundCost: true
     },
     {
         id: 'offlineCap',
@@ -133,7 +131,7 @@ export const SHOP_TRACKS: readonly ShopTrack[] = [
         maxLevel: MAX_OFFLINE_CAP_LEVEL,
         baseCost: OFFLINE_CAP_BASE_COST,
         costGrowth: OFFLINE_CAP_COST_GROWTH,
-        currency: 'voidShards',
+        currency: 'gold',
         roundCost: true
     },
     {

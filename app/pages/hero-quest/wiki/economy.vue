@@ -144,7 +144,7 @@ const planned = HQ_CURRENCY_DOCS.filter(currency => !currency.live)
               </td>
               <td class="py-1.5 pl-3 text-right tabular-nums whitespace-nowrap">
                 {{ track.baseCost.toLocaleString('en-US') }}
-                {{ track.currency === 'gems' ? 'Gems' : 'Shards' }}
+                {{ track.currency === 'gems' ? 'Gems' : track.currency === 'gold' ? 'Gold' : 'Shards' }}
               </td>
             </tr>
           </tbody>

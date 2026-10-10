@@ -32,7 +32,7 @@ describe('hero-quest raid rules', () => {
         expect(raidReward('raid_training_grounds', 50)).toBe(Math.round(3 * 1.03 ** 49))
         expect(raidReward('raid_training_grounds', 1, 'stepped')).toBe(3)
         expect(raidReward('raid_training_grounds', 6, 'stepped')).toBe(4)
-        expect(raidReward('raid_trait', 1)).toBe(10)
+        expect(raidReward('raid_trait', 1)).toBe(100)
     })
 
     it('grants a day of Keys for each whole day since the last grant, up to the bank, keeping its time of day', () => {

@@ -1856,8 +1856,12 @@ export async function buyShopTrack(tx: DbExecutor, userId: string, upgradeId: Sh
         throw createError({ statusCode: 409, statusMessage: 'That upgrade is already being bought, try again' })
     }
 
+    let balance: string | null = null
     if (track.currency === 'voidShards') {
         await tx.update(hqState).set({ voidShards: remaining! }).where(eq(hqState.userId, userId))
+    } else if (track.currency === 'gold') {
+        // `debit` guards the balance in its own WHERE and throws 400 when short, on this tx for the lock
+        balance = await debit(userId, cost.toFixed(4), 'hero-quest:shop', tx)
     } else {
         // `debitGems` guards `gems >= cost` in its own WHERE and throws 400 otherwise, so the
         // check and the spend are one statement. The tx is threaded because this transaction
@@ -1872,6 +1876,8 @@ export async function buyShopTrack(tx: DbExecutor, userId: string, upgradeId: Sh
         spent: cost,
         currency: track.currency,
         voidShards: remaining ?? state.voidShards,
+        /** The Gold balance after a Gold purchase, for the header; null otherwise. */
+        balance,
         nextCost: shopTrackCost(upgradeId, claimed.level)
     }
 }

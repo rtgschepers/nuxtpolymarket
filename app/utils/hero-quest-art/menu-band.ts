@@ -148,6 +148,31 @@ export const TROPHY: Glyph = (g, x, y) => {
     rect(g, x - 4, y + 5, 9, 1, C.brown3)
 }
 
+/** A market stall: a striped awning with a scalloped edge on two posts, over a counter of wares. */
+export const SHOP_STALL: Glyph = (g, x, y) => {
+    rect(g, x - 7, y - 8, 15, 1, C.red1)
+    for (let i = 0; i < 8; i++) {
+        const sx = x - 7 + i * 2
+        const stripe = i % 2 ? C.bone1 : C.red2
+        rect(g, sx, y - 7, i === 7 ? 1 : 2, 4, stripe)
+        // the scallops, one under each stripe
+        px(g, sx, y - 3, stripe)
+    }
+    rect(g, x - 6, y - 3, 1, 7, C.brown2)
+    rect(g, x + 6, y - 3, 1, 7, C.brown2)
+    // the wares: a stack of coins and a potion
+    rect(g, x - 4, y + 1, 3, 1, C.gold2)
+    rect(g, x - 4, y, 3, 1, C.gold3)
+    rect(g, x - 3, y - 1, 3, 1, C.gold2)
+    rect(g, x + 2, y - 1, 2, 3, C.green3)
+    px(g, x + 2, y - 2, C.brown3)
+    px(g, x + 2, y - 1, C.white)
+    // the counter
+    rect(g, x - 7, y + 2, 15, 1, C.brown3)
+    rect(g, x - 7, y + 3, 15, 3, C.brown2)
+    rect(g, x - 7, y + 6, 15, 1, C.brown1)
+}
+
 const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     gacha: GUMBALL,
     collections: (g, x, y) => ABILITY_ICON_PARTS.book(g, x, y, C.red1, C.bone1),
@@ -156,8 +181,8 @@ const ICONS: Readonly<Record<HqMenuScene, Glyph>> = {
     traits: CURRENCY_ICONS.trait_gems!,
     raids: RAID_BANNER,
     classes: NODE_TREE,
-    // Void Shards are what a prestige pays out
-    prestige: CURRENCY_ICONS.void_shards!,
+    // the Shop (the user's call, 2026-10-10: open from the World 1 boss, so no longer prestige's)
+    prestige: SHOP_STALL,
     speed: FAST_FORWARD,
     milestones: TROPHY,
     calendar: CALENDAR,
