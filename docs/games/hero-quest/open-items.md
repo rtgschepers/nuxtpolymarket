@@ -9,7 +9,7 @@ made it the most expensive bloat in the project.
 scripts cite them (`#22`, `#23.3`, `#18.6`). The gaps below — #4, #5, #8, #10–#21, #24, #26–#28 —
 are finished items, not missing ones; they are in `build-log.md` under the same number. #22, #23,
 #25 and #29 appear in both: the open part here, the full record there. New items continue from
-**#56** — #55 (the Shop and the Gold offline tracks) was decided and built 2026-10-10, and is in `build-log.md`; #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up, built and its guide's art locked the same day, closing it; #51 (bosses without an escort) landed with it; #52 (Traits), #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
+**#57** — #56 (Battle Speed into the Shop, the `shop` rename) landed 2026-10-10 and is in `build-log.md`; #55 (the Shop and the Gold offline tracks) was decided and built 2026-10-10, and is in `build-log.md`; #30 was raised and decided on 2026-09-17, and is in `build-log.md`; #31 opened 2026-09-28, #32 on 2026-09-29; #33, #34 and #35 were decided on 2026-10-02 and are in `build-log.md`; #36 landed 2026-10-03 with its pacing half open; #37 landed the same day; #38 to #42 landed 2026-10-04; #43 opened the same day, #44 landed and #45 opened with it, and #6, #3, #31 and #32 were decided (all in `build-log.md`); #46 (raids) landed 2026-10-05; #45 (boss specials) landed 2026-10-08 with its open half below, and #47 (the login calendar) the same day; #48 (milestones) landed 2026-10-09, and #43 (the Ascendant) was decided, built and its art locked the same day, closing it; #49 opened with it, and #50 (the tutorials, backlog item 10) was picked up, built and its guide's art locked the same day, closing it; #51 (bosses without an escort) landed with it; #52 (Traits), #53 (holiday gifts) and #54 (per-raid Loadout auto-apply) were built the same day, each with an open half below.
 
 **Resolving a bare `#N`:** this doc first, `build-log.md` otherwise. Sub-numbers (`#23.3`,
 `#18.6`) keep their original meaning in both.
@@ -62,7 +62,7 @@ read the older rule in the doc named in the middle column, it is superseded.**
 ## 🔴 Genuinely undesigned — full passes, not edits
 
 ### 7. Passive Skill Tree (backlog item 3)
-Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
+A menu button is free for it (Battle Speed moved into the Shop, `build-log.md` #56). Unchecked. Hero-only passive tree, generic root splitting into 3 paths, nodes up to 5 levels each, purchased via its own dedicated raid, with Champion/item side-nodes allowed but never gating a path. Structurally sound to build (raids don't have to be gacha-paired) but has had no dedicated design session.
 
 ---
 
@@ -146,7 +146,7 @@ combat and GPN. What it left open:
      only the wording is wrong.
 3. ~~A Roll or a load does not settle first~~ — fixed 2026-10-10 (the user's call): every route
    that moves the idle rate settles first (`trait/roll`, `trait/load`, `loadout/set`,
-   `loadout/apply`, `prestige/pick-class`, `prestige/shop-buy`), so a window is always paid at the
+   `loadout/apply`, `prestige/pick-class`, `shop/buy`), so a window is always paid at the
    rate it ran at.
 
 ### 47. The login calendar — built; its Gold and Gem days are placeholders

@@ -850,6 +850,14 @@ The user's calls, in one pass:
 - **The Trait raid pays 10x**: `RAID_REWARD_BASE.raid_trait` 10 → 100, still +3% a level. The calendar's Trait Gem days are sized off that income, so they are 10x too (the user's call). Makes `open-items.md` #52.1 (Deep Impact) ten times as reachable.
 - **Specs:** the new schedule, the Shop's win-only unlock and its place last in the group (`tutorials.spec.ts`), both Gold curves exactly (`shop.spec.ts`), the raid's 100 (`raids.spec.ts`), and a burst of Gold purchases selling only what the Gold covers (`concurrency.spec.ts`).
 
+### 56. Battle Speed moves into the Shop, and the Shop is `shop` throughout — **landed 2026-10-10**
+
+The user's calls, to free a menu button for the Passive Skill Tree (`open-items.md` #7). Eleven buttons at 22 px with 2 px gaps are 262 of the stage's 272; a twelfth needs 286.
+
+- **Battle Speed is a Shop tab.** The Shop has two tabs along its top left (`shop-tabs.ts`), Upgrades and Battle Speed, each a route like the Collections tabs: `/hero-quest/shop` and `/hero-quest/shop/speed`. The Speed scene draws under the Battle Speed tab unchanged. Battle Speed keeps its unlock (two Worlds cleared); until then its tab is dim and can't be pressed, and a link straight to it lands on Upgrades. Its unlock points at the Shop's button (`featureMenuScene`), and pressing it opens the Shop on the Battle Speed tab, where its explanation plays; its red dot sits on the Shop's button until then. The menu is ten buttons, so a slot is free.
+- **`prestige` → `shop`** wherever it meant the store: the scene and feature ID, the page (`/hero-quest/shop`), and the buy route (`shop/buy.post.ts`, was `prestige/shop-buy.post.ts`). Migration `0063` renames `prestige:unlock` and `prestige:visit` to `shop:*` in every `tutorials_seen`, so nobody sees the Shop's tutorial twice. The prestige action keeps its name (`prestige/execute`, `prestige/pick-class`), and `execute` lost its feature gate: `runCleared` was always the real one. `/hero-quest/prestige` and `/hero-quest/speed` are gone, with no redirect (the user's call). The art modules keep their names (`prestige-scene.ts`, `speed-scene.ts`).
+- **Specs:** every feature maps to a menu button, Battle Speed's to the Shop's (`tutorials.spec.ts`).
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.

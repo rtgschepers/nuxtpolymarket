@@ -264,7 +264,7 @@ One file per verb, directory per subsystem, `requireUserId(event)` at the top of
 ```
 state.get.ts                      init.post.ts
 boss/engage.post.ts               prestige/execute.post.ts
-prestige/pick-class.post.ts       prestige/shop-buy.post.ts
+prestige/pick-class.post.ts       shop/buy.post.ts           (prestige/shop-buy.post.ts until #56)
 gacha/pull.post.ts                gacha/craft.post.ts        (system in body: gear|champion|skill|artifact)
 gacha/buy-seals.post.ts           loadout/set.post.ts        (live equip: party/skills/artifacts/gear/formation)
 loadout/save.post.ts              loadout/apply.post.ts
