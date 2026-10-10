@@ -22,7 +22,7 @@ import { RAIDS, type RaidId } from '#shared/utils/hero-quest/content/raids'
 import { TRAIT_GRADES } from '#shared/utils/hero-quest/content/traits'
 import { LOADOUT_TARGETS } from '#shared/utils/hero-quest/loadout-session'
 import { HQ_SETTING_DEFAULTS } from '#shared/utils/hero-quest/settings'
-import { bossLossMark, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
+import { bossLossMark, featureMenuScene, isHqFeature, nextTutorial, revealedFeatures, type HqFeature, type TutorialId } from '#shared/utils/hero-quest/tutorials'
 import { GUIDE_NAME, TUTORIAL_PAGES } from '#shared/utils/hero-quest/content/tutorials'
 import type { GuideView } from '~/utils/hero-quest-art/guide'
 import type { GachaBannerView, GachaButton, GachaCard, GachaSystemId, GachaView, PullPrice } from '~/utils/hero-quest-art/gacha-scene'
@@ -393,13 +393,26 @@ function freezeShopOrder() {
 }
 
 watch(() => props.scene, (scene) => {
-    if (scene === 'prestige') freezeShopOrder()
+    if (scene === 'shop') freezeShopOrder()
 }, { immediate: true })
 
 // opened before the payload landed (a reload straight onto the scene): freeze once it arrives
 watch(shop, (tracks) => {
-    if (props.scene === 'prestige' && !shopOrder.value.length && tracks?.length) freezeShopOrder()
+    if (props.scene === 'shop' && !shopOrder.value.length && tracks?.length) freezeShopOrder()
 })
+
+/** The Shop's tab, off the route: Upgrades, or Battle Speed. */
+const shopTab = computed<HqShopTab>(() => hqShopTabOf(route.path))
+
+function onShopTab(tab: HqShopTab) {
+    void navigateTo(hqShopTabPath(tab))
+}
+
+/**
+ * Where the player stands, as the tutorials read it: Battle Speed's own tutorial plays on its Shop
+ * tab, the scene it had before it moved there.
+ */
+const tutorialScene = computed<string>(() => props.scene === 'shop' && shopTab.value === 'speed' ? 'speed' : props.scene)
 
 const prestigeView = computed<PrestigeView>(() => {
     const shards = D(voidShards.value ?? '0')
@@ -1107,11 +1120,13 @@ const seenTutorials = computed(() => [...(tutorials.value?.seen ?? []), ...seenL
 /** The open features the menu shows: with tutorials on, a feature waits for its turn behind one that opened with it. */
 const shownFeatures = computed<readonly HqFeature[]>(() => settings.value?.tutorials === false
     ? unlocked.value
-    : revealedFeatures(unlocked.value, seenTutorials.value, props.scene))
+    : revealedFeatures(unlocked.value, seenTutorials.value, tutorialScene.value))
 /** The menu shows Settings and every feature shown. */
 const menuScenes = computed(() => HQ_MENU_SCENES.filter(s => !isHqFeature(s) || shownFeatures.value.includes(s)))
-/** Opened and not visited yet: the button carries the red dot until it is. */
-const newScenes = computed(() => unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)))
+/** Opened and not visited yet: the button carries the red dot until it is, Battle Speed's on the Shop's. */
+const newScenes = computed(() => [...new Set(unlocked.value.filter(f => !seenTutorials.value.includes(`${f}:visit`)).map(featureMenuScene))])
+/** Battle Speed's tab can be pressed: it is open, and its turn in the tutorials has come. */
+const speedOpen = computed(() => shownFeatures.value.includes('speed'))
 
 /** The scene last opened from the menu: picked from what the menu showed, so it is never sent back. */
 let openedFromMenu: HqScene | null = null
@@ -1124,7 +1139,11 @@ let openedFromMenu: HqScene | null = null
 watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
     if (scene === openedFromMenu) return
     openedFromMenu = null
-    if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) return
+    if (!tutorials.value || !isHqFeature(scene) || shownFeatures.value.includes(scene)) {
+        // the Shop is open but Battle Speed's tab is not yet: the Upgrades tab instead
+        if (scene === 'shop' && shopTab.value === 'speed' && tutorials.value && !speedOpen.value) onShopTab('upgrades')
+        return
+    }
     if (import.meta.dev) {
         console.warn('[hero-quest] scene not shown, back to the battle', { scene, unlocked: unlocked.value, seen: seenTutorials.value, shown: shownFeatures.value })
     }
@@ -1137,7 +1156,7 @@ watch([() => props.scene, () => tutorials.value !== null], ([scene]) => {
  */
 const dueTutorial = computed<TutorialId | null>(() => {
     if (!tutorials.value || settings.value?.tutorials === false || fight.value || raidRound.value) return null
-    return nextTutorial(unlocked.value, seenTutorials.value, props.scene)
+    return nextTutorial(unlocked.value, seenTutorials.value, tutorialScene.value)
 })
 const guidePage = ref(0)
 watch(dueTutorial, () => { guidePage.value = 0 })
@@ -1154,16 +1173,19 @@ function closeTutorial() {
     })
 }
 
-/** An unlock's scene, whose menu button is the one thing a forced unlock lets the player press. */
+/** An unlock's menu button, the one thing a forced unlock lets the player press: Battle Speed's is the Shop's. */
 function unlockFocus(id: TutorialId): HqMenuScene | null {
-    return id.endsWith(':unlock') ? id.slice(0, -':unlock'.length) as HqMenuScene : null
+    return id.endsWith(':unlock') ? featureMenuScene(id.slice(0, -':unlock'.length) as HqFeature) as HqMenuScene : null
 }
 
 /** A menu press. Pressing the button an unlock points at is how that unlock is read. */
 function onScene(scene: HqScene) {
+    const due = dueTutorial.value
     if (guideView.value?.focus === scene) closeTutorial()
     openedFromMenu = scene
-    emit('scene', scene)
+    // Battle Speed's unlock opens the Shop on its tab, where its explanation plays
+    if (due === 'speed:unlock' && scene === 'shop') onShopTab('speed')
+    else emit('scene', scene)
 }
 
 /** A boss fight lost: counted toward the guide's one reminder, which shows once the replay is done. */
@@ -1404,6 +1426,9 @@ const awayReport = computed(() => {
           :speed="speedNow"
           :challenge="challenge"
           :scene="scene"
+          :shop-tab="shopTab"
+          :speed-open="speedOpen"
+          @shop-tab="onShopTab"
           :collections="collections"
           :collections-busy="collectionsBusy"
           :loadouts="loadoutsView"

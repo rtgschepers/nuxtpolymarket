@@ -74,8 +74,8 @@ export class SpeedScene {
 
     /** `hover` is the block whose Buy button is under the pointer; `busy` holds every button. */
     render(t: number, view: SpeedView, hover: SpeedBlock | null, pressed: boolean, busy: boolean): Surface {
-        const s = this.backdrops.render('speed', t, false)
-        drawText(s, 'BATTLE SPEED', 6, 4, C.gold2, { shadow: 1 })
+        // a tab in the Shop: the tabs stand where a title would (`shop-tabs.ts`), drawn over by the canvas
+        const s = this.backdrops.render('shop', t, false)
         const gw = textWidth(view.gems.toUpperCase())
         drawText(s, view.gems.toUpperCase(), s.w - 6, 4, C.bone1, { align: 2, shadow: 1 })
         glyph(s, CURRENCY_ICONS.gems!, s.w - 6 - gw - 9, 6, true)

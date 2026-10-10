@@ -73,6 +73,10 @@ const props = defineProps<{
     challenge?: boolean
     /** The scene on the stage; the battle when none is open. */
     scene?: HqScene
+    /** The Shop's open tab. */
+    shopTab?: HqShopTab
+    /** Battle Speed is open, so its Shop tab can be pressed. */
+    speedOpen?: boolean
     /** The Collections scene's open tab, that roster's entries in order, and that gacha's Essence. */
     collections?: CollectionsView
     /** A Collections equip or craft is on its way: the detail's buttons wait for it. */
@@ -146,6 +150,8 @@ const emit = defineEmits<{
     challenge: []
     /** A menu band button was pressed: the scene to show, or the battle when the open one closes. */
     scene: [scene: HqScene]
+    /** A Shop tab was pressed. */
+    shopTab: [tab: HqShopTab]
     /** A Collections detail button was pressed, for the entry it shows. */
     collectionAction: [action: DetailButton, id: string]
     /** A Collections tab was pressed. */
@@ -224,6 +230,7 @@ let classesScene: ClassesScene | null = null
 let classesHit: typeof import('~/utils/hero-quest-art/classes-scene') | null = null
 let speedScene: SpeedScene | null = null
 let speedHit: typeof import('~/utils/hero-quest-art/speed-scene') | null = null
+let shopTabsHit: typeof import('~/utils/hero-quest-art/shop-tabs') | null = null
 let gachaScene: GachaScene | null = null
 let gachaHit: typeof import('~/utils/hero-quest-art/gacha-scene') | null = null
 let settingsScene: SettingsScene | null = null
@@ -388,7 +395,7 @@ defineExpose({ skipFight, closeIris })
  * The challenge button and the menu band live in the canvas, so the pointer is hit-tested against
  * them in the view's own pixels. The page's own Fight button stays the keyboard's way in.
  */
-type Target = 'challenge' | 'gift' | 'gift:ok' | 'gift:skip' | HqMenuScene | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
+type Target = 'challenge' | 'gift' | 'gift:ok' | 'gift:skip' | HqMenuScene | `shoptab:${HqShopTab}` | `tab:${HqCollectionTab}` | `tile:${number}` | 'close' | DetailButton
     | `card:${number}` | `loadout:${LoadoutButton}` | `buy:${number}` | 'shop:prev' | 'shop:next' | `class:${string}` | KitTarget | `speed:${number}:${number}`
     | `gacha:${GachaSystemId}:${GachaButton | 'emblem'}` | 'reveal' | `setting:${SettingsTarget}` | `raid:${Exclude<RaidsHover, null>}` | 'reward:ok' | `cal:${CalendarTarget}` | `ms:${MilestonesTarget}` | GuideTarget
     | `trait:${TraitsTarget}`
@@ -527,7 +534,12 @@ function targetAt(e: PointerEvent): Target | null {
         const id = classesHit.classNodeAt(props.classes?.classes ?? [], x, y)
         return id ? `class:${id}` : null
     }
-    if (openScene.value === 'prestige' && prestigeHit) {
+    // the Shop's tabs sit over both of its tabs' scenes; a tab not open yet is only pointed at
+    if (openScene.value === 'shop' && shopTabsHit) {
+        const tab = shopTabsHit.shopTabAt(x, y)
+        if (tab) return tab !== shopTab.value && (tab !== 'speed' || props.speedOpen) ? `shoptab:${tab}` : null
+    }
+    if (openScene.value === 'shop' && shopTab.value === 'upgrades' && prestigeHit) {
         const tracks = props.prestige?.tracks ?? []
         const pages = Math.max(1, Math.ceil(tracks.length / prestigeHit.SHOP_PAGE_SIZE))
         const pager = pages > 1 ? prestigeHit.shopPagerAt(presenter.w, x, y) : null
@@ -584,7 +596,7 @@ function targetAt(e: PointerEvent): Target | null {
         if (at === 'claim') return props.calendarBusy ? null : 'cal:claim'
         return at ? `cal:${at}` : null
     }
-    if (openScene.value === 'speed' && speedHit && props.speedView) {
+    if (openScene.value === 'shop' && shopTab.value === 'speed' && speedHit && props.speedView) {
         const block = speedHit.speedBlockAt(props.speedView, x, y)
         // a block that cannot be bought (too dear, or another speed running) is no target
         return block && !props.speedBusy && speedHit.speedBlockOpen(props.speedView, block) ? `speed:${block.speed}:${block.minutes}` : null
@@ -752,6 +764,7 @@ function onPointerUp(e: PointerEvent) {
         const [, system, part] = hit.split(':') as [string, GachaSystemId, GachaButton | 'emblem']
         if (part !== 'emblem') emit('gachaAction', system, part)
     }
+    else if (hit.startsWith('shoptab:')) emit('shopTab', hit.slice(8) as HqShopTab)
     else if (hit.startsWith('speed:')) {
         const [, speed, minutes] = hit.split(':')
         emit('buySpeed', Number(speed), Number(minutes))
@@ -762,7 +775,7 @@ function onPointerUp(e: PointerEvent) {
     }
     else if (hit.startsWith('card:')) {
         const slot = props.loadouts?.slots[Number(hit.slice(5))]
-        if (slot?.locked) emit('scene', 'prestige')
+        if (slot?.locked) emit('scene', 'shop')
         else loadoutDetail.value = slot?.slotIndex ?? null
     }
     else if (hit.startsWith('loadout:')) {
@@ -869,6 +882,11 @@ const bandAlerts = computed<ReadonlySet<HqMenuScene>>(() => new Set<HqMenuScene>
     ...(props.calendar?.days[props.calendar.today]?.state === 'today' ? ['calendar' as const] : []),
     ...(props.milestones?.rows.some(r => r.claimable.length > 0) ? ['milestones' as const] : [])
 ]))
+/** The Shop's open tab, and the one under the pointer. */
+const shopTab = computed<HqShopTab>(() => props.shopTab ?? 'upgrades')
+const shopTabHover = computed<HqShopTab | null>(() => hover.value?.startsWith('shoptab:') ? hover.value.slice(8) as HqShopTab : null)
+const NO_SHOP_LOCKS: ReadonlySet<HqShopTab> = new Set()
+const SPEED_LOCKED: ReadonlySet<HqShopTab> = new Set(['speed'])
 const speedHover = computed<SpeedBlock | null>(() => {
     const h = hover.value
     if (!h?.startsWith('speed:')) return null
@@ -885,7 +903,7 @@ const loadoutsHover = computed<LoadoutsHover>(() => {
 onMounted(async () => {
     // started before the engine loads, so the box never paints in its own place first
     const landed = intro && wrap.value ? growFrom(wrap.value, intro) : Promise.resolve()
-    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt, giftArt, traitsArt] = await Promise.all([
+    const [{ BattleDemo, CAMERAS }, { Presenter, startLoop }, menuBand, collectionsArt, loadoutsArt, prestigeArt, classesArt, speedArt, gachaArt, settingsArt, raidsArt, calendarArt, milestonesArt, guideArt, giftArt, traitsArt, shopTabsArt] = await Promise.all([
         import('~/utils/hero-quest-art/demo'),
         import('~/utils/hero-quest-art/canvas'),
         import('~/utils/hero-quest-art/menu-band'),
@@ -901,7 +919,8 @@ onMounted(async () => {
         import('~/utils/hero-quest-art/milestones-scene'),
         import('~/utils/hero-quest-art/guide'),
         import('~/utils/hero-quest-art/holiday-gift'),
-        import('~/utils/hero-quest-art/traits-scene')
+        import('~/utils/hero-quest-art/traits-scene'),
+        import('~/utils/hero-quest-art/shop-tabs')
     ])
     if (disposed || !canvas.value) return
     band = menuBand
@@ -918,6 +937,7 @@ onMounted(async () => {
     classesHit = classesArt
     speedScene = new speedArt.SpeedScene(backdrops)
     speedHit = speedArt
+    shopTabsHit = shopTabsArt
     gachaScene = new gachaArt.GachaScene(backdrops)
     gachaHit = gachaArt
     settingsScene = new settingsArt.SettingsScene(backdrops)
@@ -970,8 +990,10 @@ onMounted(async () => {
                     ? loadoutsScene!.render(t, props.loadouts ?? { slots: [], unlocked: 0, max: 0 }, loadoutsHover.value, pressed.value, loadoutDetail.value, !!props.loadoutsBusy)
                     : scene === 'classes'
                         ? classesScene!.render(t, classesView.value, classHover.value, !!props.classesBusy, pressed.value)
-                        : scene === 'prestige'
-                            ? prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0', gold: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
+                        : scene === 'shop'
+                            ? shopTab.value === 'speed'
+                                ? speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
+                                : prestigeScene!.render(t, props.prestige ?? { tracks: [], voidShards: '0', gems: '0', gold: '0' }, shopPage.value, shopHover.value, pressed.value, !!props.prestigeBusy)
                             : scene === 'gacha'
                                 ? gachaScene!.render(t, props.gacha ?? { banners: [], gold: '0', reveal: null, armed: null }, gachaHover.value, pressed.value, !!props.gachaBusy)
                                 : scene === 'raids'
@@ -982,9 +1004,8 @@ onMounted(async () => {
                                     ? milestonesScene!.render(t, props.milestones ?? { rows: [] }, milestonesHover.value, pressed.value, !!props.milestonesBusy)
                                     : scene === 'calendar'
                                     ? calendarScene!.render(t, props.calendar ?? { today: 0, days: [], makeupsLeft: 0, makeupsPerCycle: 0, makeupDay: null, nextDayIn: '', cycleDaysLeft: 0 }, calendarHover.value, pressed.value, !!props.calendarBusy)
-                                    : scene === 'settings'
-                                    ? settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
-                                    : speedScene!.render(t, props.speedView ?? { multiplier: 1, left: null, gems: '0', gemCount: 0, offlineEfficiency: 1, tiers: [] }, speedHover.value, pressed.value, !!props.speedBusy)
+                                    : settingsScene!.render(t, props.settings ?? { settings: { ...HQ_SETTING_DEFAULTS }, tutorialsReady: false }, settingsHover.value, pressed.value, !!props.settingsBusy, settingsScroll.value)
+        if (scene === 'shop' && shopTabsHit) shopTabsHit.drawShopTabs(view, shopTab.value, shopTabHover.value, props.speedOpen ? NO_SHOP_LOCKS : SPEED_LOCKED)
         if (scene === 'battle' && giftShows() && giftHit) giftHit.drawGiftIcon(view, t, props.holidayGift!, hover.value === 'gift')
         if (props.holidayReveal && giftReveal) giftReveal.render(view, t, props.holidayReveal, hover.value === 'gift:ok', pressed.value)
         else if (props.raidReward && raidsHit) raidsHit.drawRaidReward(view, props.raidReward, hover.value === 'reward:ok', pressed.value)

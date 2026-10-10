@@ -190,7 +190,7 @@ export const useHeroQuest = () => {
      * carry, and Gems have no setter of their own, so the session is read back.
      */
     async function buyUpgrade(upgradeId: string) {
-        const res = await call<{ currency: 'voidShards' | 'gems' | 'gold', balance: string | null }>('/api/hero-quest/prestige/shop-buy', { upgradeId }, '')
+        const res = await call<{ currency: 'voidShards' | 'gems' | 'gold', balance: string | null }>('/api/hero-quest/shop/buy', { upgradeId }, '')
         if (res?.currency === 'gold' && res.balance !== null) setBalance(res.balance)
         else if (res?.currency === 'gems') await fetchSession()
         return res

@@ -64,7 +64,7 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Keep one for waves and one for bosses. Saving is free, and swapping is one tap.'
     ],
 
-    'speed:unlock': ['Battle Speed is now available. I\'ve never tried it myself, but I hear it\'s thrilling.'],
+    'speed:unlock': ['Battle Speed is now available, in the Shop. I\'ve never tried it myself, but I hear it\'s thrilling.'],
     'speed:visit': [
         'Spend Gems on a stretch of faster battles.',
         'It keeps running while you\'re away. Take it from a snail: speed is precious.'
@@ -86,8 +86,8 @@ export const TUTORIAL_PAGES: Readonly<Record<TutorialId, readonly string[]>> = {
         'Save a good board to come back to. Even I write the best ones down.'
     ],
 
-    'prestige:unlock': ['Your first boss down! A merchant has set up shop. The Shop is now available.'],
-    'prestige:visit': [
+    'shop:unlock': ['Your first boss down! A merchant has set up shop. The Shop is now available.'],
+    'shop:visit': [
         'The Shop sells upgrades that last through everything, even the Void.',
         'Offline Efficiency is the best buy here: it raises what you earn while you\'re away.',
         'Take it from a snail, the time away adds up. Offline Cap keeps it counting longer.',

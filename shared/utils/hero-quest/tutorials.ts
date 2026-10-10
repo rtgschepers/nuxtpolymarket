@@ -61,6 +61,14 @@ export function featureCheckpoint(feature: HqFeature): FeatureCheckpoint {
     return CHECKPOINT_OF.get(feature)!
 }
 
+/**
+ * The menu button a feature lives behind: its own scene, except Battle Speed, a tab in the Shop
+ * since 2026-10-10. Its unlock points at the Shop's button, and its red dot sits there.
+ */
+export function featureMenuScene(feature: HqFeature): Exclude<HqFeature, 'speed'> {
+    return feature === 'speed' ? 'shop' : feature
+}
+
 /** What reaching a checkpoint takes, as a sentence's predicate: "Opens once you beat the World 1 boss". */
 export function checkpointLabel(at: FeatureCheckpoint): string {
     switch (at.kind) {
