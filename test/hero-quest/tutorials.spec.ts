@@ -30,7 +30,9 @@ describe('hero-quest feature unlocks', () => {
         for (const f of HQ_FEATURES) expect(HQ_MENU_SCENES, f).toContain(featureMenuScene(f))
         expect(HQ_MENU_SCENES.filter(s => !HQ_FEATURES.includes(s as never))).toEqual(['settings'])
         expect(featureMenuScene('speed')).toBe('shop')
+        expect(featureMenuScene('milestones')).toBe('calendar')
         expect(HQ_MENU_SCENES).not.toContain('speed')
+        expect(HQ_MENU_SCENES).not.toContain('milestones')
     })
 
     it('opens nothing on a fresh run, and everything for a veteran', () => {
@@ -47,8 +49,8 @@ describe('hero-quest feature unlocks', () => {
     })
 
     it('follows the schedule through the Worlds, the run\'s clear and the first prestige', () => {
-        expect(unlockedFeatures(at(2, 1))).toEqual(['gacha', 'collections', 'shop', 'milestones', 'calendar'])
-        expect(unlockedFeatures(at(3, 1))).toEqual(['gacha', 'collections', 'shop', 'milestones', 'calendar', 'loadouts', 'speed'])
+        expect(unlockedFeatures(at(2, 1))).toEqual(['gacha', 'collections', 'shop', 'calendar', 'milestones'])
+        expect(unlockedFeatures(at(3, 1))).toEqual(['gacha', 'collections', 'shop', 'calendar', 'milestones', 'loadouts', 'speed'])
         expect(featureUnlocked('raids', at(4, 10))).toBe(false)
         expect(featureUnlocked('raids', at(5, 1))).toBe(true)
         expect(featureUnlocked('classes', at(WORLD_COUNT, 10, 0, true))).toBe(false)
@@ -127,7 +129,7 @@ describe('hero-quest tutorials', () => {
 
     it('hides only the group being introduced, so a reset never hides the rest', () => {
         const open = unlockedFeatures(at(3, 1))
-        expect(revealedFeatures(open, ['intro'], 'battle')).toEqual(['gacha', 'milestones', 'calendar', 'loadouts', 'speed'])
+        expect(revealedFeatures(open, ['intro'], 'battle')).toEqual(['gacha', 'calendar', 'milestones', 'loadouts', 'speed'])
     })
 
     it('keeps pointing at a feature until its scene is explained, so the next can\'t jump the queue', () => {
