@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HOLIDAYS, LUNAR_NEW_YEAR_DATES, isHolidayId, type HolidayDef } from '#shared/utils/hero-quest/content/holidays'
-import { easterSunday, holidayDayIn, holidayGift, holidayGiftGold, nextHolidayWindow, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
+import { easterSunday, holidayDayIn, holidayGift, holidayGiftGold, openHolidayWindow, openHolidayWindows } from '#shared/utils/hero-quest/holidays'
 import { HOLIDAY_CLAIM_WINDOW_DAYS, HOLIDAY_GIFTS } from '#shared/utils/hero-quest/constants'
 import { GACHA_SYSTEMS } from '#shared/utils/hero-quest/gacha'
 
@@ -113,16 +113,6 @@ describe('hero-quest holiday gifts', () => {
             expect(open).toHaveLength(1)
             expect(open[0]!.year).toBe(2026)
             expect(openHolidayWindows(at(2027, 1, 3), [eve], 3)).toHaveLength(0)
-        })
-
-        it('names the next gift to open, across the year boundary', () => {
-            expect(nextHolidayWindow(at(2026, 10, 9))?.holiday.id).toBe('holiday_halloween')
-            // inside Halloween's window the next is Christmas, not Halloween again
-            expect(nextHolidayWindow(at(2026, 10, 31))?.holiday.id).toBe('holiday_christmas')
-            const next = nextHolidayWindow(at(2026, 12, 26))!
-            expect(next.holiday.id).toBe('holiday_new_year')
-            expect(next.year).toBe(2027)
-            expect(nextHolidayWindow(at(2027, 1, 2))?.holiday.id).toBe('holiday_lunar_new_year')
         })
 
         it('opens no gift on an ordinary day', () => {

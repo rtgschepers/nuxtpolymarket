@@ -91,20 +91,6 @@ export function openHolidayWindow(id: HolidayId, now: number, holidays: readonly
     return openHolidayWindows(now, holidays, windowDays).find(w => w.holiday.id === id) ?? null
 }
 
-/** The next window to open after today, for "next gift" on the calendar; null past the end of every table. */
-export function nextHolidayWindow(now: number, holidays: readonly HolidayDef[] = HOLIDAYS, windowDays = HOLIDAY_CLAIM_WINDOW_DAYS): HolidayWindow | null {
-    const today = Math.floor(now / DAY_MS)
-    const year = new Date(now).getUTCFullYear()
-    let best: HolidayWindow | null = null
-    for (const y of [year, year + 1]) {
-        for (const holiday of holidays) {
-            const w = windowOf(holiday, y, windowDays)
-            if (w && w.opensDay > today && (!best || w.opensDay < best.opensDay)) best = w
-        }
-    }
-    return best
-}
-
 export function holidayGift(id: HolidayId): HolidayGift {
     return HOLIDAY_GIFTS[id]
 }
