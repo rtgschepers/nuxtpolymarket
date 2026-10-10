@@ -40,7 +40,7 @@ import { WORLD_SCENES, SW, SH, BG_LOOP, composeScene } from './scenery'
 import { GiftReveal, drawGiftIconIn, type GiftRewardLine } from './holiday-gift'
 import { HOLIDAYS } from '../../../shared/utils/hero-quest/content/holidays'
 import { colosseum } from './scenery-arena'
-import { drawWorldMap, TAB_BACKGROUNDS, CHROME, drawSplash } from './ui-art'
+import { drawWorldMap, CHROME, drawSplash } from './ui-art'
 import { drawLogo, LOGO_W, LOGO_H, LOGO_LOOP } from './logos'
 import { GILDED_WARLORD, GREAT_DUMMY, DEEPCOIL, BURROW_GRUB, ORE_BEETLE, FORGE_APPRENTICE, FORGE_JOURNEYMAN, FORGE_MASTER, RAMPANT, TRAINING_DUMMY } from './raids'
 import { WORLDS } from '../../../shared/utils/hero-quest/content/worlds'
@@ -613,9 +613,6 @@ function paletteAssets(): ArtAsset[] {
 
 function uiAssets(): ArtAsset[] {
     const out: ArtAsset[] = [{ ...anim('bg/world_map', 'backgrounds', 'UI backgrounds', 'Stage-select / world map', SW, SH, 8, true, (d, t) => drawWorldMap(d, t)), opaque: true }]
-    for (const tab of TAB_BACKGROUNDS) {
-        out.push({ ...anim(`bg/tab/${tab.id}`, 'backgrounds', 'UI backgrounds', `${tab.label} tab${tab.built ? '' : ' (Phase 4)'}`, SW, SH, 12, true, (d, t) => tab.draw(d, t)), opaque: true })
-    }
     for (const c of CHROME) out.push(anim(`ui/${c.id}`, 'ui', 'UI chrome', c.label, c.w, c.h, c.frames, c.frames > 1, (d, t) => c.draw(d, t)))
     out.push(...holidayGiftAssets())
     return out
