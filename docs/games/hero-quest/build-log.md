@@ -1072,6 +1072,16 @@ The user's call, from the first live deploy: a `credit` on every settle wrote a 
 - **The trickle:** a run's kill on screen throws coins (3, a boss 6) that arc out of the body and fly into the chest, bumping its lid as each lands. A landing shows a hidden chest straight away rather than at the next read. Cosmetic only: the amount still comes from the settles, and raids, the Arena and fight replays throw none.
 - **The presence poll no longer reads the session.** Settles stopped moving the shared balance, so the poll's `fetchSession()` went with the per-settle credit; opening the chest sets the balance from its response.
 
+### 65. Economy audit design calls — **landed 2026-10-15**
+
+The six calls issue #43 left open after the exploit audit (#37), each the user's call:
+
+- **Arena milestone capped.** A step pays `min(MILESTONE_ARENA_MEDALS_CAP, 50 + 25(k−1))`, the cap 300 at the 11th step (110 wins). Uncapped, a veteran's win was worth enough Medals that bought extra attacks paid for themselves in Gems (the first around 270 wins).
+- **No shared ranks.** `hq_state.arena_rating_at` (migration `0060`) is stamped with the database's `now()` whenever a match moves a Rating. Season standings and the leaderboard order by Rating, then whoever reached it first (never-moved rows last), then user ID, so every rank is its own and bot-only players at the bots' ceiling no longer all tie for rank 1.
+- **A platform prestige wipes Hero Quest.** `hq_` is off `PRESTIGE_PRESERVED_PREFIXES`, so every `hq_` table with a `user_id` is cleared like any other game's. Unclaimed Gem milestones and Arena Medals no longer ride through an ascent that burns Gems. The chest and clock patch the exemption needed is gone with it. This reverses the exemption's own reasoning (two prestige systems on one button); the player now chooses to spend the run by ascending.
+- **Raid Keys flat-priced.** `ARENA_SHOP_SEAL_KEY_PRICE` 150 (a level-20 clear's 5 Seals at the Seal price) and `ARENA_SHOP_TRAIT_KEY_PRICE` 90, replacing the level-5 derivation (90). A Key still quick-clears at the raid's best level, so it stays the cheaper road to Seals for deep raiders, bounded by Medal income.
+- **Left as is:** boss presence stays client-checked (a polling script is indistinguishable from a visible tab, and any fix is an anti-bot arms race), and alt accounts trading Rating or the floor reward stay a platform-level multi-accounting problem.
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
