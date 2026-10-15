@@ -18,15 +18,22 @@ const ROWS: Readonly<Record<HqSettingKey, { name: string, text: string }>> = {
     fastReveals: { name: 'Fast pull reveals', text: 'A pull shows all its cards at once, without the deal.' },
     skillCinematics: { name: 'Skill cinematics', text: 'Your Hero\'s signature skill plays its cinematic. Off, it lands like any other skill.' },
     combatNumbers: { name: 'Combat numbers', text: 'Damage, heal and miss numbers over the fight.' },
+    detailedDescriptions: { name: 'Descriptions', text: 'Short or Detailed: how a Collections item describes itself. Detailed gives exact multipliers and every ability in full.' },
     dotFreePulls: { name: 'Free pulls', text: 'On the Gacha, when a free pull is ready.' },
     dotUpgrades: { name: 'Upgrades', text: 'On Collections, when something can be levelled or a piece of Gear beats yours.' },
     dotTreeNodes: { name: 'Tree nodes', text: 'On the Passive Tree, when a node can be bought.' },
     dotRewards: { name: 'Rewards', text: 'On the Calendar and the Arena, when a reward is waiting.' }
 }
 
+/** The switch's own wording for its default: Descriptions reads Short or Detailed, not On or Off. */
+function defaultLabel(key: HqSettingKey): string {
+    if (key === 'detailedDescriptions') return HQ_SETTING_DEFAULTS[key] ? 'Detailed' : 'Short'
+    return HQ_SETTING_DEFAULTS[key] ? 'On' : 'Off'
+}
+
 const row = (key: HqSettingKey) => ({
     term: ROWS[key].name,
-    text: `${ROWS[key].text} ${HQ_SETTING_DEFAULTS[key] ? 'On' : 'Off'} by default.`
+    text: `${ROWS[key].text} ${defaultLabel(key)} by default.`
 })
 
 const SECTIONS: readonly { title: string, icon: string, lead: string, keys: readonly HqSettingKey[] }[] = [
@@ -40,7 +47,7 @@ const SECTIONS: readonly { title: string, icon: string, lead: string, keys: read
         title: 'Display',
         icon: 'i-lucide-monitor',
         lead: 'How the game looks and moves.',
-        keys: ['reduceMotion', 'fastReveals', 'skillCinematics', 'combatNumbers']
+        keys: ['reduceMotion', 'fastReveals', 'skillCinematics', 'combatNumbers', 'detailedDescriptions']
     },
     {
         title: 'Menu dots',

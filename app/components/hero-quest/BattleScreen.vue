@@ -154,17 +154,21 @@ function partyState(): HqPartyState {
 }
 
 function collectionTiles(tab: HqCollectionTab): CollectionTile[] {
+    // Detailed prints exact multipliers and every ability in full; Short keeps the rounded glance
+    const detailed = settings.value?.detailedDescriptions ?? HQ_SETTING_DEFAULTS.detailedDescriptions
+    const effect = detailed ? modifierLine : hqEffectLine
+    const named = (name: string, line: string) => detailed ? `${name}: ${line}` : line
     switch (tab) {
         case 'gear': {
             const f = forge.value
             const essence = f?.essence ?? 0
             const worn = new Map((f?.slots ?? []).map(slot => [slot.slot, f?.roster.find(e => e.id === slot.equippedId)]))
             return (f?.roster ?? []).map((e) => {
-                const line = modifierLine('stat', e.stat, e.equippedBonus)
+                const line = effect('stat', e.stat, e.equippedBonus)
                 // against what the slot wears now: equipping replaces its bonus, and every owned passive stays
                 const delta = e.equippedBonus - (worn.get(e.slot)?.equippedBonus ?? 0)
                 const compared: CollectionLine = e.owned && !e.equipped && delta !== 0
-                    ? { text: line, delta: hqPct(Math.abs(delta)), up: delta > 0 }
+                    ? { text: line, delta: detailed ? hqPct(Math.abs(delta)) : hqPercent(Math.abs(delta)), up: delta > 0 }
                     : line
                 return {
                     ...e,
@@ -172,7 +176,7 @@ function collectionTiles(tab: HqCollectionTab): CollectionTile[] {
                     mark: e.equipped ? 'E' as const : null,
                     upgrade: e.owned && !e.equipped && delta > 0,
                     sections: sections(
-                        { active: e.owned, lines: [modifierLine('stat', e.stat, e.ownedBonus)] },
+                        { active: e.owned, lines: [effect('stat', e.stat, e.ownedBonus)] },
                         { title: 'Equipped', scope: 'Hero', active: e.equipped, lines: [compared] }
                     ),
                     // a slot always holds a piece, so equipped Gear is replaced rather than taken off
@@ -193,8 +197,8 @@ function collectionTiles(tab: HqCollectionTab): CollectionTile[] {
                 // the row it fights in: F front, B back
                 mark: party.includes(e.id) ? (formation[e.id] === 'front' ? 'F' as const : 'B' as const) : null,
                 sections: sections(
-                    { active: e.owned, lines: e.collectionStats.map(stat => modifierLine('stat', stat, e.collectionBonus)) },
-                    { title: 'Fielded', scope: 'In the party', active: party.includes(e.id), lines: championLines(e) }
+                    { active: e.owned, lines: e.collectionStats.map(stat => effect('stat', stat, e.collectionBonus)) },
+                    { title: 'Fielded', scope: 'In the party', active: party.includes(e.id), lines: detailed ? championLines(e) : e.abilities }
                 ),
                 actions: equipActions(e.owned),
                 picker: e.owned ? hqChampionPicker(e.id, state) : null,
@@ -212,13 +216,15 @@ function collectionTiles(tab: HqCollectionTab): CollectionTile[] {
                 sections: sections(
                     {
                         active: e.owned,
-                        lines: e.modifiers.flatMap(m => m.ownedMagnitude === null ? [] : [modifierLine(m.kind, m.stat, m.ownedMagnitude)])
+                        lines: e.modifiers.flatMap(m => m.ownedMagnitude === null ? [] : [effect(m.kind, m.stat, m.ownedMagnitude)])
                     },
                     {
                         title: 'Equipped',
                         scope: 'Hero',
                         active: equipped.includes(e.id),
-                        lines: e.type === 'active' ? activeSkillLines(e, t?.wealthHours ?? null) : e.modifiers.map(m => modifierLine(m.kind, m.stat, m.magnitude))
+                        lines: e.type === 'active'
+                            ? detailed ? activeSkillLines(e, t?.wealthHours ?? null) : [...e.lines]
+                            : e.modifiers.map(m => effect(m.kind, m.stat, m.magnitude))
                     }
                 ),
                 actions: equipActions(e.owned),
@@ -236,13 +242,13 @@ function collectionTiles(tab: HqCollectionTab): CollectionTile[] {
                 sections: sections(
                     {
                         active: e.owned,
-                        lines: e.effects.flatMap(f => f.ownedMagnitude === null ? [] : [`${f.name}: ${modifierLine(f.kind, f.stat, f.ownedMagnitude)}`])
+                        lines: e.effects.flatMap(f => f.ownedMagnitude === null ? [] : [named(f.name, effect(f.kind, f.stat, f.ownedMagnitude))])
                     },
                     {
                         title: 'Equipped',
                         scope: 'Whole party',
                         active: equipped.includes(e.id),
-                        lines: e.effects.map(f => `${f.name}: ${modifierLine(f.kind, f.stat, f.magnitude)}`)
+                        lines: e.effects.map(f => named(f.name, effect(f.kind, f.stat, f.magnitude)))
                     }
                 ),
                 actions: equipActions(e.owned),

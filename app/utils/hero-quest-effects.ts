@@ -10,7 +10,7 @@ export function hqPercent(fraction: number): string {
 
 /**
  * One modifier line for a player, rounded for a glance: "PWR +1.5%", "Cooldowns -4%". The
- * Collections detail prints the exact line instead (`describe.modifierLine`).
+ * Collections detail prints the exact line instead with Detailed descriptions on (`describe.modifierLine`).
  */
 export function hqEffectLine(kind: ModifierKind, stat: string | undefined, magnitude: number): string {
     const label = kind === 'stat' ? (stat ?? '').toUpperCase() : MODIFIER_LABELS[kind]
