@@ -539,7 +539,8 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
         : attackerStanding
     await tx.update(hqState).set({
         ...standingWrites(attackerAfter),
-        ...(elo && elo.attacker.after !== attackerStanding.rating ? { arenaRatingAt: sql`now()` } : {}),
+        // a rated match stamps the Rating when it moves it, or when it is the row's first this season
+        ...(elo && (elo.attacker.after !== attackerStanding.rating || attacker.arenaSeasonId !== attackerStanding.season) ? { arenaRatingAt: sql`now()` } : {}),
         arenaMedals: sql`${hqState.arenaMedals} + ${medals}`,
         ...(won ? { arenaWins: sql`${hqState.arenaWins} + 1` } : {}),
         arenaAttemptDate: attempts.date,
@@ -553,7 +554,7 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
         await tx.update(hqState)
             .set({
                 ...standingWrites({ season: before.season, rating: elo.defender.after, matches: before.matches + 1 }),
-                ...(elo.defender.after !== before.rating ? { arenaRatingAt: sql`now()` } : {})
+                ...(elo.defender.after !== before.rating || defender.arenaSeasonId !== before.season ? { arenaRatingAt: sql`now()` } : {})
             })
             .where(eq(hqState.userId, defender.userId))
     }

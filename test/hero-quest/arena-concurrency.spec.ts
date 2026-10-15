@@ -235,6 +235,26 @@ describe.skipIf(SKIP)('hero-quest arena concurrency', () => {
             }
         })
 
+        it('stamps when each side\'s Rating moved, for ties, and leaves a dummy fight unstamped', async () => {
+            await found(ATTACKER)
+            await found(SECOND)
+            await db.transaction(tx => setDefense(tx, SECOND))
+            const stale = new Date(Date.UTC(2020, 0, 1))
+            await db.update(hqState).set({ arenaRatingAt: stale }).where(inArray(hqState.userId, [ATTACKER, SECOND]))
+            await getCandidates(ATTACKER, Date.now())
+
+            await attack(ATTACKER, SECOND)
+
+            // two equal Ratings always move each other
+            for (const id of [ATTACKER, SECOND]) expect((await stateOf(id)).arenaRatingAt!.getTime()).toBeGreaterThan(stale.getTime())
+
+            await cleanup()
+            await found(ATTACKER)
+            await getCandidates(ATTACKER, Date.now())
+            await attack(ATTACKER, ARENA_DUMMY_ID)
+            expect((await stateOf(ATTACKER)).arenaRatingAt).toBeNull()
+        })
+
         it('refuses an attack on someone the list no longer shows', async () => {
             await found(ATTACKER)
             await getCandidates(ATTACKER, Date.now())
