@@ -611,10 +611,10 @@ export class ArenaScene {
         const button = defenseButton(s.h)
         plateButton(s, button, SET_DEFENSE, GREEN, enabled('def:set'), lit('def:set'), pressed)
         if (d) {
-            // what a defence is for: the AI plays it when someone attacks it, and it never attacks
+            // what a defence is for: it fights the players who attack you, and it never attacks
             const tx = button.x + button.w + 4
-            drawText(s, 'OTHER PLAYERS ATTACK IT AND', tx, button.y, C.stone3, { shadow: 1 })
-            drawText(s, 'THE AI DEFENDS IT FOR YOU.', tx, button.y + 7, C.stone3, { shadow: 1 })
+            drawText(s, 'THIS PARTY DEFENDS YOU WHEN', tx, button.y, C.stone3, { shadow: 1 })
+            drawText(s, 'OTHER PLAYERS ATTACK.', tx, button.y + 7, C.stone3, { shadow: 1 })
         }
     }
 
