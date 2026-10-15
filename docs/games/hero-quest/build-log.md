@@ -722,6 +722,11 @@ the away report of the read that ended the session. The dev page's **Force away*
 ends a session on demand: it banks the real time, moves the settle clock back past the timeout,
 and the next read settles that gap offline through the real `settleHq`, as an hour away would.
 
+**Superseded 2026-10-12** (the user's call): a session now ends whenever a read settles a gap as
+time away, i.e. past `ONLINE_THRESHOLD_MS`, so the splash shows every time offline time is paid.
+`HQ_SESSION_TIMEOUT_MS` and the state read's top-level `awaySeconds` are gone; the gate reads
+`settled.online`. Force away still moves the clock back an hour.
+
 **It stands the save's party** (the user's call): the Hero's class and the fielded Champions,
 each on its formation row, on the battle stage's marks, idling out of step; the Beginner alone
 when there is no save. `menu-splash.ts` composes it from the `branding/splash` scene and logo, which
