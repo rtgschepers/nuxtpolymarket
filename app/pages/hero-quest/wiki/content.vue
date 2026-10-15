@@ -37,22 +37,12 @@ import type { ModifierKind } from '#shared/utils/hero-quest/modifiers'
  * change.
  *
  * One roster at a time. Rendering all 200-odd entries at once is a page nobody scrolls, and the
- * chips double as the table of contents.
+ * wiki menu's Content group doubles as the table of contents, one `?roster=` link each.
  */
 
-type RosterKey = 'classes' | 'champions' | 'skills' | 'gear' | 'artifacts' | 'effects' | 'worlds'
-
-const rosters: readonly { key: RosterKey; label: string; count: number }[] = [
-    { key: 'classes', label: 'Classes', count: CLASS_NODES.length },
-    { key: 'champions', label: 'Champions', count: CHAMPIONS.length },
-    { key: 'skills', label: 'Skills', count: SKILLS.length },
-    { key: 'gear', label: 'Gear', count: GEAR.length },
-    { key: 'artifacts', label: 'Artifacts', count: ARTIFACTS.length },
-    { key: 'effects', label: 'Artifact effects', count: Object.values(ARTIFACT_EFFECT_POOL).flat().length },
-    { key: 'worlds', label: 'Worlds', count: WORLDS.length }
-]
-
-const active = ref<RosterKey>('classes')
+const route = useRoute()
+const active = computed(() => hqWikiRoster(route.query.roster))
+const activeRoster = computed(() => HQ_WIKI_ROSTERS.find(roster => roster.key === active.value)!)
 
 /** Rarity low→high, matching the collection grids, so the two read the same way. */
 function byRarity<T extends { rarity: string; name: string }>(entries: readonly T[]): T[] {
@@ -175,19 +165,10 @@ function parentName(parentId: string | null) {
       </p>
     </div>
 
-    <div class="flex flex-wrap gap-1">
-      <UButton
-        v-for="roster in rosters"
-        :key="roster.key"
-        size="xs"
-        :variant="active === roster.key ? 'solid' : 'ghost'"
-        :color="active === roster.key ? 'primary' : 'neutral'"
-        @click="active = roster.key"
-      >
-        {{ roster.label }}
-        <span class="opacity-60">{{ roster.count }}</span>
-      </UButton>
-    </div>
+    <h2 class="text-base font-semibold text-highlighted">
+      {{ activeRoster.label }}
+      <span class="text-muted font-normal">{{ activeRoster.count }}</span>
+    </h2>
 
     <p class="text-xs text-muted">
       Numbers run from a fresh copy to a maxed one ({{ climbLabel }}). Classes are shown at Hero level 1.

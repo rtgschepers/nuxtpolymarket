@@ -18,6 +18,12 @@ import { hqNumber, hqPct } from '#shared/utils/hero-quest/numbers'
 import type { HqStatKey } from '#shared/utils/hero-quest/types'
 import { checkpointLabel, featureCheckpoint, isHqFeature, type HqFeature } from '#shared/utils/hero-quest/tutorials'
 import { RAIDS } from '#shared/utils/hero-quest/content/raids'
+import { ARTIFACTS, ARTIFACT_EFFECT_POOL } from '#shared/utils/hero-quest/content/artifacts'
+import { CHAMPIONS } from '#shared/utils/hero-quest/content/champions'
+import { CLASS_NODES } from '#shared/utils/hero-quest/content/classes'
+import { GEAR } from '#shared/utils/hero-quest/content/gear'
+import { SKILLS } from '#shared/utils/hero-quest/content/skills'
+import { WORLDS } from '#shared/utils/hero-quest/content/worlds'
 import type { GachaSystem } from '#shared/utils/hero-quest/gacha'
 import { HQ_MENU_SCENES, HQ_SCENE_LABELS, type HqMenuScene } from './hero-quest-scenes'
 
@@ -300,6 +306,28 @@ export const HQ_SCREEN_DOCS: readonly HqScreenDoc[] = (['battle', ...HQ_MENU_SCE
 
 export function hqScreenWikiPath(id: HqScreenId): string {
     return `/hero-quest/wiki/screens/${id}`
+}
+
+export type HqWikiRoster = 'classes' | 'champions' | 'skills' | 'gear' | 'artifacts' | 'effects' | 'worlds'
+
+/** The Content reference's rosters, one per page, in the wiki menu's order. */
+export const HQ_WIKI_ROSTERS: readonly { key: HqWikiRoster, label: string, count: number }[] = [
+    { key: 'classes', label: 'Classes', count: CLASS_NODES.length },
+    { key: 'champions', label: 'Champions', count: CHAMPIONS.length },
+    { key: 'skills', label: 'Skills', count: SKILLS.length },
+    { key: 'gear', label: 'Gear', count: GEAR.length },
+    { key: 'artifacts', label: 'Artifacts', count: ARTIFACTS.length },
+    { key: 'effects', label: 'Artifact effects', count: Object.values(ARTIFACT_EFFECT_POOL).flat().length },
+    { key: 'worlds', label: 'Worlds', count: WORLDS.length }
+]
+
+/** The roster a `?roster=` query names, or the first one for anything else. */
+export function hqWikiRoster(query: unknown): HqWikiRoster {
+    return HQ_WIKI_ROSTERS.find(roster => roster.key === query)?.key ?? 'classes'
+}
+
+export function hqWikiRosterPath(key: HqWikiRoster): string {
+    return `/hero-quest/wiki/content?roster=${key}`
 }
 
 /** When a feature (a screen, or a tab inside one) opens, as a sentence: "Opens once you clear 3 Worlds." */
