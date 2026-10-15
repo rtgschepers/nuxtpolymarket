@@ -132,16 +132,15 @@ export function seasonRewardFor(rank: number): number {
 }
 
 /**
- * Final ranks for a season's standings, highest Rating first. Ties share a rank and the next rank
- * skips past them (1, 2, 2, 4): no player is ranked below anyone they matched.
+ * Final ranks for a season's standings, highest Rating first, every rank its own. An equal Rating
+ * goes to whoever reached it first (a row never moved by a match last), then to user ID: shared
+ * ranks let every bot-only player tie for rank 1 at the bots' ceiling (#43).
  */
-export function rankStandings<T extends { rating: number }>(rows: readonly T[]): (T & { rank: number })[] {
-    const sorted = [...rows].sort((a, b) => b.rating - a.rating)
-    let rank = 0
-    return sorted.map((row, i) => {
-        if (i === 0 || row.rating !== sorted[i - 1]!.rating) rank = i + 1
-        return { ...row, rank }
-    })
+export function rankStandings<T extends { rating: number, ratingAt: Date | null, userId: string }>(rows: readonly T[]): (T & { rank: number })[] {
+    const reached = (row: T) => row.ratingAt?.getTime() ?? Number.POSITIVE_INFINITY
+    const sorted = [...rows].sort((a, b) =>
+        b.rating - a.rating || reached(a) - reached(b) || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
+    return sorted.map((row, i) => ({ ...row, rank: i + 1 }))
 }
 
 // ── Attempts ───────────────────────────────────────────────────────────────────────

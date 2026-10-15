@@ -232,9 +232,18 @@ describe('hero-quest arena', () => {
             expect(rollStanding({ season: 0, rating: 1000, matches: 0 }, 3)).toEqual({ season: 3, rating: ARENA_RATING_START, matches: 0 })
         })
 
-        it('ranks final standings with shared ranks on ties, and pays by rank', () => {
-            const ranked = rankStandings([{ id: 'c', rating: 990 }, { id: 'a', rating: 1200 }, { id: 'b', rating: 1100 }, { id: 'd', rating: 1100 }])
-            expect(ranked.map(r => [r.id, r.rank])).toEqual([['a', 1], ['b', 2], ['d', 2], ['c', 4]])
+        it('ranks final standings one apiece, an equal Rating to whoever reached it first, and pays by rank', () => {
+            const at = (minute: number) => new Date(Date.UTC(2026, 9, 15, 12, minute))
+            const ranked = rankStandings([
+                { userId: 'c', rating: 990, ratingAt: at(0) },
+                { userId: 'a', rating: 1200, ratingAt: at(5) },
+                { userId: 'd', rating: 1100, ratingAt: at(1) },
+                { userId: 'b', rating: 1100, ratingAt: at(3) },
+                // never moved by a match: last among its Rating, then by user ID
+                { userId: 'f', rating: 1100, ratingAt: null },
+                { userId: 'e', rating: 1100, ratingAt: null }
+            ])
+            expect(ranked.map(r => [r.userId, r.rank])).toEqual([['a', 1], ['d', 2], ['b', 3], ['e', 4], ['f', 5], ['c', 6]])
             expect(seasonRewardFor(1)).toBe(ARENA_SEASON_REWARDS[0]!.medals)
             expect(seasonRewardFor(1)).toBeGreaterThan(seasonRewardFor(2))
             expect(seasonRewardFor(10_000)).toBe(ARENA_SEASON_REWARDS[ARENA_SEASON_REWARDS.length - 1]!.medals)

@@ -1351,6 +1351,8 @@ export const hqState = pgTable('hq_state', {
   arenaRating: integer('arena_rating').notNull().default(1000),
   arenaSeasonId: integer('arena_season_id').notNull().default(0),
   arenaSeasonMatches: integer('arena_season_matches').notNull().default(0),
+  /** When a match last moved `arenaRating`: equal Ratings rank whoever reached theirs first (#43). Ordered on, never compared to. */
+  arenaRatingAt: timestamp('arena_rating_at'),
   /** Arena Medals (§5). Persist across seasons and prestige. */
   arenaMedals: integer('arena_medals').notNull().default(0),
   /** Arena attacks won, lifetime, Training Dummy wins included: the Arena milestone's feat. Never reset. */

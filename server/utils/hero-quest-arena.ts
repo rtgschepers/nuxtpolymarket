@@ -222,7 +222,7 @@ export async function closeSeason(season: number): Promise<void> {
         if (!claimed) return
         // locked, in the user-ID order an attack takes them in: a match still in flight on one of
         // these rows lands in the standings first, and one queued behind finds the season closed
-        const rows = await tx.select({ userId: hqState.userId, rating: hqState.arenaRating })
+        const rows = await tx.select({ userId: hqState.userId, rating: hqState.arenaRating, ratingAt: hqState.arenaRatingAt })
             .from(hqState)
             .where(and(eq(hqState.arenaSeasonId, season), gt(hqState.arenaSeasonMatches, 0)))
             .orderBy(sql`${hqState.userId} collate "C"`)
@@ -539,6 +539,7 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
         : attackerStanding
     await tx.update(hqState).set({
         ...standingWrites(attackerAfter),
+        ...(elo && elo.attacker.after !== attackerStanding.rating ? { arenaRatingAt: sql`now()` } : {}),
         arenaMedals: sql`${hqState.arenaMedals} + ${medals}`,
         ...(won ? { arenaWins: sql`${hqState.arenaWins} + 1` } : {}),
         arenaAttemptDate: attempts.date,
@@ -550,7 +551,10 @@ export async function attackArena(tx: DbExecutor, userId: string, slot: number, 
     if (elo && defender) {
         const before = rollStanding(standingOf(defender), season)
         await tx.update(hqState)
-            .set(standingWrites({ season: before.season, rating: elo.defender.after, matches: before.matches + 1 }))
+            .set({
+                ...standingWrites({ season: before.season, rating: elo.defender.after, matches: before.matches + 1 }),
+                ...(elo.defender.after !== before.rating ? { arenaRatingAt: sql`now()` } : {})
+            })
             .where(eq(hqState.userId, defender.userId))
     }
 
@@ -710,21 +714,21 @@ interface LeaderRow { userId: string, name: string, rating: number, rank: number
 /**
  * The Rating leaderboard (§9), for the current season: the top `ARENA_LEADERBOARD_TOP`, and the
  * viewer's own rank with `ARENA_LEADERBOARD_NEIGHBORS` either side. Ranked are the players who have
- * fought, or been fought, this season; ties share a rank.
+ * fought, or been fought, this season; an equal Rating ranks whoever reached it first, as the
+ * season's close does (`rankStandings`).
  */
 export async function arenaLeaderboard(userId: string, now: number) {
     const season = arenaSeasonAt(now)
     const result = await db.execute(sql`
         with ranked as (
             select user_id, arena_rating as rating,
-                   rank() over (order by arena_rating desc)::int as rank,
-                   row_number() over (order by arena_rating desc, user_id)::int as pos
+                   row_number() over (order by arena_rating desc, arena_rating_at asc nulls last, user_id collate "C")::int as pos
             from hq_state
             where arena_season_id = ${season} and arena_season_matches > 0
         ), mine as (
             select pos from ranked where user_id = ${userId}
         )
-        select r.user_id, u.name, r.rating, r.rank, r.pos
+        select r.user_id, u.name, r.rating, r.pos as rank, r.pos
         from ranked r
         join "user" u on u.id = r.user_id
         where r.pos <= ${ARENA_LEADERBOARD_TOP}
