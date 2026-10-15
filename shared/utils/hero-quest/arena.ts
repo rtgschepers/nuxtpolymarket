@@ -24,7 +24,7 @@ import {
     ARENA_SEASON_EPOCH_MS,
     ARENA_SEASON_REWARDS,
     ARENA_SHOP_GEM_PRICE,
-    ARENA_SHOP_KEY_LEVEL,
+    ARENA_SHOP_SEAL_KEY_PRICE,
     ARENA_SHOP_TRAIT_KEY_PRICE,
     ARENA_SHOP_SEAL_PRICE,
     K_ATTACK,
@@ -35,7 +35,6 @@ import {
     TRAIT_SLOT_COUNT
 } from './constants'
 import { RAIDS, getRaid, type RaidId } from './content/raids'
-import { raidReward } from './raids'
 import type { GachaSystem } from './gacha'
 import { traitSlotOf, type TraitBoard, type TraitSlotState } from './traits'
 import type { FormationRow } from './types'
@@ -289,12 +288,11 @@ export type ArenaShopItem =
 const SEAL_SYSTEMS: readonly GachaSystem[] = ['champion', 'skill', 'artifact', 'gear']
 
 /**
- * A raid Key's Medal price: for a Seal raid, the Seals a clear pays at `ARENA_SHOP_KEY_LEVEL` at the
- * Seal's own price; the Trait raid, which pays Trait Gems, at its own.
+ * A raid Key's Medal price: one flat price for the Seal raids, and its own for the Trait raid, which
+ * pays Trait Gems.
  */
 export function arenaKeyPrice(raid: RaidId): number {
-    if (!getRaid(raid).pairedSystem) return ARENA_SHOP_TRAIT_KEY_PRICE
-    return raidReward(raid, ARENA_SHOP_KEY_LEVEL) * ARENA_SHOP_SEAL_PRICE
+    return getRaid(raid).pairedSystem ? ARENA_SHOP_SEAL_KEY_PRICE : ARENA_SHOP_TRAIT_KEY_PRICE
 }
 
 /**

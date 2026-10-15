@@ -39,6 +39,9 @@ import {
     ARENA_SEASON_EPOCH_MS,
     ARENA_SEASON_REWARDS,
     ARENA_SHOP_GEM_PRICE,
+    ARENA_SHOP_SEAL_KEY_PRICE,
+    ARENA_SHOP_SEAL_PRICE,
+    ARENA_SHOP_TRAIT_KEY_PRICE,
     BATTLE_SPEED_ANCHOR_GEMS,
     K_ATTACK,
     K_DEFEND,
@@ -250,12 +253,12 @@ describe('hero-quest arena', () => {
             expect(arenaShopItem('nope')).toBeNull()
         })
 
-        it('prices a Seal raid\'s Key at the Seals a level-5 clear pays, and never under them', () => {
-            // a level-5 clear of a Seal raid pays 3 Seals, at 30 Medals each
-            expect(arenaShopItem('keys_raid_guild')?.price).toBe(90)
-            for (const raid of RAIDS.filter(r => r.pairedSystem)) {
-                expect(arenaShopItem(`keys_${raid.id}`)?.price).toBe(raidReward(raid.id, 5) * arenaShopItem('seals_champion')!.price)
+        it('prices every Seal raid\'s Key at one flat price, and the Trait raid\'s at its own', () => {
+            for (const raid of RAIDS) {
+                expect(arenaShopItem(`keys_${raid.id}`)?.price).toBe(raid.pairedSystem ? ARENA_SHOP_SEAL_KEY_PRICE : ARENA_SHOP_TRAIT_KEY_PRICE)
             }
+            // a Key matches the Seal item at a level-20 clear
+            expect(raidReward('raid_guild', 20) * ARENA_SHOP_SEAL_PRICE).toBe(ARENA_SHOP_SEAL_KEY_PRICE)
         })
 
         it('keeps a day of Medals into Gems well under one Battle Speed block', () => {

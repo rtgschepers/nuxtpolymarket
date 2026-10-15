@@ -1325,14 +1325,13 @@ export const ARENA_LEADERBOARD_NEIGHBORS = 2 // locked 2026-10-11, the user's ca
 
 /**
  * The Arena Shop (§6): static prices, no ladder, no cap, and no Gold (the user's call, 2026-10-10). A
- * Seal is about a fifth of a day's Medals. A Seal raid's Key is priced at the Seals a clear of that
- * raid pays at `ARENA_SHOP_KEY_LEVEL`, at the Seal's own price (the user's call, 2026-10-10: a level-5
- * clear pays 3, so 90 Medals), so a Key is never a cheaper way to Seals than the Seals themselves.
- * The Trait raid pays Trait Gems, not Seals, and keeps its own price.
+ * Seal is about a fifth of a day's Medals. A Key quick-clears at the raid's best level, so for a deep
+ * raider it is the cheaper road to Seals; flat prices bound that by Medal income (#43). A Seal raid's
+ * Key matches the Seal item at a level-20 clear (5 Seals).
  */
 export const ARENA_SHOP_SEAL_PRICE = 30 // locked 2026-10-11, the user's call
-export const ARENA_SHOP_KEY_LEVEL = 5
-export const ARENA_SHOP_TRAIT_KEY_PRICE = 60 // locked 2026-10-11, the user's call
+export const ARENA_SHOP_SEAL_KEY_PRICE = 150 // locked 2026-10-15, the user's call
+export const ARENA_SHOP_TRAIT_KEY_PRICE = 90 // locked 2026-10-15, the user's call
 /**
  * Medals per Gem: a deliberately bad rate (§6). The calibration target is that a whole day's Medals
  * convert to meaningfully less than one Battle Speed block (`BATTLE_SPEED_ANCHOR_GEMS`, 250): at 10
