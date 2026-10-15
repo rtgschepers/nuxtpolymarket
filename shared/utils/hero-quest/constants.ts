@@ -1527,11 +1527,16 @@ export const MILESTONE_RAID_KEYS_STEP = 1 // locked 2026-10-11, the user's call
 
 /**
  * The Arena's track (the user's call, 2026-10-10): every this many Arena wins, lifetime, Training
- * Dummy wins included, pays Arena Medals, more each step.
+ * Dummy wins included, pays Arena Medals, more each step up to the cap.
  */
 export const MILESTONE_ARENA_WINS_EVERY = 10 // locked 2026-10-11, the user's call
 export const MILESTONE_ARENA_MEDALS_BASE = 50 // locked 2026-10-11, the user's call
 export const MILESTONE_ARENA_MEDALS_STEP = 25 // locked 2026-10-11, the user's call
+/**
+ * The most one Arena step pays, reached at the 11th (110 wins). Uncapped, a veteran's win was worth
+ * enough Medals to make bought extra attacks Gem-positive (#43).
+ */
+export const MILESTONE_ARENA_MEDALS_CAP = 300 // locked 2026-10-15, the user's call
 
 /** A collection's steps: every this many owned, and the full roster as the last. */
 export const MILESTONE_COLLECTION_EVERY = 6 // locked 2026-10-11, the user's call
