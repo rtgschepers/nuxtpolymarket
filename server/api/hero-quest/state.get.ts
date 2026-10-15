@@ -92,7 +92,6 @@ export default defineEventHandler(async (event): Promise<HqStateResponse> => {
             voidShards: '0',
             chestGold: '0',
             nextPrestigeReward: voidShardsFor(0).toString(),
-            awaySeconds: 0,
             awayReport: null,
             settled: null
         }
@@ -189,16 +188,10 @@ export default defineEventHandler(async (event): Promise<HqStateResponse> => {
         chestGold: state.pendingGold,
         nextPrestigeReward: voidShardsFor(state.prestige).toString(),
 
-        /**
-         * The gap this read closed, in seconds: time since the last settle. The client ends the
-         * session on its splash past `HQ_SESSION_TIMEOUT_MS`; it decides nothing else.
-         */
-        awaySeconds: roundHq(settleOutcome.elapsedSeconds),
-
         /** The welcome-back card waiting to be put away, from whichever request settled the time away. */
         awayReport: serializeAwayReport(state.awayReport),
 
-        /** What this read's own settle banked; the welcome-back card reads `awayReport`. */
+        /** What this read's own settle banked; an offline one ends the session on its splash. The card reads `awayReport`. */
         settled: serializeSettled(settleOutcome)
     }
 })

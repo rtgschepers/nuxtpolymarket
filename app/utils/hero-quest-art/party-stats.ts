@@ -8,8 +8,8 @@ import { drawText, textWidth } from './font'
 import { panel } from './ui-art'
 import { stageNumber } from './run-director'
 import { headOf, HEAD } from './demo'
-import { D, hqNumber } from '../../../shared/utils/hero-quest/numbers'
-import { CHAMPION_BY_ID } from '../../../shared/utils/hero-quest/content/champions'
+import { D, hqNumber } from '#shared/utils/hero-quest/numbers'
+import { CHAMPION_BY_ID } from '#shared/utils/hero-quest/content/champions'
 
 /** One fielded unit's column: its portrait's art asset, its name, and each row's value already spelled out. */
 export interface PartyStatsUnit {

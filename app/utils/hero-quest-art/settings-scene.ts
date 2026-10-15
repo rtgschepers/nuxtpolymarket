@@ -9,8 +9,8 @@ import { panel } from './ui-art'
 import { plateButton, type Box } from './collections-scene'
 import type { SceneBackdrops } from './menu-band'
 import { HQ_STAGE_SIZES, type HqStageSize } from './stage-size'
-import type { HqSettingKey, HqSettings } from '../../../shared/utils/hero-quest/settings'
-import { GUIDE_NAME } from '../../../shared/utils/hero-quest/content/tutorials'
+import type { HqSettingKey, HqSettings } from '#shared/utils/hero-quest/settings'
+import { GUIDE_NAME } from '#shared/utils/hero-quest/content/tutorials'
 
 export interface SettingsView {
     settings: HqSettings

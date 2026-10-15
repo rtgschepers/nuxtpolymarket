@@ -74,7 +74,6 @@ import type {
 } from '#server/utils/hero-quest-api'
 import type { HqAwayReport } from '#shared/utils/hero-quest/away-report'
 import type { BattleSpeedDuration, BattleSpeedTier } from '#shared/utils/hero-quest/battle-speed'
-import { HQ_SESSION_TIMEOUT_MS } from '#shared/utils/hero-quest/constants'
 import type { HolidayId } from '#shared/utils/hero-quest/content/holidays'
 import type { RaidId } from '#shared/utils/hero-quest/content/raids'
 import type { ShopTrackId } from '#shared/utils/hero-quest/content/shop'
@@ -144,15 +143,16 @@ export const useHeroQuest = () => {
             const payload = response._data
             if (!payload) return
             fetchedAt.value = Date.now()
-            const report = payload.awayReport ?? null
-            welcome.value = report && report.id !== dismissedWelcomeId.value ? report : null
+            const away = payload.awayReport ?? null
+            welcome.value = away && away.id !== dismissedWelcomeId.value ? away : null
+            const report = payload.settled
             if (!payload.initialized) {
                 sessionActive.value = false
             } else if (sessionResuming.value) {
                 // the read Start makes closes the very gap that ended the session
                 sessionResuming.value = false
                 sessionActive.value = true
-            } else if (payload.awaySeconds * 1000 > HQ_SESSION_TIMEOUT_MS) {
+            } else if (report && !report.online) {
                 sessionActive.value = false
             } else if (sessionActive.value === null) {
                 sessionActive.value = true

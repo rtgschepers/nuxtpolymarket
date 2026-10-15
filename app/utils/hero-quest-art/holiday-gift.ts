@@ -13,8 +13,8 @@ import { glyph } from './icon-kit'
 import { CURRENCY_ICONS } from './icons-items'
 import { panel } from './ui-art'
 import { goldChestBox } from './gold-chest'
-import { formatHq } from '../../../shared/utils/hero-quest/numbers'
-import type { HolidayId } from '../../../shared/utils/hero-quest/content/holidays'
+import { formatHq } from '#shared/utils/hero-quest/numbers'
+import type { HolidayId } from '#shared/utils/hero-quest/content/holidays'
 
 interface Box {
     x: number

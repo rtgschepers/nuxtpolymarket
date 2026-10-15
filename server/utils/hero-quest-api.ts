@@ -710,7 +710,6 @@ export interface HqStateUninitialized extends HqStateCommon {
     voidShards: string
     chestGold: string
     nextPrestigeReward: string
-    awaySeconds: number
     awayReport: null
     settled: null
 }
@@ -746,8 +745,6 @@ export interface HqStateInitialized extends HqStateCommon {
     /** Gold the settles banked in the chest, paid out when the player opens it. */
     chestGold: string
     nextPrestigeReward: string
-    /** The gap this read closed, in seconds. */
-    awaySeconds: number
     /** The welcome-back card waiting to be put away. */
     awayReport: HqAwayReport | null
     settled: HqSettledPayload | null
