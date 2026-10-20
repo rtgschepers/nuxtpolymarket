@@ -2081,6 +2081,13 @@ export const TRAIT_SAVE_LOAD_COST = 100
  */
 export const TRAIT_AUTO_ROLL_BATCH = 10 // locked 2026-10-11, the user's call
 
+/**
+ * Trait Gems an Auto Roll never spends (the user's call, 2026-10-19, issue #50): the price of
+ * loading a saved board, so a run that rolls the board worse can always be undone. A single Roll
+ * can still spend down to zero.
+ */
+export const TRAIT_AUTO_ROLL_RESERVE = TRAIT_SAVE_LOAD_COST
+
 // ── Prestige shop stat tracks ──────────────────────  open-items.md #41
 
 /**
