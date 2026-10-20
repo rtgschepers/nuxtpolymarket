@@ -7,8 +7,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { analyzeCampaign, analyzeStage, makeHero, minLevelToClear, SIM_MATURE_TENURE_DAYS } from '../../scripts/hero-quest/sim'
-import { STAGES_PER_WORLD, WORLD_COUNT } from '#shared/utils/hero-quest/constants'
+import { analyzeCampaign, analyzeStage, makeHero, minLevelToClear, SIM_MATURE_TENURE_DAYS, SimProgression, type SimProgressionOptions } from '../../scripts/hero-quest/sim'
+import { BASE_CHAMPION_SLOTS, MAX_CHAMPION_SLOTS, STAGES_PER_WORLD, WORLD_COUNT } from '#shared/utils/hero-quest/constants'
+import { getClass } from '#shared/utils/hero-quest/content/classes'
 
 const hero = makeHero('class_beginner', 1)
 
@@ -128,5 +129,62 @@ describe('minLevelToClear', () => {
 
     it('returns null rather than a wrong answer when the ceiling is too low', () => {
         expect(minLevelToClear(hero, 0, WORLD_COUNT, STAGES_PER_WORLD, 1, 5)).toBeNull()
+    })
+})
+
+describe('analyzeCampaign with a SimProgression', () => {
+    const grown = (options: Partial<SimProgressionOptions>) => new SimProgression({
+        classId: 'class_beginner',
+        party: 1 + BASE_CHAMPION_SLOTS,
+        traits: [],
+        kit: [{ spec: 'none', atSeconds: 0 }],
+        classes: false,
+        shop: false,
+        ...options
+    })
+    const WALK = { maxPrestige: 3, grindBudgetSeconds: 1e9, maxLevel: 100_000 }
+
+    it('reports no prestiges without one', () => {
+        expect(analyzeCampaign(hero, 0, PAST_A_BLOCKER).prestiges).toEqual([])
+    })
+
+    it('spends Void Shards on slots before stats, and never past a cap', () => {
+        const result = analyzeCampaign(makeHero('class_beginner', 1), 0, { ...WALK, progression: grown({ shop: true, kit: [{ spec: 'mythic:5:10', atSeconds: 0 }] }) })
+        expect(result.prestiges.length).toBeGreaterThan(2)
+
+        // 100, then 200, then 400: the third prestige is the first to afford a 400 slot, and every
+        // shard before it is saved rather than spent on a stat level.
+        expect(result.prestiges[1]!.champions).toBe(BASE_CHAMPION_SLOTS)
+        expect(result.prestiges[2]!.champions).toBe(BASE_CHAMPION_SLOTS + 1)
+        for (const row of result.prestiges) {
+            expect(row.champions).toBeLessThanOrEqual(MAX_CHAMPION_SLOTS)
+            expect(row.statLevels).toBe(0)
+            expect(row.prestige).toBe(result.prestiges.indexOf(row) + 1)
+        }
+    })
+
+    it('spends class tokens one tier at a time, down a path it has reached', () => {
+        const result = analyzeCampaign(makeHero('class_beginner', 1), 0, { ...WALK, progression: grown({ classes: true }) })
+        const reached = new Set(['class_beginner'])
+        for (const row of result.prestiges) {
+            const bought = row.tokenSpentOn ?? row.classId
+            if (!reached.has(bought)) expect(reached.has(getClass(bought).parentId!)).toBe(true)
+            reached.add(bought)
+        }
+        expect(result.prestiges.at(-1)!.classId).not.toBe('class_beginner')
+    })
+
+    it('finishes sooner when the kit improves mid-run', () => {
+        const upgradeAt = 3600
+        const fixed = analyzeCampaign(makeHero('class_beginner', 1), 0, { ...WALK, maxPrestige: 0, progression: grown({ kit: [{ spec: 'common:0:1', atSeconds: 0 }] }) })
+        const ramped = analyzeCampaign(makeHero('class_beginner', 1), 0, {
+            ...WALK,
+            maxPrestige: 0,
+            progression: grown({ kit: [{ spec: 'common:0:1', atSeconds: 0 }, { spec: 'legendary:0:1', atSeconds: upgradeAt }] })
+        })
+
+        expect(fixed.totalSeconds).toBeGreaterThan(upgradeAt)
+        expect(ramped.totalSeconds).toBeLessThan(fixed.totalSeconds)
+        expect(ramped.prestigesCompleted).toBe(1)
     })
 })
