@@ -845,6 +845,23 @@ export const FIGHT_LENGTH_DRIFT = 0.35 // TUNED ✓
 /** The exponent enemy HP rides on the shared curve index. Derived — move `FIGHT_LENGTH_DRIFT`. */
 export const ENEMY_HP_STEP_EXPONENT = DPS_COVERAGE_PER_STAGE + FIGHT_LENGTH_DRIFT
 
+/**
+ * **How much of a run's `FIGHT_LENGTH_DRIFT` the next run inherits** (the user's call, 2026-10-20,
+ * issue #44). 1 is the old continuous curve; 0 starts every run's fights as long as the first's.
+ *
+ * Carried in full, the drift compounded across prestiges: each one made every fight
+ * `1.08^(0.35 × 100)` ≈ 15× longer against the same level pace, so the second prestige took about
+ * two months and an eighth was out of reach. The rest of the enemy block, and enemy HP's share of
+ * the party's DPS growth, still ride the whole index, so nothing but fight length resets.
+ *
+ * Set so the eighth prestige, which every Champion, Skill and Artifact slot takes, is reachable in
+ * about six months (the user's call). On the baseline walk with class tokens and Void Shards spent
+ * (`--classes --shop --grind-hours=20000`) and a fixed Rare 0★ Lv2 kit, 0.3 lands the prestiges
+ * on days 1.7, 4.5, 5.8, 7.9, 13.6, 29.6, 71.9 and **183**; 0.25 put the eighth at day 64 and 0.35
+ * at day 544. Better kit than the walk's fixed one gets there sooner.
+ */
+export const PRESTIGE_DRIFT_CARRY = 0.3 // locked 2026-10-20, the user's call
+
 // ── Gold ───────────────────────────────────────────  gold-economy.md §3–4
 
 /**
