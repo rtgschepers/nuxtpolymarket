@@ -919,11 +919,14 @@ export const BASE_GOLD = 1 // TUNED ✓
  * before day 90 and earns the walk's month what the 4-day pace did (1.29B against 1.38B): 50–77% of
  * platform on day one, 25–33% from day 3. Swept: 1.045 → 13–20% from day 3, 1.04 → 6–11%.
  *
+ * 1.05 → 1.065 on 2026-10-20, back on a 4-day first run (`XP_TO_LEVEL_BASE` 86): the first run's Worlds
+ * pay 26–75% of platform again (1.05 had fallen to 9–67%); past it the ceiling binds, so nothing later moves.
+ *
  * **Kept under `ENEMY_STEP_BASE` (1.08)**, so Gold still grows more slowly than the enemy it is
  * earned from (`settle.spec.ts`). A Beginner party of three never reaches the ceiling in its
  * first month; a party of six does by about day 12. Coupled to run pacing like `BASE_GOLD`.
  */
-export const GOLD_STEP_BASE = 1.05 // TUNED ✓
+export const GOLD_STEP_BASE = 1.065 // TUNED ✓
 
 // ── The tenure ceiling ─────────────────────────────  gold-economy.md §3, §9
 
