@@ -7,9 +7,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { analyzeCampaign, analyzeStage, makeHero, minLevelToClear, SIM_MATURE_TENURE_DAYS, SimProgression, type SimProgressionOptions } from '../../scripts/hero-quest/sim'
+import { analyzeCampaign, analyzeStage, compareClasses, makeHero, makeParty, minLevelToClear, setSimTreePolicy, simTraitBoard, SIM_MATURE_TENURE_DAYS, SimProgression, withSimKit, withSimTree, type SimProgressionOptions } from '../../scripts/hero-quest/sim'
 import { BASE_CHAMPION_SLOTS, MAX_CHAMPION_SLOTS, STAGES_PER_WORLD, WORLD_COUNT } from '#shared/utils/hero-quest/constants'
-import { getClass } from '#shared/utils/hero-quest/content/classes'
+import { CLASS_NODES, getClass } from '#shared/utils/hero-quest/content/classes'
 
 const hero = makeHero('class_beginner', 1)
 
@@ -186,5 +186,24 @@ describe('analyzeCampaign with a SimProgression', () => {
         expect(fixed.totalSeconds).toBeGreaterThan(upgradeAt)
         expect(ramped.totalSeconds).toBeLessThan(fixed.totalSeconds)
         expect(ramped.prestigesCompleted).toBe(1)
+    })
+})
+
+describe('the class tiers on the baseline party', () => {
+    it('makes every class out-damage the one it was taken from', () => {
+        // issue #45: the baseline's Traits, tree and kit, a party of three, a first prestige's level
+        const traits = simTraitBoard('atk:D:deep_impact,imp:D:deep_impact,champion_atk:D:aggression,atk:D:aggression,imp:D:aggression')
+        setSimTreePolicy('cheapest')
+        let rows
+        try {
+            rows = compareClasses(1, 1, STAGES_PER_WORLD - 1, 446, 3, (id, level, size) => withSimTree(withSimKit(makeParty(id, level, size, { traits }), 'rare:0:2')))
+        } finally {
+            setSimTreePolicy('none')
+        }
+        const dps = new Map(rows.map(row => [row.classId, row.partyDps]))
+        for (const node of CLASS_NODES) {
+            if (!node.parentId || node.tier === 'capstone') continue
+            expect(dps.get(node.id)!.gt(dps.get(node.parentId)!), `${node.id} over ${node.parentId}`).toBe(true)
+        }
     })
 })

@@ -21,7 +21,7 @@
  * set directly.
  */
 
-import type { HqStatKey, StatTier, TraitGrade, TraitSetId, TraitStatId } from './types'
+import type { ClassTier, HqStatKey, StatTier, TraitGrade, TraitSetId, TraitStatId } from './types'
 import type { HolidayId } from './content/holidays'
 
 // ── Run structure ──────────────────────────────────  core-progression-and-prestige.md §2
@@ -545,6 +545,30 @@ export const CONVERGENCE_COOLDOWN_FACTOR = 2 // locked 2026-10-11, the user's ca
 export const DELTA_MODEST = 2 // TUNED ✓
 export const DELTA_NORMAL = 4 // TUNED ✓
 export const DELTA_EXTREME = 8 // TUNED ✓
+
+/**
+ * The Hero's PWR by the tier of the class played (the user's call, 2026-10-20, issues #45 and #47):
+ * every class token is an upgrade, and a master out-damages an elite at any kit.
+ *
+ * Without it the Beginner (two strikes, `high` SPD, Haste) out-damaged every base class and
+ * several elites and masters, so a first token made the Hero weaker; and with strong kit the
+ * Shaman's party buff carried an elite past the Beast Master. A tier is a multiplier on the
+ * Hero's PWR, after the level curve, so the first run (played as the Beginner) is untouched.
+ *
+ * Measured with `--report=classes` on the baseline (party of 3, Traits, tree, Rare 0★ Lv2, prestige
+ * 1, level 446) and on strong kit (party of 4, Legendary 3★ Lv5, prestige 3, level 1,296): every
+ * class out-damages its parent at both, and the Beast Master every elite at the second. The
+ * smallest ladder that does is 2.4 / 2.8 / 3.2 / 3.6; the Warrior line binds it (Warrior over the
+ * Beginner, Knight over the Warrior). Off the baseline, without the Passive Skill Tree, the
+ * Warrior still trails the Beginner by 6–12%. Moving it re-paces every run after the first.
+ */
+export const CLASS_TIER_PWR_MULTIPLIER: Readonly<Record<ClassTier, number>> = { // UNTUNED ╧
+    beginner: 1,
+    base: 2.5,
+    elite: 3,
+    master: 3.5,
+    capstone: 4
+}
 
 /**
  * What every class's and archetype's **accumulated** LCK base is multiplied by.
