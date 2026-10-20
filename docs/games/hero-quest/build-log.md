@@ -1097,6 +1097,10 @@ Four GitHub issues from the progression walk past a first prestige (#44–#47), 
 - **The first prestige is back to 4 days** (`XP_TO_LEVEL_BASE` 38 → 86, the user's call): every grind about 2.3× longer. Gold was re-measured on it: `GOLD_STEP_BASE` 1.05 → 1.065 puts the first run's Worlds back at 26–75% of platform (1.05 had fallen to 9–67%); from the first prestige on the age ceiling binds, so month 3 and month 6 don't move. ⚠ A new party on Common 0★ Lv1 kit now takes ~24 minutes for World 1 (was 10), open with the user.
 - **The sim grows the party** (`SimProgression`): `--kit-ramp`, `--classes` and `--shop` buy kit, class tokens and Void Shard tracks as the walk goes, which is how the later prestiges were measured. `voidShardsFor` moved to `shared/` and pays whole shards.
 
+### 67. The Gold stack held to §5 — **landed 2026-10-20**
+
+A player report: Gold still ran very fast with Gold skills. Measured with `projectAbilities` and `economyBonuses`, a build of three Gold skills and two Gold Artifacts reached ×4.2 at 0★ Lv1, ×7.2 at 2★ Lv5 and ×13 maxed, and every slot on maxed Gold ×21, against `gold-economy.md` §5's ~×3 dedicated and ~×5 worst case. The four burst skills add up and nothing capped them; the Gambit and King's Ransom fix earlier the same day had only removed the worst of it. **Every Gold burst is scaled by 2/15** (the user's call): `GOLD_BURST_COOLDOWN_SECONDS` 120 → 900 for Coin Toss and Prospector's Instinct, so §6's 0.5–2 minutes per cast stands, and the Gambit and King's Ransom Gold bursts (`KINGS_RANSOM_GOLD_BURST_MINUTES`, its XP burst unchanged) by the same factor. Now ×1.5, ×2.2 and ×3.3 for the three builds and ×5.1 for every slot, with no cap, as §5 intends; `gold-stack.spec.ts` holds the worst case under ×5.5, and the column-headroom specs use ×5.5 instead of ×4.
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
