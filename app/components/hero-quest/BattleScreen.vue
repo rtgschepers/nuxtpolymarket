@@ -758,6 +758,14 @@ watch(() => props.scene, () => {
 })
 const inRaid = computed(() => props.scene === 'raids' || raidRound.value !== null || raidReturning.value)
 /**
+ * The Arena attack the stage is playing in place of the run, and what it came to, held until its
+ * replay ends. Declared above `inSessionScene`, whose immediate watch reads them during setup: a
+ * reload with an Arena session open used to hit them uninitialised and fail the page with a 500.
+ */
+const arenaRound = ref<StageArena | null>(null)
+const arenaResult = ref<ArenaResultView | null>(null)
+let arenaOutcome: ArenaResultView | null = null
+/**
  * Whether the player is still where the open Loadout session belongs: a raid's in the Raids scene or
  * a round, the Arena's in the Arena or an Arena round (the user's call, 2026-10-10: the Arena's
  * preferred Loadout works exactly as a raid's). Anywhere else the session is left.
@@ -981,11 +989,6 @@ function onArenaTab(tab: HqArenaTab) {
     if (tab === 'log') void arenaRead(loadArenaLog)
     if (tab === 'ranking') void arenaRead(loadArenaBoard)
 }
-
-/** The Arena attack the stage is playing in place of the run, and what it came to, held until its replay ends. */
-const arenaRound = ref<StageArena | null>(null)
-const arenaResult = ref<ArenaResultView | null>(null)
-let arenaOutcome: ArenaResultView | null = null
 
 async function onArenaAction(target: ArenaTarget) {
     // a refresh or an attack paid in Gems waits for a second press, unless that is turned off in Settings
