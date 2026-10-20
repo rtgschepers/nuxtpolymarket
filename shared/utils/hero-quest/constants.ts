@@ -1895,6 +1895,27 @@ export const GOLD_BURST_MINUTES: readonly number[] = [ // UNTUNED ╧
 export const GOLD_BURST_COOLDOWN_SECONDS = 120 // UNTUNED ╧
 
 /**
+ * Treasure Hunter's Gambit's Gold burst, in minutes of current income: 4.8 **seconds**, where
+ * `GOLD_BURST_MINUTES` gives Epic 3 minutes.
+ *
+ * Unlike Coin Toss it is a damage Active on the shared ladder cadence, so the Epic ladder
+ * stretches it to ~8.3 seconds of income every ~11 seconds, +75% Gold while equipped (4.8 over
+ * `SKILL_BASE_COOLDOWN_SECONDS`, since the ladder stretches both alike). The Epic ladder value on
+ * that cadence was ~5.2 minutes every ~11 seconds, close to +2,800%.
+ */
+export const TREASURE_HUNTERS_GAMBIT_GOLD_BURST_MINUTES = 0.08 // locked 2026-10-20, the user's call
+
+/**
+ * King's Ransom's Gold and XP bursts, each in minutes of current income: 8 **seconds**, where
+ * `GOLD_BURST_MINUTES` gives Mythic 8 minutes.
+ *
+ * The same fix as Treasure Hunter's Gambit, for the same reason: a damage Active on the shared
+ * ladder cadence. The Mythic ladder stretches it to ~20 seconds of income every ~16 seconds,
+ * about +125% Gold and +125% XP while equipped, down from close to +7,500% of each.
+ */
+export const KINGS_RANSOM_BURST_MINUTES = 8 / 60 // locked 2026-10-20, the user's call
+
+/**
  * How much shorter a "chance to refund / reset / re-trigger" Active's cooldown is rendered as.
  *
  * Executioner's Edge, Ragnarok Strike and Fortune's Gambit carry such a clause, and there is no
