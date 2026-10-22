@@ -1101,6 +1101,16 @@ Four GitHub issues from the progression walk past a first prestige (#44–#47), 
 
 A player report: Gold still ran very fast with Gold skills. Measured with `projectAbilities` and `economyBonuses`, a build of three Gold skills and two Gold Artifacts reached ×4.2 at 0★ Lv1, ×7.2 at 2★ Lv5 and ×13 maxed, and every slot on maxed Gold ×21, against `gold-economy.md` §5's ~×3 dedicated and ~×5 worst case. The four burst skills add up and nothing capped them; the Gambit and King's Ransom fix earlier the same day had only removed the worst of it. **Every Gold burst is scaled by 2/15** (the user's call): `GOLD_BURST_COOLDOWN_SECONDS` 120 → 900 for Coin Toss and Prospector's Instinct, so §6's 0.5–2 minutes per cast stands, and the Gambit and King's Ransom Gold bursts (`KINGS_RANSOM_GOLD_BURST_MINUTES`, its XP burst unchanged) by the same factor. Now ×1.5, ×2.2 and ×3.3 for the three builds and ×5.1 for every slot, with no cap, as §5 intends; `gold-stack.spec.ts` holds the worst case under ×5.5, and the column-headroom specs use ×5.5 instead of ×4.
 
+### 68. A kit ladder for the prestige walk, and XP ×0.75 — **landed 2026-10-22**
+
+The user's calls, from play: the 4th prestige took about a day against the walk's week, and Heroes level too quickly.
+
+- **The walk's kit steps up per run** (`--kit-ladder`, `SIM_KIT_LADDER`): Champions two Rare on the first run, two Epic, two Epic and a Legendary, an Epic, two Legendary and a Mythic, then every slot Mythic; Gear, Skills and Artifacts take the same mix spread over their own slots (`apportionKit`, ties to the lower rarity), at the fixed 0★ Lv2 and with slot counts unchanged. The ladder sets the Champion count when it lists more than the Shop has bought. On the old table it measured days 4, 7.4, 11.3, 16.1, 18.9 and 30.1.
+- **`PRESTIGE_HP_SHED_STEPS` refit on the ladder** to the same targets: 4.0, 8.9, 15.0, 22.0, 29.9, 60, 120 and 240.
+- **`XP_TO_LEVEL_BASE` 86 → 115** (XP ×0.75), stretching the whole schedule: days **5.4, 12.1, 20.2, 29.6, 40.2, 81, 160 and 321**. Levels at each prestige don't move (446, 850, 1253…); only the time to reach them. A new party's World 1 on Common 0★ Lv1 goes from 24 to 33 minutes.
+- **Gold re-measured, not moved**: the first run's Worlds pay 22–69% of platform (was 27–76%), days 3–5 about 25%, and from the first prestige on the age ceiling binds as before.
+- ⚠ The walk does not model Battle Speed (up to ×5), likely part of the gap to the user's real pace.
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
