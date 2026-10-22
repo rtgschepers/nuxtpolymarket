@@ -1111,6 +1111,10 @@ The user's calls, from play: the 4th prestige took about a day against the walk'
 - **Gold re-measured, not moved**: the first run's Worlds pay 22–69% of platform (was 27–76%), days 3–5 about 25%, and from the first prestige on the age ceiling binds as before.
 - ⚠ The walk does not model Battle Speed (up to ×5), likely part of the gap to the user's real pace.
 
+### 69. The 100-pull — **landed 2026-10-22**
+
+The user's call, to save clicks: a banner holding 90 Seals swaps its single pull for **PULL 90 +10**, ten 10-pulls in one press (`HUNDRED_PULL_SIZE`, `HUNDRED_PULL_COST`, derived from the 10-pull). The pull route takes `count: 100`, never auto-buys Seals for it, and rolls each ten at the gacha level the tens before it reached, so it pays exactly what ten 10-pulls would. Its reveal deals eight to a row, twice as fast, into a box that scrolls to follow the deal; the wheel or a finger scrolls it by hand, which stops the following. Reveals of one and ten are unchanged.
+
 ### 9. Holiday gameplay events — **decided 2026-10-10: not built**
 
 Was an open item: `holiday-events.md` locked the gift mechanic and left limited-time modes and content deferred. **Holidays are gifts only** (the user's call): no event modes, no limited-time content. The gifts (#53) are the whole feature.
