@@ -90,6 +90,8 @@ Quick-clear bypasses `fight.ts` entirely — once the level's "cleared" flag is 
 
 **Exception:** `rampaging_boss` and `training_dummy` raids (Section 7) have no discrete "cleared" level to flag — quick-clear there re-grants the reward for the account's current best-ever level reached instead, still at the cost of a Key.
 
+**Quick-clear can be taken 1, 5 or 10 at a time** (`RAID_QUICK_CLEAR_COUNTS`), each clear costing its own Key and paying the best's reward, all or nothing (the user's call, 2026-10-23).
+
 ---
 
 ## 5. Live-Engagement Only

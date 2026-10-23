@@ -275,7 +275,7 @@ holiday/claim.post.ts             speed/buy.post.ts
 settings/set.post.ts              calendar/claim.post.ts     (seals/claim-daily.post.ts until #29 retired it)
 milestones/claim.post.ts          loadout/rename.post.ts
 tutorials/seen.post.ts            tutorials/reset.post.ts
-raid/engage.post.ts               raid/quick-clear.post.ts   (raidId in body, both routes)
+raid/engage.post.ts               raid/quick-clear.post.ts   (raidId in body, both routes; quick-clear also takes count 1, 5 or 10)
 raid/leave.post.ts
 arena/defense-set.post.ts         arena/attack.post.ts       (attack accepts a dummy target sentinel per arena.md §2a)
 arena/candidates.get.ts           arena/refresh-candidates.post.ts   (3-candidate list, dummy-filled as needed; 2 free refreshes a day, then 5 Gems doubling)
