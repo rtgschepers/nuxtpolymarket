@@ -6,7 +6,7 @@ For Hero Quest see @docs/games/hero-quest/CLAUDE.md
 
 ## Stack
 
-- Nuxt 4 + Vue 3, **Nuxt UI v4** (use its components and semantic tokens)
+- Nuxt 4 + Vue 3, Tailwind CSS v4
 - Drizzle ORM + PostgreSQL (`server/database/schema.ts`)
 - better-auth
 - **bun only**. Never `npm`, `pnpm` or `yarn`. `bun.lock` is the only lockfile.
@@ -18,7 +18,7 @@ For Hero Quest see @docs/games/hero-quest/CLAUDE.md
 - `server/api/`: Nitro file routes (`*.get.ts`, `*.post.ts`); shared logic lives in `server/utils/`
 - `shared/`: code used by both client and server (game rules, payouts, random)
 - `content/changelog/`: the player-facing changelog
-- `scripts/`: economy balance simulations (`bun run balance:*`)
+- `scripts/`: balance simulations and one-off tools, run directly with `bun scripts/<name>.ts` (no `package.json` entries)
 
 ## Client
 
@@ -27,7 +27,6 @@ For Hero Quest see @docs/games/hero-quest/CLAUDE.md
 - `formatNumber(value, compact = true)` for every coin and gem amount shown.
 - Coin and gem inputs accept `10k`/`2.5m` shorthand: bind `useAmountInput(ref)` to the input and show `amountPreview(text)` as a trailing hint.
 - `apiFetch` for typed API calls; `apiErrorMessage(e, fallback)` for error text.
-- Colors: semantic tokens (`text-primary`, `text-muted`, `bg-elevated`, `border-default`), not raw hex or Tailwind palette colors.
 - **Toasts are for errors and failures only** (`'error'` / `'warning'`). Never add success or confirmation toasts; the UI updating is the feedback.
 
 ## Server
@@ -94,6 +93,7 @@ Edit `schema.ts`, then run `bun run db:generate` (commit the generated `drizzle/
   - Good: `- **Ember Portals**: portals from the triggering spin stay open for the free spins, and portals max out at a white ×256.`
   - You may rewrite the whole day's file at any time to make it shorter: merge, trim or drop entries when it grows long.
 - **Before any commit**: `bun run typecheck` and `bun run test` must both pass. `nuxt build` does not typecheck. A red `main` blocks every branch and deploy, so fix failures and call out any that are genuinely pre-existing. DB tests need the compose Postgres running.
+- **Balance checks and simulations go in `scripts/`, never in tests.** To verify or tune a game (RTP, income curves, difficulty, bot playthroughs), add or extend a `scripts/<game>-*.ts`. Tests run on every deploy, so they cover rules and correctness, not tuning numbers that move whenever a feature changes.
 - **Commits**: only when asked. Short imperative subject, no body or footer, no `Co-Authored-By`. Split commits by concern.
 - **Branches**: `feature/…` or `bugfix/…` in kebab-case, from an up-to-date `main`.
 - **PRs**: title is the branch name, empty body, base `main`.

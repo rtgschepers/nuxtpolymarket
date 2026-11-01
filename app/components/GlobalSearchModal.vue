@@ -38,25 +38,6 @@ const rawGroups: CommandPaletteGroup[] = [
         keywords: ['home', 'dashboard', 'games', 'hub', 'index', 'main']
       },
       {
-        id: 'ai',
-        label: 'AI Assistant',
-        description: 'Chat with Polynux AI assistant',
-        icon: 'i-lucide-bot',
-        to: '/ai',
-        keywords: ['ai', 'chat', 'bot', 'assistant', 'help', 'gpt']
-      },
-      {
-        id: 'ai-wiki',
-        parentId: 'ai',
-        isSubpage: true,
-        treePrefix: '└──',
-        label: 'Wiki & Guide',
-        description: 'Documentation, guides, and system prompts for AI',
-        icon: 'i-lucide-book-open',
-        to: '/ai-wiki',
-        keywords: ['ai', 'wiki', 'docs', 'manual', 'help', 'guide']
-      },
-      {
         id: 'gem-exchange',
         label: 'Gem Exchange',
         description: 'Convert coins to gems and trade platform currency',
@@ -508,6 +489,14 @@ const rawGroups: CommandPaletteGroup[] = [
         keywords: ['firewall', 'security', 'cyber', 'defense', 'packets', 'puzzle']
       },
       {
+        id: 'hackerz',
+        label: 'Hackerz',
+        description: 'Neon 3D lane defence - hold the fence against waves of hackers',
+        icon: 'i-lucide-skull',
+        to: '/hackerz',
+        keywords: ['hackerz', 'hackers', 'cyber', 'tron', 'defense', 'tower defence', '3d']
+      },
+      {
         id: 'storm-the-house',
         label: 'Storm the House',
         description: 'Defend your stronghold against relentless enemy waves',
@@ -530,6 +519,14 @@ const rawGroups: CommandPaletteGroup[] = [
         icon: 'i-lucide-boxes',
         to: '/voxel-arena',
         keywords: ['voxel', 'arena', 'shooter', 'slasher', 'waves', 'survival', 'roguelike', 'upgrades', 'titan']
+      },
+      {
+        id: 'dead-front',
+        label: 'Dead Front',
+        description: 'Co-op round-based zombies FPS with 1900s weapons',
+        icon: 'i-lucide-crosshair',
+        to: '/dead-front',
+        keywords: ['dead front', 'zombies', 'fps', 'co-op', 'multiplayer', 'rounds', 'pack-a-punch', 'perks', 'wonder weapon', 'ww1']
       }
     ]
   },

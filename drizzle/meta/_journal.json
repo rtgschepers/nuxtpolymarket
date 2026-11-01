@@ -428,6 +428,41 @@
       "when": 1792089320546,
       "tag": "0060_green_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792315625928,
+      "tag": "0061_dead_front_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792400944027,
+      "tag": "0062_tricky_norman_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1793027505512,
+      "tag": "0063_rare_otto_octavius",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1793278993040,
+      "tag": "0064_thin_dragon_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1793280598823,
+      "tag": "0065_pretty_vision",
+      "breakpoints": true
     }
   ]
 }
